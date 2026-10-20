@@ -39,7 +39,7 @@ metadata and the backend fallback mirror it.
 ### Changed
 
 - New Voice conversion workspace: perform a line and re-voice it with an RVC model through Applio, import or train voices, or add an RVC step to clone takes; the dubbing RVC hook no longer drops converted audio ([guide](docs/voice-conversion.md))
-- One-command source setup: `install.sh` (Linux, macOS, WSL2) and `install.ps1` (Windows) install the toolchains, the backend, Applio and the starter models, then verify a backend boot ([guide](docs/install/full-setup.md))
+- One-command source setup: `install.sh` (Linux, macOS, WSL2) and `install.ps1` (Windows) install the toolchains, the backend, Applio and the starter models, then verify a backend boot; they cope with slow connections (longer uv timeouts and retries, Applio's dependency download retried when it times out), accept `-Models a,b` unquoted in PowerShell, and take `--cache-dir` / `-CacheDir` to keep download caches on another drive ([guide](docs/install/full-setup.md))
 
 ### Docs
 

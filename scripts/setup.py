@@ -193,6 +193,14 @@ def _cudnn8_lib_dir(compat_dir):
     return os.path.join(compat_dir, "nvidia", "cudnn", "lib")
 
 
+def _cudnn8_timeout():
+    """Seconds allowed for the ~700 MB cuDNN 8 download (OMNIVOICE_CUDNN8_TIMEOUT, default 180)."""
+    try:
+        return max(1, int(os.environ.get("OMNIVOICE_CUDNN8_TIMEOUT", "") or 180))
+    except ValueError:
+        return 180
+
+
 def _count_cudnn8_libs(lib_dir):
     """Count cuDNN 8 shared libraries in the given directory."""
     if sys.platform == "win32":
@@ -253,7 +261,7 @@ def main():
             check=True,
             capture_output=True,
             text=True,
-            timeout=180,
+            timeout=_cudnn8_timeout(),
         )
         n = _count_cudnn8_libs(lib_dir)
         print(f"✓ cuDNN 8 installed: {n} libraries")

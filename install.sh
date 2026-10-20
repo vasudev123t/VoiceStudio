@@ -5,7 +5,9 @@
 # clones the repository when needed, installs the JS workspace and the Python
 # backend, sets up Applio for voice conversion (RVC), optionally downloads the
 # starter models through the backend's own model API, and verifies a backend
-# boot. Safe to re-run: every step checks what is already present.
+# boot. Safe to re-run: every step checks what is already present, so an
+# interrupted run (closed terminal, dropped connection) can just be started
+# again with the same flags.
 #
 #   curl -fsSL https://raw.githubusercontent.com/vasudev123t/VoiceStudio/main/install.sh | bash
 #   curl -fsSL https://raw.githubusercontent.com/vasudev123t/VoiceStudio/main/install.sh | bash -s -- --yes
@@ -31,6 +33,9 @@ NO_LAUNCH=0
 DATA_DIR_ARG=""
 APPLIO_DIR_ARG=""
 PORT_ARG=""
+CACHE_DIR_ARG=""
+APPLIO_INSTALL_ATTEMPTS=3
+APPLIO_RETRY_DELAY=${APPLIO_RETRY_DELAY:-10}
 NODE_MAJOR_MIN=22
 DEFAULT_BUN_VERSION="1.4.2"
 
@@ -86,6 +91,8 @@ Usage: install.sh [options]
                        the platform default, ~/.omnivoice on Linux)
       --applio-dir PATH  Applio location (default: <data dir>/tools/applio,
                        which the app finds without extra settings)
+      --cache-dir PATH Put the Hugging Face, uv and pip download caches under
+                       PATH (sets HF_HOME, UV_CACHE_DIR, PIP_CACHE_DIR)
       --port N         Port for the verification backend (default: 3900, or
                        the next free port)
       --skip-system    Skip OS package installs (no sudo)
@@ -94,6 +101,10 @@ Usage: install.sh [options]
 
 Model licences: OmniVoice weights are CC-BY-NC-4.0 (non-commercial),
 KittenTTS is Apache-2.0, faster-whisper-small is MIT. Applio is MIT.
+
+Slow connections: UV_HTTP_TIMEOUT and UV_HTTP_RETRIES default to 600 s and 5
+for this run (values you set are kept); Applio's dependency download is
+retried up to 3 times. An interrupted run can be re-run safely.
 USAGE
 }
 
@@ -122,6 +133,8 @@ while [[ $# -gt 0 ]]; do
     --applio-dir=*) APPLIO_DIR_ARG="${1#*=}" ;;
     --port) need_value "$@"; PORT_ARG="$2"; shift ;;
     --port=*) PORT_ARG="${1#*=}" ;;
+    --cache-dir) need_value "$@"; CACHE_DIR_ARG="$2"; shift ;;
+    --cache-dir=*) CACHE_DIR_ARG="${1#*=}" ;;
     --no-launch) NO_LAUNCH=1 ;;
     -h|--help) usage; exit 0 ;;
     *) die "Unknown option: $1 (see --help)" ;;
@@ -165,6 +178,21 @@ prepend_path() { case ":$PATH:" in *":$1:"*) ;; *) PATH="$1:$PATH"; export PATH 
 
 port_busy() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
 
+# Slow-connection defaults for every uv call (uv's own are 30 s / 3 retries)
+# and for setup:api's optional cuDNN 8 download; user-set values win.
+apply_network_defaults() {
+  export UV_HTTP_TIMEOUT="${UV_HTTP_TIMEOUT:-600}"
+  export UV_HTTP_RETRIES="${UV_HTTP_RETRIES:-5}"
+  export OMNIVOICE_CUDNN8_TIMEOUT="${OMNIVOICE_CUDNN8_TIMEOUT:-1800}"
+  info "UV_HTTP_TIMEOUT=$UV_HTTP_TIMEOUT UV_HTTP_RETRIES=$UV_HTTP_RETRIES OMNIVOICE_CUDNN8_TIMEOUT=$OMNIVOICE_CUDNN8_TIMEOUT"
+  if [[ -n "$CACHE_DIR_ARG" ]]; then
+    mkdir -p "$CACHE_DIR_ARG"
+    CACHE_DIR="$(cd "$CACHE_DIR_ARG" && pwd)"
+    export HF_HOME="$CACHE_DIR/huggingface" UV_CACHE_DIR="$CACHE_DIR/uv" PIP_CACHE_DIR="$CACHE_DIR/pip"
+    info "caches in $CACHE_DIR: HF_HOME=$HF_HOME UV_CACHE_DIR=$UV_CACHE_DIR"
+  fi
+}
+
 # ── platform detection ───────────────────────────────────────────────────
 OS="$(uname -s)"
 ARCH="$(uname -m)"
@@ -191,6 +219,9 @@ case "$OS" in
     [[ $SKIP_MODELS == 1 ]] && ps_args+=(-SkipModels)
     [[ -n "$MODELS" ]] && ps_args+=(-Models "$MODELS")
     [[ -n "$TARGET_DIR" ]] && ps_args+=(-Dir "$TARGET_DIR")
+    [[ -n "$DATA_DIR_ARG" ]] && ps_args+=(-DataDir "$DATA_DIR_ARG")
+    [[ -n "$APPLIO_DIR_ARG" ]] && ps_args+=(-ApplioDir "$APPLIO_DIR_ARG")
+    [[ -n "$CACHE_DIR_ARG" ]] && ps_args+=(-CacheDir "$CACHE_DIR_ARG")
     [[ $NO_LAUNCH == 1 ]] && ps_args+=(-NoLaunch)
     if [[ -n "$here" && -f "$here/install.ps1" ]]; then
       exec powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(cygpath -w "$here/install.ps1")" ${ps_args[@]+"${ps_args[@]}"}
@@ -491,6 +522,33 @@ applio_healthy() {
   (cd "$APPLIO_DIR" && "$py" -c "import torch, faiss, librosa, soundfile" >/dev/null 2>&1)
 }
 
+# PyTorch index for Applio's requirements, as run-install.sh picks it
+# (CUDA 12.8 on Linux, PyPI on macOS) or the matching CPU/ROCm build.
+applio_index_args() {
+  case "$OS:$RESOLVED_VARIANT" in
+    Darwin:*) ;;
+    *:cpu) printf '%s\n' --extra-index-url https://download.pytorch.org/whl/cpu --index-strategy unsafe-best-match ;;
+    *:rocm) printf '%s\n' --extra-index-url https://download.pytorch.org/whl/rocm6.4 --index-strategy unsafe-best-match ;;
+    *) printf '%s\n' --extra-index-url https://download.pytorch.org/whl/cu128 --index-strategy unsafe-best-match ;;
+  esac
+}
+
+# Install Applio's requirements into its env with its own interpreter, up to
+# APPLIO_INSTALL_ATTEMPTS times (a slow link can time out on one big wheel).
+applio_install_deps() {
+  local py attempt idx=() line
+  py="$(applio_python_path)" || return 1
+  while IFS= read -r line; do idx+=("$line"); done < <(applio_index_args)
+  for ((attempt = 1; attempt <= APPLIO_INSTALL_ATTEMPTS; attempt++)); do
+    info "installing Applio's dependencies (attempt $attempt/$APPLIO_INSTALL_ATTEMPTS, UV_HTTP_TIMEOUT=${UV_HTTP_TIMEOUT:-30})"
+    (cd "$APPLIO_DIR" && run uv pip install --python "$py" -r requirements.txt ${idx[@]+"${idx[@]}"}) \
+      || warn "Applio dependency install failed (attempt $attempt/$APPLIO_INSTALL_ATTEMPTS)"
+    applio_healthy && return 0
+    ((attempt < APPLIO_INSTALL_ATTEMPTS)) && sleep "$APPLIO_RETRY_DELAY"
+  done
+  return 1
+}
+
 install_applio() {
   step "Applio (voice conversion)"
   if [[ $SKIP_APPLIO == 1 ]]; then info "skipped (--skip-applio)"; return; fi
@@ -505,30 +563,31 @@ install_applio() {
       mkdir -p "$(dirname "$APPLIO_DIR")"
       run git clone --depth 1 "$APPLIO_REPO" "$APPLIO_DIR"
     fi
-    # A half-made venv makes run-install.sh prompt and then launch the web UI.
-    [[ -d "$APPLIO_DIR/.venv" ]] && { warn "removing incomplete Applio venv"; rm -rf "$APPLIO_DIR/.venv"; }
     local variant=$RESOLVED_VARIANT
-    if [[ "$OS" == Darwin || "$variant" == cuda ]]; then
+    if applio_python_path >/dev/null; then
+      # A previous run made the env but its download died part way: retry the
+      # dependency install instead of rebuilding the env.
+      info "Applio's environment exists but is incomplete; reinstalling its dependencies"
+    elif [[ "$OS" == Darwin || "$variant" == cuda ]]; then
+      # A venv without an interpreter makes run-install.sh prompt and then launch the web UI.
+      [[ -d "$APPLIO_DIR/.venv" ]] && { warn "removing incomplete Applio venv"; rm -rf "$APPLIO_DIR/.venv"; }
       info "running Applio's run-install.sh"
       # run-install.sh calls `clear` under `set -e`; give it a terminal type.
       local term=${TERM:-xterm}; [[ $term == dumb ]] && term=xterm
-      (cd "$APPLIO_DIR" && TERM=$term bash ./run-install.sh </dev/null)
+      (cd "$APPLIO_DIR" && TERM=$term bash ./run-install.sh </dev/null) \
+        || warn "Applio's run-install.sh failed (exit $?); retrying its dependency step"
     else
       # run-install.sh always pulls CUDA 12.8 wheels on Linux; mirror its
       # steps with the matching PyTorch index instead.
-      local index="https://download.pytorch.org/whl/cpu"
-      [[ "$variant" == rocm ]] && index="https://download.pytorch.org/whl/rocm6.4"
-      info "mirroring run-install.sh with the $variant PyTorch index ($index)"
-      (
-        cd "$APPLIO_DIR"
-        export UV_HTTP_TIMEOUT=300
-        run uv venv .venv --python 3.12
-        run uv pip install --python .venv/bin/python python-ffmpeg
-        run uv pip install --python .venv/bin/python -r requirements.txt \
-          --extra-index-url "$index" --index-strategy unsafe-best-match
-      )
+      rm -rf "$APPLIO_DIR/.venv"
+      info "mirroring run-install.sh with the $variant PyTorch index"
+      (cd "$APPLIO_DIR" && run uv venv .venv --python 3.12 \
+        && run uv pip install --python .venv/bin/python python-ffmpeg) \
+        || die "could not create Applio's environment in $APPLIO_DIR/.venv"
     fi
-    applio_healthy || die "Applio's environment is not importable (torch/faiss/librosa); see the output above"
+    applio_python_path >/dev/null || die "Applio's installer did not create an environment in $APPLIO_DIR; see the output above"
+    applio_healthy || applio_install_deps \
+      || die "Applio's environment is not importable (torch/faiss/librosa) after $APPLIO_INSTALL_ATTEMPTS dependency installs; check the connection and re-run (finished downloads are cached)"
     ok "Applio environment ready"
   fi
   local py; py="$(applio_python_path)"
@@ -662,6 +721,9 @@ fi
 GPU_NAME=""
 if have nvidia-smi; then GPU_NAME="$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -n1 || true)"; fi
 
+step "Download settings"
+apply_network_defaults
+
 step "JavaScript workspace (bun install)"
 run bun install
 
@@ -679,6 +741,8 @@ verify_backend
 launch_env=()
 [[ $CUSTOM_DATA_DIR == 1 ]] && launch_env+=("OMNIVOICE_DATA_DIR=$DATA_DIR")
 [[ $SKIP_APPLIO == 0 && "$APPLIO_DIR" != "$MANAGED_APPLIO_DIR" ]] && launch_env+=("OMNIVOICE_APPLIO_DIR=$APPLIO_DIR")
+# Downloaded models live in HF_HOME, so the app must see the same value.
+[[ -n "$CACHE_DIR_ARG" ]] && launch_env+=("HF_HOME=$HF_HOME" "UV_CACHE_DIR=$UV_CACHE_DIR")
 local env_words="" kv
 for kv in ${launch_env[@]+"${launch_env[@]}"}; do env_words+="$(printf '%q' "$kv") "; done
 local launch_cmd models_text="none downloaded (use the in-app Model Store)"
@@ -694,6 +758,7 @@ info "PyTorch       $RESOLVED_VARIANT ($("$(repo_python)" -c 'import torch; prin
 info "VC device     ${VC_DEVICE:-n/a}"
 info "Repository    $TARGET_DIR"
 info "Data dir      $DATA_DIR"
+[[ -n "$CACHE_DIR_ARG" ]] && info "Caches        $CACHE_DIR (HF_HOME, UV_CACHE_DIR)"
 if [[ $SKIP_APPLIO == 1 ]]; then info "Applio        skipped"
 else info "Applio        $APPLIO_DIR (backend sees it: $VC_READY)"; fi
 info "Models        $models_text"
@@ -709,4 +774,6 @@ fi
 return 0
 }
 
+# Tests source this file with VOICESTUDIO_INSTALL_SOURCE_ONLY=1 to reach the helpers.
+if [[ "${VOICESTUDIO_INSTALL_SOURCE_ONLY:-}" == 1 ]] && (return 0 2>/dev/null); then return 0; fi
 main

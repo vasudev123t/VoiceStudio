@@ -9,7 +9,13 @@
   `bun run setup:api`; installs Applio for voice conversion (RVC) with its own
   run-install.bat plus `core.py prerequisites`; optionally downloads the
   starter models through the backend's model API; boots the backend once to
-  verify it; and prints a summary. Safe to re-run: finished steps are skipped.
+  verify it; and prints a summary. Safe to re-run: finished steps are skipped,
+  so a run that was interrupted (closed window, dropped connection) can simply
+  be started again with the same flags.
+
+  Slow connections: uv's HTTP timeout and retry count default to 600 s and 5
+  (UV_HTTP_TIMEOUT / UV_HTTP_RETRIES; values you set yourself are kept), and a
+  failed Applio dependency download is retried up to 3 times.
 
   Execution policy: if scripts are blocked, run it with
     powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
@@ -27,6 +33,8 @@
   .\install.ps1 -Yes
 .EXAMPLE
   .\install.ps1 -Cpu -SkipApplio -Models kittentts -NoLaunch
+.EXAMPLE
+  .\install.ps1 -Yes -Models omnivoice,kittentts -Dir D:\VoiceStudio -DataDir D:\VoiceStudioData\data -ApplioDir D:\VoiceStudioData\applio -CacheDir D:\VoiceStudioData\cache
 #>
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingWriteHost', '', Justification = 'Interactive installer: colored console output is the UI.')]
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'Internal helpers of an installer the user runs explicitly.')]
@@ -43,8 +51,8 @@ param(
   [switch]$SkipApplio,
   # Do not download models.
   [switch]$SkipModels,
-  # Comma list: omnivoice,kittentts,whisper-small, all, none.
-  [string]$Models = '',
+  # omnivoice,kittentts,whisper-small, all, none. Quoted ('a,b') or not (a,b).
+  [string[]]$Models = @(),
   # Clone/use VoiceStudio here (default: this checkout, else .\VoiceStudio).
   [string]$Dir = '',
   # Repository to clone.
@@ -55,6 +63,8 @@ param(
   [string]$DataDir = '',
   # Applio location (default: <data dir>\tools\applio, found automatically).
   [string]$ApplioDir = '',
+  # Put the Hugging Face and uv download caches here (sets HF_HOME, UV_CACHE_DIR, PIP_CACHE_DIR).
+  [string]$CacheDir = '',
   # Port for the verification backend (default: 3900 or the next free one).
   [int]$Port = 0,
   # Skip winget/choco installs.
@@ -72,6 +82,14 @@ try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::S
 $NodeMajorMin = 22
 $DefaultBunVersion = '1.4.2'
 $ApplioRepo = 'https://github.com/IAHispano/Applio'
+$ApplioInstallAttempts = 3
+# Slow-connection defaults (uv's own are 30 s / 3 retries); user-set values win.
+$NetworkDefaults = [ordered]@{
+  'UV_HTTP_TIMEOUT'          = '600'
+  'UV_HTTP_RETRIES'          = '5'
+  # setup:api's optional cuDNN 8 download (~700 MB) for faster-whisper on CUDA.
+  'OMNIVOICE_CUDNN8_TIMEOUT' = '1800'
+}
 $ModelCatalog = [ordered]@{
   'omnivoice'     = @{ Repo = 'k2-fsa/OmniVoice'; Size = '~2.4 GB'; License = 'weights CC-BY-NC-4.0 (non-commercial)' }
   'kittentts'     = @{ Repo = 'KittenML/kitten-tts-mini-0.8'; Size = '~80 MB'; License = 'Apache-2.0' }
@@ -84,6 +102,13 @@ if ($Help) {
   return
 }
 if ($Cpu -and $Cuda) { throw 'Pick one of -Cpu or -Cuda.' }
+
+# `-Models a,b` binds as an array and `-Models 'a,b'` as one string: accept both.
+function Join-ModelList([string[]]$Value) {
+  $parts = @($Value) | Where-Object { $null -ne $_ } | ForEach-Object { "$_".Split(',') } | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+  return (@($parts) -join ',')
+}
+$ModelSpec = Join-ModelList $Models
 
 # -- logging -------------------------------------------------------------
 $script:StepNo = 0
@@ -107,11 +132,26 @@ function Confirm-Step([string]$Question, [bool]$DefaultYes = $true) {
 function Test-Command([string]$Name) { [bool](Get-Command $Name -ErrorAction SilentlyContinue) }
 
 # Run a native command; throw on a non-zero exit code (PowerShell 5.1 does not).
+# Windows PowerShell 5.1 can turn a native tool's stderr (progress, warnings)
+# into a terminating error under ErrorActionPreference=Stop when output is
+# redirected or transcribed, so relax it for the call: the exit code decides.
 function Invoke-Native {
   param([Parameter(Mandatory)][string]$FilePath, [string[]]$ArgumentList = @())
   Write-Host ("    $ {0} {1}" -f $FilePath, ($ArgumentList -join ' ')) -ForegroundColor DarkGray
+  if (-not (Get-Command $FilePath -ErrorAction SilentlyContinue)) { throw "$FilePath not found" }
+  $ErrorActionPreference = 'Continue'
+  $global:LASTEXITCODE = 0
   & $FilePath @ArgumentList
-  if ($LASTEXITCODE -ne 0) { throw "$FilePath exited with code $LASTEXITCODE" }
+  $code = $LASTEXITCODE
+  $ErrorActionPreference = 'Stop'
+  if ($code -ne 0) { throw "$FilePath exited with code $code" }
+}
+
+# Set an environment variable for this run unless the user already set it.
+function Set-DefaultEnv([string]$Name, [string]$Value) {
+  $current = [Environment]::GetEnvironmentVariable($Name)
+  if ([string]::IsNullOrEmpty($current)) { Set-Item -Path "env:$Name" -Value $Value; Write-Info "$Name=$Value" }
+  else { Write-Info "$Name=$current (already set)" }
 }
 
 # Run a native command for its stdout only, ignoring stderr and failures.
@@ -146,10 +186,13 @@ function Install-Prereq([string]$WingetId, [string]$ChocoId, [string[]]$WingetEx
   if ($script:HaveWinget) {
     $wargs = @('install', '--id', $WingetId, '-e', '--source', 'winget', '--accept-source-agreements', '--accept-package-agreements', '--silent') + $WingetExtra
     Write-Host "    $ winget $($wargs -join ' ')" -ForegroundColor DarkGray
+    $ErrorActionPreference = 'Continue'
     & winget @wargs
+    $code = $LASTEXITCODE
+    $ErrorActionPreference = 'Stop'
     # -1978335189 = already installed / no applicable upgrade.
-    if ($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq -1978335189) { $done = $true }
-    else { Write-Warn2 "winget failed for $WingetId (exit $LASTEXITCODE)" }
+    if ($code -eq 0 -or $code -eq -1978335189) { $done = $true }
+    else { Write-Warn2 "winget failed for $WingetId (exit $code)" }
   }
   if (-not $done -and $ChocoId) {
     if (-not $script:HaveChoco) { throw "Could not install ${WingetId}: winget failed or is missing and Chocolatey is not installed (https://chocolatey.org/install)." }
@@ -248,6 +291,27 @@ else {
 Set-Location $Dir
 
 # Bun, pinned to package.json's packageManager.
+# bun.sh/install.ps1 sets ErrorActionPreference=Stop itself and then runs
+# `bun.exe completions 2>&1`; on Windows PowerShell 5.1 that stderr line becomes
+# a TerminatingError ("PowerShell completions are not yet written for Bun",
+# "The pipeline has been stopped") that it swallows. Run it in a child
+# PowerShell so that noise stays out of this session, and judge the result by
+# the child's exit code and the bun.exe it leaves behind.
+function Install-BunOfficial([string]$Version) {
+  $installerPath = Join-Path ([IO.Path]::GetTempPath()) "voicestudio-bun-install-$PID.ps1"
+  Invoke-WebRequest -UseBasicParsing -Uri 'https://bun.sh/install.ps1' -OutFile $installerPath
+  $shell = if ($PSVersionTable.PSEdition -eq 'Core') { Join-Path $PSHOME 'pwsh.exe' } else { Join-Path $PSHOME 'powershell.exe' }
+  try {
+    Write-Host "    $ $shell -File bun.sh/install.ps1 -Version $Version" -ForegroundColor DarkGray
+    $ErrorActionPreference = 'Continue'
+    & $shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $installerPath -Version $Version 2>&1 | ForEach-Object { Write-Host "    $_" }
+    $code = $LASTEXITCODE
+    $ErrorActionPreference = 'Stop'
+  } finally { Remove-Item -Force $installerPath -ErrorAction SilentlyContinue }
+  $bunExe = Join-Path $env:USERPROFILE '.bun\bin\bun.exe'
+  if ($code -ne 0) { throw "bun.sh installer exited with code $code" }
+  if (-not (Test-Path $bunExe)) { throw "bun.sh installer did not create $bunExe" }
+}
 $BunVersion = $DefaultBunVersion
 $pkgJson = Get-Content (Join-Path $Dir 'package.json') -Raw | ConvertFrom-Json
 $pm = Get-Prop $pkgJson 'packageManager' ''
@@ -257,7 +321,7 @@ if ($haveBun -eq $BunVersion) { Write-Ok "Bun $haveBun" }
 else {
   Write-Info "Installing Bun $BunVersion (have: $(if ($haveBun) { $haveBun } else { 'none' }))"
   try {
-    & ([scriptblock]::Create((Invoke-RestMethod 'https://bun.sh/install.ps1'))) -Version $BunVersion
+    Install-BunOfficial $BunVersion
   } catch {
     Write-Warn2 "bun.sh installer failed ($($_.Exception.Message)); trying the package manager"
     Install-Prereq 'Oven-sh.Bun' 'bun' @('--version', $BunVersion) @('--version', $BunVersion)
@@ -282,6 +346,17 @@ if (Test-Command 'nvidia-smi') {
   if ($LASTEXITCODE -ne 0) { $GpuName = '' }
 }
 $Variant = if ($Cpu) { 'cpu' } elseif ($Cuda) { 'cuda' } elseif ($GpuName) { 'cuda' } else { 'cpu' }
+
+Write-Step 'Download settings'
+foreach ($k in $NetworkDefaults.Keys) { Set-DefaultEnv $k $NetworkDefaults[$k] }
+if ($CacheDir) {
+  $CacheDir = [IO.Path]::GetFullPath($CacheDir)
+  New-Item -ItemType Directory -Force -Path $CacheDir | Out-Null
+  $env:HF_HOME = Join-Path $CacheDir 'huggingface'
+  $env:UV_CACHE_DIR = Join-Path $CacheDir 'uv'
+  $env:PIP_CACHE_DIR = Join-Path $CacheDir 'pip'
+  Write-Info "caches in ${CacheDir}: HF_HOME=$env:HF_HOME UV_CACHE_DIR=$env:UV_CACHE_DIR"
+}
 
 Write-Step 'JavaScript workspace (bun install)'
 Invoke-Native bun @('install')
@@ -309,6 +384,28 @@ function Test-ApplioHealthy {
   try { Invoke-Quiet { & $py -c 'import torch, faiss, librosa, soundfile' } | Out-Null; return ($LASTEXITCODE -eq 0) } finally { Pop-Location }
 }
 
+# Re-run Applio's dependency step (run-install.bat's `uv pip install`) with the
+# env's own interpreter, up to $ApplioInstallAttempts times.
+function Repair-ApplioEnvironment {
+  $py = Get-ApplioPython
+  if (-not $py) { return $false }
+  $index = if ($Variant -eq 'cpu') { 'https://download.pytorch.org/whl/cpu' } else { 'https://download.pytorch.org/whl/cu128' }
+  $pipArgs = @('pip', 'install', '-r', 'requirements.txt', '--python', $py, '--extra-index-url', $index, '--index-strategy', 'unsafe-best-match')
+  # run-install.bat installs uv into the env; fall back to the uv on PATH.
+  Invoke-Quiet { & $py -m uv --version } | Out-Null
+  $useEnvUv = ($LASTEXITCODE -eq 0)
+  for ($attempt = 1; $attempt -le $ApplioInstallAttempts; $attempt++) {
+    Write-Info "installing Applio's dependencies (attempt $attempt/$ApplioInstallAttempts, UV_HTTP_TIMEOUT=$env:UV_HTTP_TIMEOUT)"
+    Push-Location $ApplioDir
+    try {
+      if ($useEnvUv) { Invoke-Native $py (@('-m', 'uv') + $pipArgs) } else { Invoke-Native 'uv' $pipArgs }
+    } catch { Write-Warn2 $_.Exception.Message } finally { Pop-Location }
+    if (Test-ApplioHealthy) { return $true }
+    if ($attempt -lt $ApplioInstallAttempts) { Start-Sleep -Seconds 10 }
+  }
+  return $false
+}
+
 $ApplioReady = 'skipped'
 Write-Step 'Applio (voice conversion)'
 if ($SkipApplio) { Write-Info 'skipped (-SkipApplio)' }
@@ -321,16 +418,30 @@ else {
       New-Item -ItemType Directory -Force -Path (Split-Path $ApplioDir) | Out-Null
       Invoke-Native git @('clone', '--depth', '1', $ApplioRepo, $ApplioDir)
     }
-    Write-Info "running Applio's run-install.bat (Miniconda in %USERPROFILE%\Miniconda3, env in $ApplioDir\env)"
-    # Applio's installer creates a conda env; accept the channel ToS non-interactively
-    # and feed NUL so its closing `pause` returns.
-    $env:CONDA_PLUGINS_AUTO_ACCEPT_TOS = 'yes'
-    Push-Location $ApplioDir
-    try {
-      & cmd.exe /d /c 'run-install.bat < NUL'
-      if ($LASTEXITCODE -ne 0) { throw "run-install.bat exited with code $LASTEXITCODE" }
-    } finally { Pop-Location }
-    if (-not (Test-ApplioHealthy)) { throw "Applio's environment is not importable (torch/faiss/librosa); see the output above." }
+    if (Get-ApplioPython) {
+      # A previous run created the env but its download died part way: retry
+      # the dependency install instead of rebuilding the conda env.
+      Write-Info "Applio's environment exists but is incomplete; reinstalling its dependencies"
+    }
+    else {
+      Write-Info "running Applio's run-install.bat (Miniconda in %USERPROFILE%\Miniconda3, env in $ApplioDir\env)"
+      # Applio's installer creates a conda env; accept the channel ToS non-interactively
+      # and feed NUL so its closing `pause` returns. Its subroutine errors do not
+      # reach the exit code ("installed successfully" after a failed download),
+      # so the import check below is what decides.
+      $env:CONDA_PLUGINS_AUTO_ACCEPT_TOS = 'yes'
+      Push-Location $ApplioDir
+      try {
+        $ErrorActionPreference = 'Continue'
+        & cmd.exe /d /c 'run-install.bat < NUL'
+        $code = $LASTEXITCODE
+      } finally { $ErrorActionPreference = 'Stop'; Pop-Location }
+      if ($code -ne 0) { Write-Warn2 "run-install.bat exited with code $code" }
+      if (-not (Get-ApplioPython)) { throw "Applio's run-install.bat did not create $ApplioDir\env; see the output above." }
+    }
+    if (-not (Test-ApplioHealthy) -and -not (Repair-ApplioEnvironment)) {
+      throw "Applio's environment is not importable (torch/faiss/librosa) after $ApplioInstallAttempts dependency installs; check the connection and re-run (finished downloads are cached)."
+    }
     Write-Ok 'Applio environment ready'
   }
   $ApplioPython = Get-ApplioPython
@@ -399,14 +510,14 @@ try {
   if ($SkipModels) { Write-Info 'skipped (-SkipModels)' }
   else {
     $selected = @()
-    if (-not $Models) {
+    if (-not $ModelSpec) {
       Write-Info 'Starter models (downloaded from Hugging Face through the backend):'
       foreach ($k in $ModelCatalog.Keys) { Write-Info ('  {0,-14} {1,-8} {2}' -f $k, $ModelCatalog[$k].Size, $ModelCatalog[$k].License) }
       if (Confirm-Step 'Download OmniVoice (~2.4 GB, CC-BY-NC weights) and KittenTTS (~80 MB, Apache-2.0)?' $true) { $selected += @('omnivoice', 'kittentts') }
       if (-not $Yes -and (Confirm-Step 'Also download faster-whisper-small (~0.5 GB, MIT) for transcription?' $false)) { $selected += 'whisper-small' }
     }
-    elseif ($Models -ne 'none') {
-      $list = if ($Models -eq 'all') { @($ModelCatalog.Keys) } else { $Models.Split(',') | ForEach-Object { $_.Trim() } | Where-Object { $_ } }
+    elseif ($ModelSpec -ne 'none') {
+      $list = if ($ModelSpec -eq 'all') { @($ModelCatalog.Keys) } else { @($ModelSpec.Split(',')) }
       foreach ($k in $list) { if (-not $ModelCatalog.Contains($k)) { throw "Unknown model '$k' (use omnivoice, kittentts, whisper-small)." } }
       $summary = ($list | ForEach-Object { "$_ ($($ModelCatalog[$_].Size), $($ModelCatalog[$_].License))" }) -join '; '
       if (Confirm-Step "Download: ${summary}?" $true) { $selected = @($list) }
@@ -462,6 +573,14 @@ Write-Step 'Summary'
 $launchEnv = @()
 if ($CustomDataDir) { $launchEnv += "`$env:OMNIVOICE_DATA_DIR='$DataDir'" }
 if (-not $SkipApplio -and $ApplioDir -ne $ManagedApplioDir) { $launchEnv += "`$env:OMNIVOICE_APPLIO_DIR='$ApplioDir'" }
+if ($CacheDir) {
+  # Downloaded models live in HF_HOME, so the app must see the same value.
+  if (Confirm-Step "Save HF_HOME=$env:HF_HOME and UV_CACHE_DIR=$env:UV_CACHE_DIR as user environment variables?" $true) {
+    foreach ($name in @('HF_HOME', 'UV_CACHE_DIR')) { [Environment]::SetEnvironmentVariable($name, [Environment]::GetEnvironmentVariable($name), 'User') }
+    Write-Ok 'HF_HOME and UV_CACHE_DIR saved (new terminals pick them up)'
+  }
+  else { $launchEnv += "`$env:HF_HOME='$env:HF_HOME'" }
+}
 $launch = (@("cd '$Dir'") + $launchEnv + @('bun run dev')) -join '; '
 Write-Info "OS            Windows $([Environment]::OSVersion.Version) ($env:PROCESSOR_ARCHITECTURE)"
 Write-Info "Node          $(& node --version)   Bun $(& bun --version)   $(& uv --version)"
@@ -470,6 +589,7 @@ Write-Info "PyTorch       $Variant (torch $TorchVersion)$(if ($GpuName) { "  GPU
 Write-Info "VC device     $(if ($VcDevice) { $VcDevice } else { 'n/a' })"
 Write-Info "Repository    $Dir"
 Write-Info "Data dir      $DataDir"
+if ($CacheDir) { Write-Info "Caches        $CacheDir (HF_HOME, UV_CACHE_DIR)" }
 Write-Info "Applio        $(if ($SkipApplio) { 'skipped' } else { "$ApplioDir (backend sees it: $ApplioReady)" })"
 Write-Info "Models        $(if ($Installed.Count) { $Installed -join ', ' } else { 'none downloaded (use the in-app Model Store)' })"
 Write-Host ''

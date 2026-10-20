@@ -66,6 +66,13 @@ for the current window only.
    - Linux with `--cpu` or `--rocm`: `run-install.sh` always pulls CUDA wheels,
      so the script repeats its steps (`uv venv .venv --python 3.12`, then
      `uv pip install -r requirements.txt`) with the CPU or ROCm PyTorch index.
+   - If Applio's environment exists but does not import torch, faiss and
+     librosa (for example after a download timed out, which `run-install.bat`
+     still reports as a success), the script re-runs only the dependency step
+     with the environment's own interpreter, up to 3 times. On Windows that is
+     `env\python.exe -m uv pip install -r requirements.txt --python env\python.exe`
+     with the CUDA 12.8 index (CPU index with `-Cpu`). A re-run of the script
+     goes straight to this step instead of rebuilding the environment.
    - After installing, it runs `core.py prerequisites --no-pretraineds-hifigan --models --exe`
      from the Applio folder to fetch the base models.
    - With a custom `--applio-dir` / `-ApplioDir`, the scripts print
@@ -97,12 +104,13 @@ for the current window only.
 | `--cpu` / `--cuda` / `--rocm` | `-Cpu` / `-Cuda` | PyTorch variant (default auto; ROCm is Linux only) |
 | `--skip-applio` | `-SkipApplio` | Do not install Applio |
 | `--skip-models` | `-SkipModels` | Do not download models |
-| `--models LIST` | `-Models LIST` | `omnivoice,kittentts,whisper-small`, `all` or `none` |
+| `--models LIST` | `-Models LIST` | `omnivoice,kittentts,whisper-small`, `all` or `none` (in PowerShell, quoted or not) |
 | `--dir PATH` | `-Dir PATH` | Checkout location |
 | `--repo URL` | `-Repo URL` | Repository to clone (default `vasudev123t/VoiceStudio`) |
 | `--branch NAME` | `-Branch NAME` | Branch to clone |
 | `--data-dir PATH` | `-DataDir PATH` | Data dir (default `OMNIVOICE_DATA_DIR` or the platform default) |
 | `--applio-dir PATH` | `-ApplioDir PATH` | Applio location (default `<data dir>/tools/applio`) |
+| `--cache-dir PATH` | `-CacheDir PATH` | Put the download caches under PATH: sets `HF_HOME` (`PATH/huggingface`, where models go), `UV_CACHE_DIR` and `PIP_CACHE_DIR` for the run |
 | `--port N` | `-Port N` | Port for the verification backend |
 | `--skip-system` | `-SkipSystem` | Skip OS package installs (no sudo/winget) |
 | `--no-launch` | `-NoLaunch` | Do not start `bun run dev` at the end |
@@ -116,3 +124,35 @@ On Git Bash, `install.sh` hands off to `install.ps1` with the same flags.
 - CUDA wheels add several GB to each of those.
 - The starter models add about 2.5 GB.
 - The first run takes 10–30 minutes, depending on the network. A re-run takes seconds.
+
+## Slow connections and interrupted runs
+
+- uv's HTTP timeout defaults to 30 s, which is too short for the multi-GB CUDA
+  wheels on a slow link. For the run, the scripts set `UV_HTTP_TIMEOUT=600`
+  and `UV_HTTP_RETRIES=5`, plus `OMNIVOICE_CUDNN8_TIMEOUT=1800` for the
+  optional cuDNN 8 download in `setup:api`. Values you set yourself are kept.
+- A run that stops part way (closed terminal, lost connection, sleep) can be
+  started again with the same flags. Every step checks what is already there,
+  and uv reuses the wheels it already downloaded. Long downloads run inside the
+  terminal that started the script, so keep that window open. On Windows, a
+  separate window started with `start powershell` survives closing the editor
+  or terminal tab that launched it.
+
+## Installing on another drive
+
+When the system drive is short of space, put the checkout, data, Applio and
+the download caches on another drive. Example for `D:` on Windows:
+
+```powershell
+.\install.ps1 -Yes -Models omnivoice,kittentts `
+  -Dir D:\VoiceStudio -DataDir D:\VoiceStudioData\data `
+  -ApplioDir D:\VoiceStudioData\applio -CacheDir D:\VoiceStudioData\cache
+```
+
+`-CacheDir` / `--cache-dir` sets `HF_HOME`, `UV_CACHE_DIR` and `PIP_CACHE_DIR`
+for the run. Models are stored under `HF_HOME`, so the app must see the same
+value later: `install.ps1` offers to save `HF_HOME` and `UV_CACHE_DIR` as user
+environment variables, and `install.sh` adds them to the printed launch
+command. Setting `HF_HOME` and `UV_CACHE_DIR` yourself before the run works the
+same way. Applio's Miniconda still goes to `%USERPROFILE%\Miniconda3`
+(about 0.5 GB), because `run-install.bat` fixes that path.
