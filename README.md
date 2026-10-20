@@ -139,7 +139,7 @@ Add `-- --install` for the networked managed-runtime installation check.
 
 | Need | Start here |
 |---|---|
-| Setup help | [Troubleshooting](docs/install/troubleshooting.md) · [Model downloads](docs/downloading-models.md) |
+| Setup help | [Troubleshooting](docs/install/troubleshooting.md) · [Model downloads](docs/downloading-models.md) · [One-command source setup](docs/install/full-setup.md) (`install.sh` / `install.ps1`) |
 | Models & audio quality | [Engine guides](docs/engines/README.md) · [Benchmarks](docs/benchmarks.md) · [Voice conversion (RVC)](docs/voice-conversion.md) |
 | Integrations | [Local API](docs/speech-platform.md) · [MCP](docs/mcp.md) · [Examples](examples/README.md) |
 | Phone companion (preview) | [iOS and Android apps](docs/mobile.md) |
