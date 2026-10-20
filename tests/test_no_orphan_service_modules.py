@@ -23,7 +23,11 @@ SERVICES_DIR = REPO_ROOT / "backend" / "services"
 _SEARCH_ROOTS = ("backend", "tests", "scripts")
 
 # module name -> justification for existing with no in-repo referencer.
-_INTENTIONALLY_UNREFERENCED: dict[str, str] = {}
+_INTENTIONALLY_UNREFERENCED: dict[str, str] = {
+    # Standalone script executed by path inside Applio's own interpreter
+    # (services/rvc.py ApplioBackend spawns it); never imported by VoiceStudio.
+    "rvc_applio_worker": "subprocess entry point run by file path",
+}
 
 
 def _py_files() -> list[Path]:

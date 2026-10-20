@@ -1674,6 +1674,43 @@ def generate_budget(engine: Optional[str] = None):
     return generate_budget_s(engine)
 
 
+def _rvc_post_step_or_404(voice_id, **params):
+    """Validate the optional RVC post-step BEFORE any synthesis work."""
+    if not voice_id:
+        return None
+    from services import rvc_registry
+    from services.rvc import ConversionParams
+
+    try:
+        rvc_registry.get_voice(voice_id)
+    except rvc_registry.VoiceNotFound:
+        raise HTTPException(status_code=404, detail="That RVC voice doesn't exist.") from None
+    try:
+        return voice_id, ConversionParams(**params).validate()
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+async def _apply_rvc_post_step(audio_tensor, sample_rate, post):
+    """Re-voice a finished take with an RVC voice (runs before watermarking,
+    so the saved take carries exactly one mark). Failures are user-visible:
+    the user explicitly asked for the converted voice."""
+    from services.rvc import CONVERT_TIMEOUT_S, RVCUnavailable, get_service
+
+    voice_id, params = post
+    try:
+        tensor, sr, _result = await run_on_gpu_pool_guarded(
+            functools.partial(get_service().convert_tensor, audio_tensor, sample_rate,
+                              voice_id, params),
+            what="RVC post-step", timeout=CONVERT_TIMEOUT_S + 30,
+        )
+    except RVCUnavailable as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return tensor, sr
+
+
 @router.post("/generate")
 async def generate_speech(
     text: str = Form(...),
@@ -1719,6 +1756,14 @@ async def generate_speech(
     # classic flow, so streaming is purely a delivery channel — engine-agnostic
     # (text-level chunking, no per-engine token streaming).
     stream: bool = Form(False),
+    # Voice conversion post-step (hybrid TTS → RVC): when set, the finished
+    # take is re-voiced with this registered RVC voice before watermarking
+    # and saving. Omitted = byte-identical legacy behavior.
+    rvc_voice_id: Optional[str] = Form(None),
+    rvc_pitch: int = Form(0, ge=-24, le=24),
+    rvc_f0_method: Literal["rmvpe", "crepe", "fcpe", "harvest", "pm"] = Form("rmvpe"),
+    rvc_index_rate: float = Form(0.75, ge=0.0, le=1.0),
+    rvc_protect: float = Form(0.33, ge=0.0, le=0.5),
 ):
     # #502: NFC-normalize the input text so decomposed (NFD) diacritics — common
     # in pasted Vietnamese and other Latin-with-marks text — are composed to the
@@ -1728,6 +1773,10 @@ async def generate_speech(
     # (utils/duration.py) so the estimate and the synthesis see the same text.
     import unicodedata
     text = unicodedata.normalize("NFC", text)
+    _rvc_post = _rvc_post_step_or_404(
+        rvc_voice_id, pitch=rvc_pitch, f0_method=rvc_f0_method,
+        index_rate=rvc_index_rate, protect=rvc_protect,
+    )
 
     # ── Engine resolution (issue #312) ──────────────────────────────────────
     # The request runs on the engine selected in Settings (POST /engines/select,
@@ -2356,6 +2405,9 @@ async def generate_speech(
                         timeout=_generate_timeout_s(text, execution_device=_routing["effective_device"]),
                     )
 
+                if _rvc_post is not None:
+                    audio_tensor, sample_rate = await _apply_rvc_post_step(
+                        audio_tensor, sample_rate, _rvc_post)
                 _, meta = await _finalize_generation(
                     audio_tensor, sample_rate, text=text, history_mode=history_mode,
                     ref_audio_path=ref_audio_path, language=language,
@@ -2506,6 +2558,9 @@ async def generate_speech(
         # their real rate only once weights are up.
         sample_rate = (_backend.sample_rate if _backend is not None
                        else _model.sampling_rate)
+        if _rvc_post is not None:
+            audio_tensor, sample_rate = await _apply_rvc_post_step(
+                audio_tensor, sample_rate, _rvc_post)
         # Watermark → save → history → prune → emit, shared with the streaming
         # path (see _finalize_generation) so both flows produce identical takes.
         audio_tensor, _meta = await _finalize_generation(

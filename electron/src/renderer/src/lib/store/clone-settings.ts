@@ -29,6 +29,8 @@ export interface CloneSettings {
   showOverrides: boolean;
   selectedProfileId: string | null;
   autoPlay: boolean;
+  /** RVC voice applied after synthesis (clone workspace only); '' = off. */
+  rvcVoiceId: string;
 }
 
 export const DEFAULT_CLONE_SETTINGS: CloneSettings = {
@@ -52,6 +54,7 @@ export const DEFAULT_CLONE_SETTINGS: CloneSettings = {
   showOverrides: false,
   selectedProfileId: null,
   autoPlay: false,
+  rvcVoiceId: '',
 };
 
 /** Whether `value` is a valid stored value for the clone setting `key`. */

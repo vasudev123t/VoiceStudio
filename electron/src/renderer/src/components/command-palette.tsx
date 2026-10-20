@@ -35,6 +35,7 @@ import {
   WrenchIcon,
   XIcon,
   type LucideIcon,
+  ArrowLeftRightIcon,
 } from 'lucide-react';
 import {
   designDraftFromTake,
@@ -176,6 +177,13 @@ export function CommandPalette() {
       group: workspaceGroup,
       icon: WandSparklesIcon,
       run: () => navigate({ to: '/design' }),
+    },
+    {
+      id: 'voice-conversion',
+      label: t('nav.voice_conversion'),
+      group: workspaceGroup,
+      icon: ArrowLeftRightIcon,
+      run: () => navigate({ to: '/voice-conversion' }),
     },
     {
       id: 'audiobook',

@@ -57,3 +57,44 @@ export async function authorizeModelsDirectory(dataDir: string, selected: string
   }
   return writeAuthorization(dataDir, 'models_dir', path);
 }
+
+export type VoiceConversionDirectoryKind = 'applio_dir' | 'rvc_dataset_dir';
+export function assertVoiceConversionDirectoryKind(value: unknown): VoiceConversionDirectoryKind {
+  if (value !== 'applio_dir' && value !== 'rvc_dataset_dir') {
+    throw new Error('Invalid voice-conversion directory kind');
+  }
+  return value;
+}
+
+async function isFile(path: string) {
+  try {
+    return (await stat(path)).isFile();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Mint a one-shot capability for an Applio checkout (must contain core.py and
+ * rvc/infer/infer.py; '' restores the managed default) or an RVC training
+ * dataset folder (read-only; never created or written).
+ */
+export async function authorizeVoiceConversionDirectory(
+  dataDir: string,
+  selected: string,
+  kind: VoiceConversionDirectoryKind,
+) {
+  assertVoiceConversionDirectoryKind(kind);
+  if (!isAbsolute(dataDir)) throw new Error('Expected an absolute data directory');
+  if (selected === '' && kind === 'applio_dir') return writeAuthorization(dataDir, kind, '');
+  if (!isAbsolute(selected)) throw new Error('Expected an absolute directory');
+  const path = await realpath(selected);
+  if (!(await stat(path)).isDirectory()) throw new Error('Expected a directory');
+  if (
+    kind === 'applio_dir' &&
+    !((await isFile(join(path, 'core.py'))) && (await isFile(join(path, 'rvc', 'infer', 'infer.py'))))
+  ) {
+    throw new Error('Selected folder is not an Applio checkout');
+  }
+  return writeAuthorization(dataDir, kind, path);
+}

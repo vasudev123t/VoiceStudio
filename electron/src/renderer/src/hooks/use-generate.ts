@@ -347,6 +347,8 @@ function useGenerateController(): UseGenerateClone {
           denoise: settings.denoise,
           postprocess: settings.postprocess,
           duration: settings.duration,
+          // Voice Design auditions stay raw; only clone takes get the RVC post-step.
+          rvcVoiceId: design ? undefined : settings.rvcVoiceId || undefined,
         };
         const result = await generateClone(input, {
           signal: controller.signal,

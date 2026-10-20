@@ -43,6 +43,7 @@ import {
 import { cn } from '@/lib/utils';
 import { EngineLanguagePicker } from './engine-language-picker';
 import { PresetVoicePicker } from './preset-voice-picker';
+import { RvcPostStepControl } from '@/features/voice-conversion/rvc-post-step';
 import { QualityControls } from './quality-controls';
 import { CloneDemoAction } from './clone-demo';
 import { useCloneDemo } from '@/hooks/use-clone-demo';
@@ -412,6 +413,7 @@ export function ActionBar() {
           <PresetVoicePicker disabled={isGenerating} />
           <span aria-hidden="true" className="mx-1 h-4 w-px bg-border" />
           <QualityControls disabled={isGenerating} />
+          <RvcPostStepControl disabled={isGenerating} />
           <VoiceControls />
         </div>
 

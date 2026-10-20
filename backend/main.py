@@ -746,12 +746,14 @@ def _phase_a_build_inner() -> None:
         media_tools as media_tools_router,  # Audio tools: ffmpeg/ffprobe/yt-dlp
         auth as auth_router,
         voice_convert,  # Studio Convert: speech-to-speech via ASR → TTS
+        voice_conversion,  # Voice conversion: RVC / Applio speech-to-speech
     )
     from api.routers import mcp_bindings as _mcp_bindings_router  # noqa: E402
     from api.routers import telephony_twilio as _telephony_twilio_router  # noqa: E402
     from api.routers import calls as _calls_router  # noqa: E402
     _router_modules.extend([
-        system, profiles, profile_images, exports, generation, voice_convert, dub_core, dub_generate,
+        system, profiles, profile_images, exports, generation, voice_convert, voice_conversion,
+        dub_core, dub_generate,
         dub_export, dub_translate, projects, glossary, engines, tools,
         stories, setup, gallery, archetypes, describe_voice, community,
         batch, watermark, events, capture, capture_ws, speech_platform, dictation,
@@ -1296,6 +1298,21 @@ async def lifespan(app: FastAPI):
     # when Phase A never completed — nothing armed, nothing to flip.
     if model_loads_begin_shutdown is not None:
         model_loads_begin_shutdown()
+    # Voice conversion: stop the Applio worker process (if one was started)
+    # and any running training/setup subprocess. Lazy: never imports RVC code
+    # on a backend that never used the feature.
+    if "services.rvc" in sys.modules:
+        try:
+            sys.modules["services.rvc"].reset_service()
+        except Exception:  # noqa: BLE001
+            logger.debug("RVC shutdown failed", exc_info=True)
+    if "services.rvc_training" in sys.modules:
+        try:
+            _rvc_training = sys.modules["services.rvc_training"]
+            for _job in _rvc_training.list_jobs():
+                _rvc_training.cancel_job(_job.id)
+        except Exception:  # noqa: BLE001
+            logger.debug("RVC training shutdown failed", exc_info=True)
     # Stop MCP first — signal its task to exit its own anyio context (correct
     # task-affinity), then bound the wait so a wedged manager can't hang exit.
     mcp_stop = getattr(app.state, "mcp_stop", None)

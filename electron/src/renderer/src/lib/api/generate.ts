@@ -170,6 +170,8 @@ export function toGenerateForm(input: CloneGenerateInput): FormData {
     if (instruct) form.append('instruct', instruct);
   }
   if (input.designRecipe) form.append('design_recipe', JSON.stringify(input.designRecipe));
+  // Optional RVC post-step: the backend converts the take before watermarking.
+  if (input.rvcVoiceId) form.append('rvc_voice_id', input.rvcVoiceId);
   return form;
 }
 

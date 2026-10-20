@@ -120,6 +120,15 @@ export const designRoute = createRoute({
   component: DesignPage,
 });
 
+export const voiceConversionRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/voice-conversion',
+  component: lazyRouteComponent(
+    () => import('@/features/voice-conversion/voice-conversion-page'),
+    'VoiceConversionPage',
+  ),
+});
+
 export const dubRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/dub',
@@ -290,6 +299,7 @@ export const routeTree = rootRoute.addChildren([
   logsRoute,
   dubRoute,
   designRoute,
+  voiceConversionRoute,
   transcriptionsRoute,
   settingsRoute,
   appearanceRoute,

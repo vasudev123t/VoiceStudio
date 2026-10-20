@@ -90,6 +90,13 @@ describe('toGenerateForm', () => {
     expect(toGenerateForm({ ...BASE_INPUT, presetVoice: 'F3' }).get('preset_voice')).toBe('F3');
   });
 
+  it('adds the RVC post-step only when a voice is chosen', () => {
+    expect(toGenerateForm(BASE_INPUT).has('rvc_voice_id')).toBe(false);
+    expect(toGenerateForm({ ...BASE_INPUT, rvcVoiceId: 'narrator' }).get('rvc_voice_id')).toBe(
+      'narrator',
+    );
+  });
+
   it('keeps existing defaults and sends explicit quality choices', () => {
     const defaults = toGenerateForm(BASE_INPUT);
     expect(defaults.get('wav_bits')).toBe('16');

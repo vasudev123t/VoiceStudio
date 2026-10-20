@@ -23,6 +23,9 @@ DELETE /profiles/{profile_id}
 DELETE /profiles/{profile_id}/consent
 DELETE /projects/{project_id}
 DELETE /pronunciation/{entry_id}
+DELETE /voice-conversion/history
+DELETE /voice-conversion/history/{entry_id}
+DELETE /voice-conversion/voices/{voice_id}
 GET /.well-known/voicestudio-speech
 GET /api/integrations/twilio/state
 GET /api/mcp/bindings
@@ -174,9 +177,15 @@ GET /v1/audio/capabilities
 GET /v1/audio/voices
 GET /v1/models
 GET /v1/models/{model_id:path}
+GET /voice-conversion/history
+GET /voice-conversion/jobs
+GET /voice-conversion/status
+GET /voice-conversion/train/{job_id}
+GET /voice-conversion/voices
 GET /watermark/status
 PATCH /gallery/voices/{voice_id}
 PATCH /projects/{project_id}
+PATCH /voice-conversion/voices/{voice_id}
 POST /api/auth/session
 POST /api/auth/ws-ticket
 POST /api/integrations/twilio/test
@@ -303,6 +312,12 @@ POST /transcribe
 POST /v1/audio/speech
 POST /v1/audio/transcriptions
 POST /v1/audio/translations
+POST /voice-conversion/convert
+POST /voice-conversion/setup
+POST /voice-conversion/train
+POST /voice-conversion/train/{job_id}/cancel
+POST /voice-conversion/unload
+POST /voice-conversion/voices/import
 POST /watermark/detect
 POST /watermark/settings
 PUT /api/integrations/twilio/config
@@ -330,6 +345,7 @@ PUT /profiles/{profile_id}/audio
 PUT /profiles/{profile_id}/image
 PUT /projects/{project_id}
 PUT /pronunciation/{entry_id}
+PUT /voice-conversion/settings
 WS /v1/audio/transcriptions/stream
 WS /ws/events
 WS /ws/transcribe

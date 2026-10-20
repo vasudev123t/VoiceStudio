@@ -63,11 +63,12 @@ Live dictation uses a WebSocket, which cannot pass through the app protocol HTTP
 - `@/lib/api/profiles.ts`: `listProfiles()`, `createCloneProfile({ name, refAudio, refAudioName, refText, instruct, language })`, `deleteProfile(id)`.
 - `@/lib/api/history.ts`: `listHistory()`, `clearHistory()`, `deleteHistoryItem(id)`, `setHistoryStarred(id, starred)`.
 - `@/lib/api/engines.ts`: `getEngines()`, `getSystemInfo()`.
+- `@/lib/api/voice-conversion.ts`: `getStatus()`, `listVoices()`, `importVoice(name, model, index?)`, `renameVoice(id, name)`, `deleteVoice(id)`, `convertAudio(file, voiceId, params, signal?)` (multipart via `toConvertForm`), `listHistory()`, `deleteHistoryEntry(id)`, `startTraining(input)` (via `toTrainForm`; uploads or a one-shot `dataset_authorization`), `getJob(id)`, `listJobs()`, `cancelJob(id)`, `startApplioSetup()`, `updateSettings({ device?, applio_dir_authorization? })`, `vcQueryKeys`.
 - `@/lib/api/audio.ts`: `cleanAudio(blob, filename): Promise<File>` (POST /clean-audio, field `audio`, honours X-Clean-Filename).
 - `@/lib/query.ts`: `queryClient`, `queryKeys = { profiles:['profiles'], history:['history'], engines:['engines'], systemInfo:['system','info'] }`.
 - `@/lib/languages.ts`: `LANGUAGES: string[]` (bundled list, index 0 = 'Auto'), `POPULAR_LANGUAGES: string[]`, `TAGS: string[]` (expression tokens).
 - `@/lib/store/clone-settings.ts` (TanStack Store, persisted to localStorage `voicestudio.clone.settings.v1`):
-  `interface CloneSettings { text; language; refText; instruct; steps; cfg; speed; tShift; posTemp; classTemp; layerPenalty; denoise; postprocess; duration; showOverrides; selectedProfileId: string|null; autoPlay: boolean }`,
+  `interface CloneSettings { text; language; refText; instruct; steps; cfg; speed; tShift; posTemp; classTemp; layerPenalty; denoise; postprocess; duration; showOverrides; selectedProfileId: string|null; autoPlay: boolean; rvcVoiceId: string /* '' = no RVC post-step */ }`,
   `DEFAULT_CLONE_SETTINGS`, `cloneSettingsStore`, `useCloneSetting(key)`, `useCloneSettings()`, `setCloneSetting(key, value)`, `patchCloneSettings(partial)`, `resetOverrides()`.
 - `@/lib/store/reference.ts` (not persisted): `interface ReferenceState { file: File|null; durationSeconds: number|null; objectUrl: string|null }`, `useReference()`, `setReferenceFile(file: File|null): Promise<{ ok: boolean; durationSeconds: number|null; tooLong: boolean }>` (probes duration; clears selectedProfileId when a file is set).
 - `@/lib/store/output.ts`: `interface OutputState { result: GenerateResult|null; objectUrl: string|null; text: string }`, `useLatestOutput()`, `setLatestOutput(result, text)`.

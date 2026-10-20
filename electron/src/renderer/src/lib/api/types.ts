@@ -177,6 +177,8 @@ export interface CloneGenerateInput {
   postprocess: boolean;
   /** '' = auto. */
   duration: string;
+  /** Registered RVC voice to convert the take into after synthesis. */
+  rvcVoiceId?: string;
 }
 
 export interface GenerateResult {

@@ -68,6 +68,7 @@ describe('take metadata', () => {
       showOverrides: true,
       selectedProfileId: 'ignored',
       autoPlay: true,
+      rvcVoiceId: 'narrator',
     };
     rememberTake('take', changed);
     const restored = takeSettings(item);

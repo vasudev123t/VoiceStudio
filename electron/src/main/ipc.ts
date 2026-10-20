@@ -6,6 +6,8 @@ import {
   assertMediaTool,
   authorizeMediaTool,
   authorizeModelsDirectory,
+  assertVoiceConversionDirectoryKind,
+  authorizeVoiceConversionDirectory,
 } from './media-authorization';
 import { isTrustedRenderer } from './trusted-renderer';
 import { replaceFile } from './replace-file';
@@ -50,6 +52,7 @@ export const CHANNELS = {
   permissionsOpenSettings: 'permissions:openSettings',
   filesAuthorizeMediaTool: 'files:authorizeMediaTool',
   filesAuthorizeModelsDirectory: 'files:authorizeModelsDirectory',
+  filesAuthorizeVoiceConversionDirectory: 'files:authorizeVoiceConversionDirectory',
   filesExtractScript: 'files:extractScript',
   backendGetStatus: 'backend:getStatus',
   backendAcknowledgeCrash: 'backend:acknowledgeCrash',
@@ -560,6 +563,27 @@ export function registerIpc(
     }
     return authorizeModelsDirectory(await backendDataDirectory(supervisor), selected);
   });
+
+  ipcMain.handle(
+    CHANNELS.filesAuthorizeVoiceConversionDirectory,
+    async (event, rawKind: unknown, rawReset: unknown = false) => {
+      const owner = getMainWindow();
+      assertTrustedMainFrame(event, owner);
+      const kind = assertVoiceConversionDirectoryKind(rawKind);
+      if (typeof rawReset !== 'boolean') throw new Error('Invalid voice-conversion request');
+      let selected = '';
+      if (!rawReset || kind !== 'applio_dir') {
+        const picked = await dialog.showOpenDialog(owner, { properties: ['openDirectory'] });
+        if (picked.canceled || !picked.filePaths[0]) return null;
+        selected = picked.filePaths[0];
+      }
+      return authorizeVoiceConversionDirectory(
+        await backendDataDirectory(supervisor),
+        selected,
+        kind,
+      );
+    },
+  );
 
   ipcMain.handle(CHANNELS.filesSaveAudio, async (event, raw: unknown): Promise<SaveAudioResult> => {
     const owner = windowFor(event) ?? getMainWindow();

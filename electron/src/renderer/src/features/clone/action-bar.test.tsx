@@ -181,4 +181,5 @@ describe('ActionBar', () => {
   });
 });
 
+vi.mock('@/features/voice-conversion/rvc-post-step', () => ({ RvcPostStepControl: () => null }));
 vi.mock('@/hooks/use-engines', () => ({ useEngines: () => ({ activeTts: null }) }));

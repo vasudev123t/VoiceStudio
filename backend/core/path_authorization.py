@@ -27,6 +27,8 @@ _KINDS = {
     "soni_input",
     "soni_output_dir",
     "sidecar_dir",
+    "applio_dir",
+    "rvc_dataset_dir",
 }
 _AUTH_DIR = os.path.join(DATA_DIR, ".path-authorizations")
 

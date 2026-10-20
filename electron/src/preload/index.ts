@@ -130,6 +130,8 @@ const bridge: VoiceStudioBridge = {
     authorizeMediaTool: (kind) => ipcRenderer.invoke('files:authorizeMediaTool', kind),
     authorizeModelsDirectory: (reset = false) =>
       ipcRenderer.invoke('files:authorizeModelsDirectory', reset),
+    authorizeVoiceConversionDirectory: (kind: 'applio_dir' | 'rvc_dataset_dir', reset = false) =>
+      ipcRenderer.invoke('files:authorizeVoiceConversionDirectory', kind, reset),
     extractScript: (input) => ipcRenderer.invoke('files:extractScript', input) as Promise<string>,
     saveAudio: (req: SaveAudioRequest) =>
       ipcRenderer.invoke('files:saveAudio', req) as Promise<SaveAudioResult>,

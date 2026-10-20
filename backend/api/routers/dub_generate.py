@@ -1445,8 +1445,15 @@ async def dub_generate(job_id: str, req: DubRequest):
                         await loop.run_in_executor(_gpu_pool, apply_rvc, seg_wav_path)
                         from services.audio_io import load_audio
                         rvc_wav, rvc_sr = load_audio(seg_wav_path)
-                        if rvc_sr == backend.sample_rate:
-                            audio_tensor = rvc_wav
+                        # RVC writes at the VOICE MODEL's rate (32/40/48 kHz),
+                        # which almost never equals the TTS rate; the old
+                        # equality check silently discarded every conversion.
+                        if rvc_sr != backend.sample_rate:
+                            import torchaudio.functional as _rvc_af
+                            rvc_wav = _rvc_af.resample(rvc_wav, rvc_sr, backend.sample_rate)
+                        if rvc_wav.dim() == 2 and rvc_wav.shape[0] > 1:
+                            rvc_wav = rvc_wav.mean(dim=0, keepdim=True)
+                        audio_tensor = rvc_wav
 
                     except Exception as e:
                         yield f"data: {json.dumps({'type': 'warning', 'segment': i, 'message': f'RVC skipped: {str(e)[:120]}'})}\n\n"

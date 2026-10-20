@@ -36,6 +36,10 @@ metadata and the backend fallback mirror it.
 
 - The installed app now rebuilds a Python environment that antivirus or disk cleanup removed, once per launch with the usual setup progress, instead of stopping at a setup error; your voices and projects are untouched (#3032) — thanks @afraniohugo and @javalovelinux-cmd!
 
+### Changed
+
+- New Voice conversion workspace: perform a line and re-voice it with an RVC model through Applio, import or train voices, or add an RVC step to clone takes; the dubbing RVC hook no longer drops converted audio ([guide](docs/voice-conversion.md))
+
 ### Docs
 
 - OmniVoice GGUF docs state that the installers do not ship its native binary yet (#3026) — thanks @DestinyQJY!

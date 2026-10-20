@@ -11,6 +11,7 @@ const EVENT_QUERY_KEYS: Readonly<Record<string, readonly QueryKey[]>> = {
   profiles: [queryKeys.profiles],
   dub_history: [['dub-history']],
   export_history: [['export-history']],
+  voice_conversion: [['voice-conversion']],
   generation_history: [queryKeys.history],
   model_status: [
     queryKeys.engines,

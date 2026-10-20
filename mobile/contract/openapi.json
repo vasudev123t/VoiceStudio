@@ -740,6 +740,89 @@
     "title": "Body_convert_speech_convert_post",
     "type": "object"
    },
+   "Body_convert_voice_conversion_convert_post": {
+    "properties": {
+     "audio": {
+      "contentMediaType": "application/octet-stream",
+      "title": "Audio",
+      "type": "string"
+     },
+     "clean_audio": {
+      "default": false,
+      "title": "Clean Audio",
+      "type": "boolean"
+     },
+     "clean_strength": {
+      "default": 12.0,
+      "maximum": 30.0,
+      "minimum": 1.0,
+      "title": "Clean Strength",
+      "type": "number"
+     },
+     "f0_autotune": {
+      "default": false,
+      "title": "F0 Autotune",
+      "type": "boolean"
+     },
+     "f0_method": {
+      "default": "rmvpe",
+      "enum": [
+       "rmvpe",
+       "crepe",
+       "fcpe",
+       "harvest",
+       "pm"
+      ],
+      "title": "F0 Method",
+      "type": "string"
+     },
+     "filter_radius": {
+      "default": 3,
+      "maximum": 7.0,
+      "minimum": 0.0,
+      "title": "Filter Radius",
+      "type": "integer"
+     },
+     "index_rate": {
+      "default": 0.75,
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Index Rate",
+      "type": "number"
+     },
+     "pitch": {
+      "default": 0,
+      "maximum": 24.0,
+      "minimum": -24.0,
+      "title": "Pitch",
+      "type": "integer"
+     },
+     "protect": {
+      "default": 0.33,
+      "maximum": 0.5,
+      "minimum": 0.0,
+      "title": "Protect",
+      "type": "number"
+     },
+     "rms_mix_rate": {
+      "default": 1.0,
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Rms Mix Rate",
+      "type": "number"
+     },
+     "voice_id": {
+      "title": "Voice Id",
+      "type": "string"
+     }
+    },
+    "required": [
+     "audio",
+     "voice_id"
+    ],
+    "title": "Body_convert_voice_conversion_convert_post",
+    "type": "object"
+   },
    "Body_create_profile_profiles_post": {
     "properties": {
      "image": {
@@ -1284,6 +1367,50 @@
       ],
       "title": "Ref Text"
      },
+     "rvc_f0_method": {
+      "default": "rmvpe",
+      "enum": [
+       "rmvpe",
+       "crepe",
+       "fcpe",
+       "harvest",
+       "pm"
+      ],
+      "title": "Rvc F0 Method",
+      "type": "string"
+     },
+     "rvc_index_rate": {
+      "default": 0.75,
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Rvc Index Rate",
+      "type": "number"
+     },
+     "rvc_pitch": {
+      "default": 0,
+      "maximum": 24.0,
+      "minimum": -24.0,
+      "title": "Rvc Pitch",
+      "type": "integer"
+     },
+     "rvc_protect": {
+      "default": 0.33,
+      "maximum": 0.5,
+      "minimum": 0.0,
+      "title": "Rvc Protect",
+      "type": "number"
+     },
+     "rvc_voice_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Rvc Voice Id"
+     },
      "seed": {
       "anyOf": [
        {
@@ -1364,6 +1491,39 @@
      "file"
     ],
     "title": "Body_import_profile_marketplace_import_post",
+    "type": "object"
+   },
+   "Body_import_voice_voice_conversion_voices_import_post": {
+    "properties": {
+     "index": {
+      "anyOf": [
+       {
+        "contentMediaType": "application/octet-stream",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Index"
+     },
+     "model": {
+      "contentMediaType": "application/octet-stream",
+      "title": "Model",
+      "type": "string"
+     },
+     "name": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "model"
+    ],
+    "title": "Body_import_voice_voice_conversion_voices_import_post",
     "type": "object"
    },
    "Body_inspect_persona_personas_inspect_post": {
@@ -1562,6 +1722,93 @@
      "file"
     ],
     "title": "Body_stories_encode_stories_encode_post",
+    "type": "object"
+   },
+   "Body_train_voice_conversion_train_post": {
+    "properties": {
+     "batch_size": {
+      "default": 8,
+      "maximum": 50.0,
+      "minimum": 1.0,
+      "title": "Batch Size",
+      "type": "integer"
+     },
+     "checkpointing": {
+      "default": false,
+      "title": "Checkpointing",
+      "type": "boolean"
+     },
+     "dataset_authorization": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Dataset Authorization"
+     },
+     "epochs": {
+      "default": 300,
+      "maximum": 10000.0,
+      "minimum": 1.0,
+      "title": "Epochs",
+      "type": "integer"
+     },
+     "f0_method": {
+      "default": "rmvpe",
+      "enum": [
+       "rmvpe",
+       "crepe",
+       "fcpe"
+      ],
+      "title": "F0 Method",
+      "type": "string"
+     },
+     "files": {
+      "anyOf": [
+       {
+        "items": {
+         "contentMediaType": "application/octet-stream",
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Files"
+     },
+     "name": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+     },
+     "sample_rate": {
+      "default": "48000",
+      "enum": [
+       "32000",
+       "40000",
+       "48000"
+      ],
+      "title": "Sample Rate",
+      "type": "string"
+     },
+     "save_every": {
+      "default": 25,
+      "maximum": 100.0,
+      "minimum": 1.0,
+      "title": "Save Every",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "title": "Body_train_voice_conversion_train_post",
     "type": "object"
    },
    "Body_transcribe_audio_transcribe_post": {
@@ -3453,6 +3700,21 @@
     "title": "RevokeRequest",
     "type": "object"
    },
+   "RvcVoiceRenameBody": {
+    "properties": {
+     "name": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "title": "RvcVoiceRenameBody",
+    "type": "object"
+   },
    "SegmentPreviewRequest": {
     "properties": {
      "duration": {
@@ -4724,6 +4986,64 @@
      "type"
     ],
     "title": "ValidationError",
+    "type": "object"
+   },
+   "VoiceConversionSettingsBody": {
+    "properties": {
+     "applio_dir_authorization": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Applio Dir Authorization"
+     },
+     "device": {
+      "anyOf": [
+       {
+        "enum": [
+         "auto",
+         "cpu",
+         "cuda",
+         "cuda:0",
+         "cuda:1",
+         "mps"
+        ],
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Device"
+     }
+    },
+    "title": "VoiceConversionSettingsBody",
+    "type": "object"
+   },
+   "VoiceConversionSetupBody": {
+    "properties": {
+     "confirm": {
+      "default": false,
+      "title": "Confirm",
+      "type": "boolean"
+     },
+     "cuda": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Cuda"
+     }
+    },
+    "title": "VoiceConversionSetupBody",
     "type": "object"
    },
    "WebSocketTicketRequest": {
@@ -17819,6 +18139,537 @@
     "summary": "Retrieve Model",
     "tags": [
      "OpenAI-Compatible Audio API"
+    ]
+   }
+  },
+  "/voice-conversion/convert": {
+   "post": {
+    "description": "Convert ``audio`` with a registered voice.\n\nThe upload is copied untouched (``source_url``) and the converted take is\nwritten as WAV at the voice model's sample rate (``audio_url``).",
+    "operationId": "convert_voice_conversion_convert_post",
+    "requestBody": {
+     "content": {
+      "multipart/form-data": {
+       "schema": {
+        "$ref": "#/components/schemas/Body_convert_voice_conversion_convert_post"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Convert",
+    "tags": [
+     "voice-conversion"
+    ]
+   }
+  },
+  "/voice-conversion/history": {
+   "delete": {
+    "operationId": "clear_history_voice_conversion_history_delete",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Clear History",
+    "tags": [
+     "voice-conversion"
+    ]
+   },
+   "get": {
+    "operationId": "history_voice_conversion_history_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "History",
+    "tags": [
+     "voice-conversion"
+    ]
+   }
+  },
+  "/voice-conversion/history/{entry_id}": {
+   "delete": {
+    "operationId": "delete_history_voice_conversion_history__entry_id__delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "entry_id",
+      "required": true,
+      "schema": {
+       "title": "Entry Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Delete History",
+    "tags": [
+     "voice-conversion"
+    ]
+   }
+  },
+  "/voice-conversion/jobs": {
+   "get": {
+    "operationId": "jobs_voice_conversion_jobs_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Jobs",
+    "tags": [
+     "voice-conversion"
+    ]
+   }
+  },
+  "/voice-conversion/settings": {
+   "put": {
+    "operationId": "update_settings_voice_conversion_settings_put",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/VoiceConversionSettingsBody"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Update Settings",
+    "tags": [
+     "voice-conversion"
+    ]
+   }
+  },
+  "/voice-conversion/setup": {
+   "post": {
+    "description": "Download + install Applio into ``<data>/tools/applio`` (several GB).\n\nNever runs implicitly: the caller must pass ``confirm=true``.",
+    "operationId": "setup_applio_voice_conversion_setup_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/VoiceConversionSetupBody"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Setup Applio",
+    "tags": [
+     "voice-conversion"
+    ]
+   }
+  },
+  "/voice-conversion/status": {
+   "get": {
+    "operationId": "status_voice_conversion_status_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Status",
+    "tags": [
+     "voice-conversion"
+    ]
+   }
+  },
+  "/voice-conversion/train": {
+   "post": {
+    "description": "Train a new voice with Applio: uploaded clips or a desktop-picked folder.\n\nDefaults are sized for an 8 GB GPU (batch 8, 48 kHz, rmvpe). Progress is\npushed as ``voice_conversion`` events and polled via ``GET /train/{id}``.",
+    "operationId": "train_voice_conversion_train_post",
+    "requestBody": {
+     "content": {
+      "multipart/form-data": {
+       "schema": {
+        "$ref": "#/components/schemas/Body_train_voice_conversion_train_post"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Train",
+    "tags": [
+     "voice-conversion"
+    ]
+   }
+  },
+  "/voice-conversion/train/{job_id}": {
+   "get": {
+    "operationId": "train_status_voice_conversion_train__job_id__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "job_id",
+      "required": true,
+      "schema": {
+       "title": "Job Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "tail",
+      "required": false,
+      "schema": {
+       "default": 200,
+       "maximum": 4000,
+       "minimum": 0,
+       "title": "Tail",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Train Status",
+    "tags": [
+     "voice-conversion"
+    ]
+   }
+  },
+  "/voice-conversion/train/{job_id}/cancel": {
+   "post": {
+    "operationId": "cancel_train_voice_conversion_train__job_id__cancel_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "job_id",
+      "required": true,
+      "schema": {
+       "title": "Job Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Cancel Train",
+    "tags": [
+     "voice-conversion"
+    ]
+   }
+  },
+  "/voice-conversion/unload": {
+   "post": {
+    "operationId": "unload_voice_conversion_unload_post",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Unload",
+    "tags": [
+     "voice-conversion"
+    ]
+   }
+  },
+  "/voice-conversion/voices": {
+   "get": {
+    "operationId": "list_voices_voice_conversion_voices_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "List Voices",
+    "tags": [
+     "voice-conversion"
+    ]
+   }
+  },
+  "/voice-conversion/voices/import": {
+   "post": {
+    "description": "Import an Applio/RVC-trained voice: ``model`` (.pth) + optional ``index``.",
+    "operationId": "import_voice_voice_conversion_voices_import_post",
+    "requestBody": {
+     "content": {
+      "multipart/form-data": {
+       "schema": {
+        "$ref": "#/components/schemas/Body_import_voice_voice_conversion_voices_import_post"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Import Voice",
+    "tags": [
+     "voice-conversion"
+    ]
+   }
+  },
+  "/voice-conversion/voices/{voice_id}": {
+   "delete": {
+    "operationId": "delete_voice_voice_conversion_voices__voice_id__delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "voice_id",
+      "required": true,
+      "schema": {
+       "title": "Voice Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Delete Voice",
+    "tags": [
+     "voice-conversion"
+    ]
+   },
+   "patch": {
+    "operationId": "rename_voice_voice_conversion_voices__voice_id__patch",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "voice_id",
+      "required": true,
+      "schema": {
+       "title": "Voice Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/RvcVoiceRenameBody"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Rename Voice",
+    "tags": [
+     "voice-conversion"
     ]
    }
   },
