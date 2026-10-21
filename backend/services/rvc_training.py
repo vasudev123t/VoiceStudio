@@ -481,6 +481,192 @@ def _run_training(job: Job, settings: TrainSettings, applio: Path, python: Path,
             shutil.rmtree(exp_dir / heavy, ignore_errors=True)
 
 
+# ── Index (re)build for imported voices ─────────────────────────────────────
+#
+# Imported third-party voices usually ship only ``model.pth``; without an
+# ``.index`` RVC's retrieval step is skipped (index_rate silently becomes 0)
+# and the timbre is less close than the model can give. Applio builds the
+# FAISS index from ContentVec features of the *target speaker's* audio, so an
+# index can be (re)built from any clean recordings of that speaker without
+# retraining: preprocess → extract → index at the voice's sample rate. When a
+# trained voice's own features are still on disk (OMNIVOICE_RVC_KEEP_TRAINING
+# _FILES), only the index stage runs.
+
+
+def _existing_features(voice_meta: dict) -> Optional[Path]:
+    job = voice_meta.get("train_job")
+    if not job:
+        return None
+    logs = training_root() / str(job) / "logs"
+    if not logs.is_dir():
+        return None
+    for exp in logs.iterdir():
+        extracted = exp / "extracted"
+        if extracted.is_dir() and any(extracted.glob("*.npy")):
+            return exp
+    return None
+
+
+def build_index_commands(*, python: str, applio: str, model_name: str, dataset: str,
+                         sample_rate: int, gpu: str, cores: int) -> dict:
+    core = os.path.join(applio, "core.py")
+    sr = str(sample_rate)
+    return {
+        "preprocess": [python, core, "preprocess", "--model-name", model_name,
+                       "--dataset-path", dataset, "--sample-rate", sr,
+                       "--cpu-cores", str(cores), "--cut-preprocess", "Automatic",
+                       "--chunk-len", "3.0", "--overlap-len", "0.3",
+                       "--normalization-mode", "none"],
+        # Only the ContentVec features matter for the index; mutes are not
+        # needed (they pad the *training* filelist).
+        "extract": [python, core, "extract", "--model-name", model_name,
+                    "--f0-method", "rmvpe", "--cpu-cores", str(cores),
+                    "--gpu", gpu, "--sample-rate", sr, "--embedder-model", "contentvec",
+                    "--include-mutes", "0"],
+        "index": [python, core, "index", "--model-name", model_name,
+                  "--index-algorithm", "Auto"],
+    }
+
+
+def start_index_build(voice_id: str, *, dataset_dir: Optional[Path] = None,
+                      job_id: Optional[str] = None,
+                      runner: Optional[Callable[[Job], None]] = None) -> Job:
+    """(Re)build ``model.index`` for a registered voice as a background job."""
+    from services import rvc_registry
+    from services.rvc import applio_dir, applio_python
+
+    meta = rvc_registry.voice_meta(voice_id)  # VoiceNotFound → caller maps to 404
+    features = _existing_features(meta)
+    root = applio_dir()
+    py = applio_python(root) if root else None
+    if runner is None and (root is None or py is None):
+        raise RuntimeError("Building an index needs Applio. Install it from Voice conversion → "
+                           "Setup or set OMNIVOICE_APPLIO_DIR to an Applio checkout.")
+    if features is None and (dataset_dir is None or not dataset_dir.is_dir()
+                             or not dataset_files(dataset_dir)):
+        raise ValueError("Add recordings of this voice's speaker (wav, flac, mp3, ogg, m4a) "
+                         "to build its index.")
+    if _active("train") is not None or _active("index") is not None:
+        raise JobConflict("A training or index job is already running.")
+    sample_rate = int(meta.get("sample_rate") or 40000)
+    if sample_rate not in SAMPLE_RATES:
+        sample_rate = min(SAMPLE_RATES, key=lambda sr: abs(sr - sample_rate))
+    job_id = job_id or uuid.uuid4().hex[:12]
+    workdir = training_root() / f"index-{job_id}"
+    workdir.mkdir(parents=True, exist_ok=True)
+    job = Job(id=job_id, kind="index", name=meta.get("name") or voice_id, voice_id=voice_id,
+              settings={"voice_id": voice_id, "sample_rate": sample_rate,
+                        "reuse_features": features is not None,
+                        "dataset_files": len(dataset_files(dataset_dir)) if dataset_dir else 0},
+              workdir=str(workdir))
+    with _jobs_lock:
+        _jobs[job.id] = job
+
+    def _target():
+        try:
+            if runner is not None:
+                runner(job)
+            else:
+                _run_index_build(job, voice_id, Path(root), Path(py), dataset_dir, workdir,
+                                 sample_rate, features)
+        except _Cancelled:
+            job.status = "cancelled"
+            job.log.append("Cancelled.")
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("RVC index build %s failed", job.id)
+            job.status = "failed"
+            job.error = str(exc)[:500]
+            job.log.append(f"ERROR: {exc}")
+        else:
+            if job.status not in _TERMINAL:
+                job.status = "succeeded"
+                job.progress = 1.0
+        finally:
+            job.finished_at = time.time()
+            _persist(job)
+            _emit(job, voice_id=voice_id)
+
+    threading.Thread(target=_target, name=f"rvc-index-{job.id}", daemon=True).start()
+    return job
+
+
+def _run_index_build(job: Job, voice_id: str, applio: Path, python: Path,
+                     dataset_dir: Optional[Path], workdir: Path, sample_rate: int,
+                     features: Optional[Path]) -> None:
+    from services import rvc_registry
+
+    job.status = "running"
+    _free_gpu_for_job(job)
+    env = _applio_env(workdir / "logs")
+    gpu = _auto_gpu()
+    model_name = "index_" + _model_name(job.name)
+    if features is not None:
+        exp_dir = features
+        env["APPLIO_LOGS_DIR"] = str(features.parent)
+        model_name = features.name
+        job.log.append(f"Reusing training features in {features}")
+    else:
+        exp_dir = workdir / "logs" / model_name
+    cmds = build_index_commands(python=str(python), applio=str(applio), model_name=model_name,
+                                dataset=str(dataset_dir or ""), sample_rate=sample_rate,
+                                gpu=gpu, cores=_cpu_cores(0))
+    job.log.append(f"Applio: {applio}  python: {python}  gpu: {gpu}  sr: {sample_rate}")
+
+    def _check(stage: str, rc: int, ok: bool) -> None:
+        if rc != 0 or not ok:
+            tail = next((line for line in reversed(job.log) if _FAIL_RE.search(line)), "")
+            raise StageFailed(f"{stage} failed{': ' + tail if tail else ''} (exit {rc}).")
+
+    weights = {"preprocess": (0.0, 0.2), "extract": (0.2, 0.8), "index": (0.8, 1.0)}
+    if features is None:
+        for stage, artifact in (("preprocess", "sliced_audios"), ("extract", "extracted")):
+            job.stage, job.progress = stage, weights[stage][0]
+            _emit(job)
+            rc = _run_stage(job, cmds[stage], cwd=str(applio), env=env)
+            out = exp_dir / artifact
+            _check(stage, rc, out.is_dir() and any(out.iterdir()))
+    job.stage, job.progress = "index", weights["index"][0]
+    _emit(job)
+    index = exp_dir / f"{model_name}.index"
+    if index.is_file() and features is None:
+        index.unlink()
+    rc = _run_stage(job, cmds["index"], cwd=str(applio), env=env)
+    _check("index", rc, index.is_file())
+    # A worker may hold the old index open (Windows file locks).
+    try:
+        from services.rvc import get_service
+
+        get_service().unload()
+    except Exception:  # noqa: BLE001
+        pass
+    rvc_registry.attach_index(voice_id, index, extra={"index_job": job.id})
+    job.log.append(f"Index attached to voice {voice_id} ({index.stat().st_size} bytes).")
+    job.status, job.progress = "succeeded", 1.0
+    try:
+        from core import event_bus
+
+        event_bus.emit("voice_conversion", {"action": "voices_changed", "id": voice_id})
+    except Exception:  # noqa: BLE001
+        pass
+    if features is None:
+        for heavy in ("sliced_audios", "sliced_audios_16k", "extracted", "f0", "f0_voiced"):
+            shutil.rmtree(exp_dir / heavy, ignore_errors=True)
+
+
+def _applio_env(logs_dir: Path) -> dict:
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    env = dict(os.environ)
+    env.pop("PYTHONPATH", None)
+    env.update({"APPLIO_LOGS_DIR": str(logs_dir), "PYTHONUNBUFFERED": "1",
+                "PYTHONIOENCODING": "utf-8"})
+    return env
+
+
+def _free_gpu_for_job(job: Job) -> None:
+    """Placeholder hook; item 2 makes training/index jobs preempt GPU users."""
+    return None
+
+
 # ── Applio setup ─────────────────────────────────────────────────────────────
 
 APPLIO_REPO = "https://github.com/IAHispano/Applio.git"

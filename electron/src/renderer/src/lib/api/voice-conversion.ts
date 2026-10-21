@@ -36,6 +36,8 @@ export interface RvcVoice {
   f0: boolean | null;
   epochs: number | null;
   has_index: boolean;
+  /** `bundled` (imported/trained with it), `rebuilt` (built in-app) or null. */
+  index_source?: 'bundled' | 'rebuilt' | null;
   model_bytes: number;
   index_bytes: number;
 }
@@ -92,6 +94,7 @@ export interface ConversionEntry {
   backend: string;
   device: string;
   params: Record<string, unknown>;
+  index_used?: boolean;
   audio_url: string;
   source_url: string | null;
 }
@@ -100,7 +103,7 @@ export type VcJobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cance
 
 export interface VcJob {
   id: string;
-  kind: 'train' | 'setup';
+  kind: 'train' | 'setup' | 'index';
   name: string;
   status: VcJobStatus;
   stage: string | null;
@@ -235,6 +238,17 @@ export function toTrainForm(input: TrainInput): FormData {
 
 export function startTraining(input: TrainInput) {
   return apiJson<VcJob>(`${BASE}/train`, { method: 'POST', body: toTrainForm(input) });
+}
+
+/** (Re)build a voice's FAISS index from recordings of its speaker. */
+export function buildVoiceIndex(id: string, files: File[], datasetId?: string | null) {
+  const body = new FormData();
+  if (datasetId) body.append('dataset_id', datasetId);
+  else for (const file of files) body.append('files', file, file.name);
+  return apiJson<VcJob>(`${BASE}/voices/${encodeURIComponent(id)}/index`, {
+    method: 'POST',
+    body,
+  });
 }
 
 export function getJob(id: string, tail = 200, signal?: AbortSignal) {

@@ -270,6 +270,7 @@ export function ConvertPanel({ status }: { status: VcStatus }) {
           f0Methods={status.f0_methods}
           supported={status.supported_params}
           disabled={busy}
+          hasIndex={selected ? selected.has_index : true}
         />
         <HistoryList
           items={history.data ?? []}

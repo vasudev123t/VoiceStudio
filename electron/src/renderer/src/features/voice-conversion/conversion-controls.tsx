@@ -80,12 +80,15 @@ export function ConversionControls({
   f0Methods,
   supported,
   disabled = false,
+  hasIndex = true,
 }: {
   params: ConversionParams;
   onChange: (next: ConversionParams) => void;
   f0Methods: F0Method[];
   supported: string[];
   disabled?: boolean;
+  /** False when the selected voice has no `.index`: the index rate does nothing. */
+  hasIndex?: boolean;
 }) {
   const { t } = useTranslation();
   const set = <K extends keyof ConversionParams>(key: K, value: ConversionParams[K]) =>
@@ -156,10 +159,20 @@ export function ConversionControls({
         min={0}
         max={1}
         step={0.05}
-        format={(v) => v.toFixed(2)}
-        disabled={disabled}
+        format={(v) => (hasIndex ? v.toFixed(2) : t('voiceConversion.index_rate_off'))}
+        disabled={disabled || !hasIndex}
         onChange={(v) => set('indexRate', v)}
       />
+      {!hasIndex && (
+        <p
+          role="status"
+          data-testid="vc-no-index"
+          className="flex items-start gap-1.5 text-[11px] text-warning"
+        >
+          <TriangleAlertIcon className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
+          {t('voiceConversion.no_index_warning')}
+        </p>
+      )}
       <SliderRow
         label={t('voiceConversion.protect')}
         hint={t('voiceConversion.protect_hint')}

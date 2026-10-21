@@ -114,6 +114,7 @@ def _public(meta: dict, path: Path) -> dict:
         "f0": meta.get("f0"),
         "epochs": meta.get("epochs"),
         "has_index": index.is_file(),
+        "index_source": (meta.get("index_source") or ("bundled" if index.is_file() else None)),
         "model_bytes": model.stat().st_size if model.is_file() else 0,
         "index_bytes": index.stat().st_size if index.is_file() else 0,
     }
@@ -260,6 +261,49 @@ def voice_files(voice_id: str) -> tuple[str, Optional[str]]:
         raise VoiceNotFound(voice_id)
     index = path / INDEX_FILENAME
     return str(path / MODEL_FILENAME), (str(index) if index.is_file() else None)
+
+
+def attach_index(voice_id: str, index_path: os.PathLike | str, *,
+                 extra: Optional[dict] = None) -> dict:
+    """Install a (re)built FAISS ``.index`` for a registered voice.
+
+    An existing index is never deleted: it is kept as
+    ``model.index.bak-<timestamp>`` next to the new one.
+    """
+    src = Path(index_path)
+    if src.suffix.lower() != ".index" or not src.is_file():
+        raise InvalidVoiceFile("Index must be an existing .index file.")
+    if src.stat().st_size > MAX_INDEX_BYTES:
+        raise InvalidVoiceFile("Index file is too large.")
+    with _lock:
+        path = _voice_dir(voice_id)
+        meta = _read_meta(path)
+        if not meta:
+            raise VoiceNotFound(voice_id)
+        dest = path / INDEX_FILENAME
+        fd, tmp = tempfile.mkstemp(dir=path, prefix=".index-", suffix=".tmp")
+        os.close(fd)
+        try:
+            shutil.copyfile(src, tmp)
+            if dest.is_file():
+                os.replace(dest, path / f"{INDEX_FILENAME}.bak-{int(time.time())}")
+            os.replace(tmp, dest)
+        finally:
+            if os.path.exists(tmp):
+                os.unlink(tmp)
+        meta.update({"index_source": "rebuilt", "index_built_at": time.time(), **(extra or {})})
+        _write_meta(path, meta)
+    logger.info("RVC voice %s: index attached (%s)", voice_id, src.name)
+    return _public(meta, path)
+
+
+def voice_meta(voice_id: str) -> dict:
+    """Raw ``meta.json`` of a registered voice (copy)."""
+    path = _voice_dir(voice_id)
+    meta = _read_meta(path)
+    if not meta:
+        raise VoiceNotFound(voice_id)
+    return dict(meta)
 
 
 def rename_voice(voice_id: str, name: str) -> dict:

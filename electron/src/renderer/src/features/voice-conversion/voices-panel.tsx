@@ -1,20 +1,32 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { CheckIcon, FileAudioIcon, PencilIcon, PlusIcon, Trash2Icon, XIcon } from 'lucide-react';
+import {
+  CheckIcon,
+  DatabaseIcon,
+  FileAudioIcon,
+  PencilIcon,
+  PlusIcon,
+  Trash2Icon,
+  TriangleAlertIcon,
+  XIcon,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ConfirmDialog } from '@/features/clone/confirm-dialog';
 import { describeError } from '@/lib/api/client';
 import {
+  buildVoiceIndex,
   deleteVoice,
   importVoice,
+  isTerminal,
   renameVoice,
   vcQueryKeys,
   type RvcVoice,
 } from '@/lib/api/voice-conversion';
-import { formatBytes, useRvcVoices } from './queries';
+import { Progress } from '@/components/ui/progress';
+import { formatBytes, useRvcVoices, useVcJob } from './queries';
 
 /** Strip Applio's `_<epoch>e_<step>s` suffix so "Narrator_300e_9000s.pth" → "Narrator". */
 export function voiceNameFromFile(filename: string): string {
@@ -114,6 +126,78 @@ export function ImportVoiceForm({ onDone }: { onDone?: (voice: RvcVoice) => void
   );
 }
 
+/**
+ * Missing-index warning + "Build index" from recordings of the voice's
+ * speaker. Without an index RVC skips retrieval and the index-rate knob does
+ * nothing, so imported voices sound less like the target than they could.
+ */
+export function IndexBuilder({ voice }: { voice: RvcVoice }) {
+  const { t } = useTranslation();
+  const client = useQueryClient();
+  const input = useRef<HTMLInputElement>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
+  const job = useVcJob(jobId).data;
+  const running = Boolean(jobId && (!job || !isTerminal(job.status)));
+  const start = async (files: File[]) => {
+    if (!files.length) return;
+    try {
+      const started = await buildVoiceIndex(voice.id, files);
+      setJobId(started.id);
+      toast.success(t('voiceConversion.index_build_started', { name: voice.name }));
+    } catch (error) {
+      toast.error(describeError(error));
+    }
+  };
+  const jobStatus = job?.status;
+  useEffect(() => {
+    if (jobStatus === 'succeeded') void client.invalidateQueries({ queryKey: vcQueryKeys.voices });
+  }, [client, jobStatus]);
+  if (voice.has_index && !running) return null;
+  return (
+    <div className="mt-1 space-y-1" data-testid={`vc-index-builder-${voice.id}`}>
+      {!voice.has_index && (
+        <p className="flex items-start gap-1.5 text-[11px] text-warning">
+          <TriangleAlertIcon className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
+          {t('voiceConversion.no_index_voice_warning')}
+        </p>
+      )}
+      <input
+        ref={input}
+        type="file"
+        multiple
+        accept="audio/*,.wav,.flac,.mp3,.ogg,.m4a"
+        className="sr-only"
+        aria-label={t('voiceConversion.build_index')}
+        onChange={(event) => {
+          const files = Array.from(event.target.files ?? []);
+          event.target.value = '';
+          void start(files);
+        }}
+      />
+      {running ? (
+        <div className="space-y-1" role="status">
+          <p className="text-[11px] text-muted-foreground">
+            {t('voiceConversion.index_building')}
+            {job?.stage ? ` · ${job.stage}` : ''}
+          </p>
+          <Progress
+            value={Math.round((job?.progress ?? 0) * 100)}
+            aria-label={t('voiceConversion.index_building')}
+          />
+        </div>
+      ) : (
+        <Button size="xs" variant="outline" onClick={() => input.current?.click()}>
+          <DatabaseIcon />
+          {t('voiceConversion.build_index')}
+        </Button>
+      )}
+      {job?.status === 'failed' && job.error && (
+        <p className="text-[11px] text-destructive">{job.error}</p>
+      )}
+    </div>
+  );
+}
+
 function VoiceRow({ voice }: { voice: RvcVoice }) {
   const { t } = useTranslation();
   const client = useQueryClient();
@@ -162,6 +246,7 @@ function VoiceRow({ voice }: { voice: RvcVoice }) {
             .filter(Boolean)
             .join(' · ')}
         </p>
+        <IndexBuilder voice={voice} />
       </div>
       {editing ? (
         <>

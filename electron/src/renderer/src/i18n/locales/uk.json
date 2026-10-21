@@ -3855,6 +3855,12 @@
     "open_workspace": "Відкрити «Перетворення голосу»",
     "expressive_preset": "Expressive",
     "expressive_preset_hint": "Expressive preset: rmvpe, protect 0.33, volume envelope 0.1, index 0.6 — keeps breaths, laughs and your loudness contour.",
-    "protect_off_warning": "Protect at 0.5 switches protection off: breaths and consonants are forced through the model. 0.33 keeps micro-expressions."
+    "protect_off_warning": "Protect at 0.5 switches protection off: breaths and consonants are forced through the model. 0.33 keeps micro-expressions.",
+    "index_rate_off": "off (no index)",
+    "no_index_warning": "This voice has no .index file, so the index rate has no effect and the timbre is less close than it could be. Build one in Voices from recordings of the target speaker.",
+    "no_index_voice_warning": "No .index — retrieval is off for this voice. Build one from a few minutes of clean recordings of the same speaker.",
+    "build_index": "Build index",
+    "index_building": "Building index…",
+    "index_build_started": "Building the index for {{name}}…"
   }
 }

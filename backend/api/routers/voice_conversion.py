@@ -15,6 +15,7 @@ Applio setup or a training run, which may fetch Applio's pretrained weights):
 * ``POST /voice-conversion/convert``           multipart audio + voice_id + params
 * ``GET|DELETE /voice-conversion/history[/{id}]``
 * ``POST /voice-conversion/unload``            free the model / VRAM
+* ``POST /voice-conversion/voices/{id}/index`` (re)build a voice's FAISS index
 * ``POST /voice-conversion/train``, ``GET /voice-conversion/jobs``,
   ``GET /voice-conversion/train/{job_id}``, ``POST /voice-conversion/train/{job_id}/cancel``
 
@@ -253,6 +254,70 @@ def delete_voice(voice_id: str):
     return {"ok": True}
 
 
+@router.post("/voices/{voice_id}/index")
+async def build_voice_index(
+    voice_id: str,
+    files: Optional[List[UploadFile]] = File(None),
+    dataset_authorization: Optional[str] = Form(None),
+    dataset_id: Optional[str] = Form(None),
+):
+    """(Re)build the FAISS ``.index`` of a voice from recordings of its speaker.
+
+    Imported voices often ship without an index, which silently turns the
+    index-rate knob off. Sources: uploaded clips, a desktop-picked folder, or
+    a Voice Dataset Builder dataset (``dataset_id``). A trained voice whose
+    training features are still on disk needs no audio at all.
+    """
+    from services import rvc_registry, rvc_training
+
+    _voice_or_404(voice_id)
+    job_id = uuid.uuid4().hex[:12]
+    dataset_dir: Optional[Path] = None
+    uploads = [f for f in (files or []) if f is not None and f.filename]
+    if dataset_authorization:
+        from core.path_authorization import PathAuthorizationError, consume
+
+        try:
+            dataset_dir = Path(consume(dataset_authorization, "rvc_dataset_dir"))
+        except PathAuthorizationError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+    elif dataset_id:
+        try:
+            from services import dataset_builder
+
+            dataset_dir = dataset_builder.dataset_clips_dir(dataset_id)
+        except (ImportError, LookupError, ValueError) as exc:
+            raise HTTPException(status_code=404, detail="That dataset doesn't exist.") from exc
+    elif uploads:
+        dataset_dir = rvc_training.training_root() / f"index-{job_id}" / "dataset"
+        dataset_dir.mkdir(parents=True, exist_ok=True)
+        total = 0
+        for i, upload in enumerate(uploads):
+            ext = (upload_suffix(upload.filename) or "").lower()
+            if ext not in rvc_training.AUDIO_EXTS:
+                shutil.rmtree(dataset_dir.parent, ignore_errors=True)
+                raise HTTPException(status_code=415,
+                                    detail=f"Unsupported dataset file: {upload.filename}")
+            stem = portable_filename(Path(upload.filename).stem, default="clip", max_bytes=80)
+            try:
+                total += await _save_upload(upload, dataset_dir / f"{i:04d}_{stem}{ext}",
+                                            _MAX_DATASET_BYTES - total, "Dataset")
+            except HTTPException:
+                shutil.rmtree(dataset_dir.parent, ignore_errors=True)
+                raise
+    try:
+        job = rvc_training.start_index_build(voice_id, dataset_dir=dataset_dir, job_id=job_id)
+    except rvc_registry.VoiceNotFound:
+        raise HTTPException(status_code=404, detail="That RVC voice doesn't exist.") from None
+    except rvc_training.JobConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise _unavailable(exc) from exc
+    return job.public()
+
+
 # ── Conversion ───────────────────────────────────────────────────────────────
 
 
@@ -342,6 +407,9 @@ async def convert(
         "backend": result.backend,
         "device": result.device,
         "params": result.params,
+        # Without an index the index-rate knob has no effect (RVC skips
+        # retrieval); record it so the UI can say why a take sounds less close.
+        "index_used": bool(voice.get("has_index")),
     })
     return _entry_public(entry)
 
