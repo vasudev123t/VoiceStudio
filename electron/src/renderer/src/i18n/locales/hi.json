@@ -3858,5 +3858,16 @@
     "build_index": "Build index",
     "index_building": "Building index…",
     "index_build_started": "Building the index for {{name}}…"
+  },
+  "gpuMemory": {
+    "title": "GPU memory",
+    "description": "Release every model VoiceStudio holds on the GPU (TTS, voice conversion worker, ASR, aligners). They reload on next use.",
+    "free": "Free GPU",
+    "freeing": "Freeing…",
+    "freed": "Freed {{mb}} MB of GPU memory ({{released}}).",
+    "nothing_loaded": "nothing was loaded",
+    "free_failed": "Could not free the GPU: {{message}}",
+    "usage": "GPU {{usage}} · VoiceStudio {{mb}} MB",
+    "usage_hint": "Whole-GPU usage, and the part held by VoiceStudio's own processes."
   }
 }

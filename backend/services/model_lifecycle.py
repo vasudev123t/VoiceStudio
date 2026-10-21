@@ -264,6 +264,48 @@ def list_loaded() -> dict:
         logger.warning("Loaded-model inventory unavailable for translation")
         degraded_sources.append("translation")
 
+    # 8. wav2vec2 aligners (WhisperX word timing), cached per language and
+    # device and previously never released or shown (review item 2).
+    try:
+        import services.asr_backend as ab
+
+        aligners = ab.loaded_aligners()
+        if aligners:
+            models.append({
+                "id": "asr-aligners",
+                "name": f"Word aligners ({', '.join(lang for lang, _ in aligners)})",
+                "checkpoint": "wav2vec2",
+                "device": ", ".join(sorted({dev for _, dev in aligners})),
+                "vram_mb": 0,
+                "unloadable": True,
+                "note": "released after the idle timeout",
+            })
+    except Exception:
+        logger.warning("Loaded-model inventory unavailable for aligners")
+        degraded_sources.append("aligners")
+
+    # 9. The Applio voice-conversion worker: a separate process with its own
+    # CUDA context, alive until idle-reaped (review item 2).
+    try:
+        from services import rvc
+
+        info = rvc.get_service().loaded_info() if rvc._service is not None else None
+        if info:
+            models.append({
+                "id": "rvc-worker",
+                "name": "Voice conversion (Applio worker)" if info["backend"] == "applio"
+                        else "Voice conversion (rvc-python)",
+                "checkpoint": os.path.basename(info.get("model") or "") or info["backend"],
+                "device": str(info.get("device") or "auto"),
+                "vram_mb": 0,
+                "unloadable": True,
+                "pid": info.get("pid"),
+                "note": "stops after the idle timeout",
+            })
+    except Exception:
+        logger.warning("Loaded-model inventory unavailable for voice conversion")
+        degraded_sources.append("rvc")
+
     # System memory snapshot — free/total RAM (and VRAM on a dedicated GPU) plus
     # a low-memory advisory, so the panel can show pressure instead of leaving
     # the 16 GB-Mac OOM class invisible until the backend dies.
@@ -322,6 +364,20 @@ async def unload(model_id: str) -> dict:
             return {"unloaded": model_id, "success": True}
         return {"unloaded": model_id, "success": False, "reason": "in use by dictation"}
 
+    if model_id == "asr-aligners":
+        import services.asr_backend as ab
+
+        n = ab.release_align_cache(0.0)
+        return {"unloaded": model_id, "success": n > 0, "count": n,
+                **({} if n else {"reason": "not loaded"})}
+
+    if model_id == "rvc-worker":
+        from services import rvc
+
+        if rvc._service is not None and rvc.get_service().release():
+            return {"unloaded": model_id, "success": True}
+        return {"unloaded": model_id, "success": False, "reason": "not running"}
+
     if model_id == "translation:nllb":
         from api.routers import dub_translate as dt
 
@@ -371,7 +427,8 @@ async def unload(model_id: str) -> dict:
 async def unload_all() -> dict:
     """Release shared/alternate TTS, diarisation, sidecars, dictation and translation."""
     results = {}
-    model_ids = ["tts", "diarization", "sidecars", "capture-asr", "translation:nllb"]
+    model_ids = ["tts", "diarization", "sidecars", "capture-asr", "translation:nllb",
+                 "asr-aligners", "rvc-worker"]
     try:
         model_ids.extend(
             entry["id"]

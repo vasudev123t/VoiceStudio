@@ -84,6 +84,20 @@ def _free(converter):
         pass
 
 
+def _gpu_status() -> dict:
+    """torch's view of this process's CUDA memory (MiB)."""
+    try:
+        import torch
+
+        if not torch.cuda.is_available():
+            return {"cuda": False}
+        return {"cuda": True,
+                "allocated_mb": round(torch.cuda.memory_allocated() / 2**20, 1),
+                "reserved_mb": round(torch.cuda.memory_reserved() / 2**20, 1)}
+    except Exception as exc:  # noqa: BLE001
+        return {"cuda": None, "error": str(exc)}
+
+
 def main():
     device_override = os.environ.get("OMNIVOICE_RVC_WORKER_DEVICE", "auto")
     try:
@@ -107,6 +121,8 @@ def main():
             elif op == "unload":
                 _free(converter)
                 _reply({"ok": True})
+            elif op == "status":
+                _reply({"ok": True, **_gpu_status()})
             elif op == "convert":
                 params = msg.get("params") or {}
                 kwargs = {

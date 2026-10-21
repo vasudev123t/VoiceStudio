@@ -571,6 +571,37 @@ _ALIGN_CACHE: dict[tuple[str, str], object] = {}
 #: ±10-30 ms timing that lip-sync depends on. Hence: try MPS, fall back to **CPU**,
 #: and only then give up and keep Whisper's own looser timestamps.
 _ALIGN_DEVICE_ENV = "OMNIVOICE_ALIGN_DEVICE"
+_ALIGN_LAST_USED = 0.0
+
+
+def loaded_aligners() -> list[tuple[str, str]]:
+    """(language, device) of every resident wav2vec2 aligner."""
+    return [key for key, value in list(_ALIGN_CACHE.items()) if value is not None]
+
+
+def release_align_cache(idle_s: float, *, now: float | None = None) -> int:
+    """Drop cached wav2vec2 aligners unused for ``idle_s`` seconds.
+
+    They were cached for the life of the process (each 0.3–1.2 GB, on CUDA
+    when alignment ran there) and invisible to the loaded-models panel.
+    Returns how many resident aligners were released; negative results
+    (``None`` = "no aligner for this language") are kept, they cost nothing.
+    """
+    now = time.monotonic() if now is None else now
+    if now - _ALIGN_LAST_USED < idle_s:
+        return 0
+    resident = loaded_aligners()
+    for key in resident:
+        _ALIGN_CACHE.pop(key, None)
+    if resident:
+        try:
+            from services.model_manager import free_vram
+
+            free_vram()
+        except Exception:  # noqa: BLE001
+            pass
+        logger.info("Released %d cached wav2vec2 aligner(s).", len(resident))
+    return len(resident)
 
 
 def load_align_model(language_code: str, device: str):
@@ -580,6 +611,8 @@ def load_align_model(language_code: str, device: str):
     language — WhisperX bundles them for ~20 major languages only — or it
     cannot be loaded on ``device``. The caller then keeps Whisper's own
     (looser) word timestamps, after trying any fallback device."""
+    global _ALIGN_LAST_USED
+    _ALIGN_LAST_USED = time.monotonic()
     key = (language_code, device)
     if key in _ALIGN_CACHE:
         return _ALIGN_CACHE[key]

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { WorkspaceHeader } from '@/components/app-shell/workspace-header';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
+import { FreeGpuButton } from '@/components/free-gpu-button';
 import { describeError } from '@/lib/api/client';
 import { ConvertPanel } from './convert-panel';
 import { useVcStatus } from './queries';
@@ -22,6 +23,8 @@ export function VoiceConversionPage() {
     <div className="flex h-full min-h-0 flex-col">
       <WorkspaceHeader>
         <h1 className="text-sm font-medium">{t('voiceConversion.title')}</h1>
+        <span className="min-w-0 flex-1" />
+        <FreeGpuButton />
       </WorkspaceHeader>
       <section className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
         <div className="mx-auto w-full max-w-6xl space-y-5">

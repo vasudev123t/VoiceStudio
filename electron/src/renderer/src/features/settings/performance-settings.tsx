@@ -15,6 +15,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { FreeGpuButton } from '@/components/free-gpu-button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { apiJson, describeError } from '@/lib/api/client';
@@ -371,6 +372,9 @@ function MemoryManagement() {
           </SettingsRow>
         ))
       )}
+      <SettingsRow id="free-gpu" title={t('gpuMemory.title')} description={t('gpuMemory.description')}>
+        <FreeGpuButton disabled={active} />
+      </SettingsRow>
       <SettingsRow id="flush-caches" title={t('header.flush_caches')}>
         <Button
           size="sm"

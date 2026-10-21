@@ -3597,6 +3597,21 @@ async def idle_worker():
             release_idle_models(idle_timeout)
         except Exception:  # noqa: BLE001 — the reaper must never kill idle_worker
             logger.warning("idle watermark-model release failed", exc_info=True)
+        # wav2vec2 aligners and the Applio voice-conversion worker (its own
+        # process + CUDA context) were never idle-released (review item 2).
+        try:
+            from services.asr_backend import release_align_cache
+
+            release_align_cache(idle_timeout)
+        except Exception:  # noqa: BLE001
+            logger.warning("idle aligner release failed", exc_info=True)
+        try:
+            from services import rvc as _rvc
+
+            if _rvc._service is not None:
+                await asyncio.to_thread(_rvc.get_service().release_idle)
+        except Exception:  # noqa: BLE001
+            logger.warning("idle voice-conversion worker release failed", exc_info=True)
 
 def release_tts_side_caches():
     """Drop caches keyed to the TTS model, for when the model itself is released.

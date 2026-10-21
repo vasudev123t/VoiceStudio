@@ -331,6 +331,32 @@ async def unload_model(model_id: str):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.get("/system/gpu-memory")
+def gpu_memory(include_other: bool = True):
+    """Device VRAM totals plus per-process usage, VoiceStudio's own processes
+    labelled (backend, rvc-worker, sidecars). Never initialises CUDA here."""
+    from services import gpu_memory as gm
+
+    return gm.snapshot(include_other=include_other)
+
+
+@router.post("/system/free-gpu")
+async def free_gpu():
+    """Release everything VoiceStudio holds on the GPU — TTS, sidecars,
+    dictation ASR, aligners, the Applio worker, in-process engines — and
+    report VRAM before/after (review item 2)."""
+    import asyncio as _asyncio
+
+    from services import gpu_memory as gm
+    from services import model_manager as _mm
+
+    before = await _asyncio.to_thread(gm.snapshot, include_other=False)
+    async with _mm._model_lock:
+        released = await _asyncio.to_thread(gm.release_gpu_holders, reason="free-gpu")
+    after = await _asyncio.to_thread(gm.snapshot, include_other=False)
+    return {"released": released, "before": before, "after": after}
+
+
 @router.get("/system/info", response_model=SystemInfoResponse)
 def system_info():
     """Settings page system info — model, tokens, data dir, timeout.

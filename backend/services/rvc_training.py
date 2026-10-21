@@ -395,6 +395,7 @@ def _run_training(job: Job, settings: TrainSettings, applio: Path, python: Path,
     from services import rvc_registry
 
     job.status = "running"
+    _free_gpu_for_job(job)
     model_name = _model_name(settings.name)
     logs_dir = workdir / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
@@ -663,8 +664,23 @@ def _applio_env(logs_dir: Path) -> dict:
 
 
 def _free_gpu_for_job(job: Job) -> None:
-    """Placeholder hook; item 2 makes training/index jobs preempt GPU users."""
-    return None
+    """Release VoiceStudio's own GPU holders before an Applio training/index job.
+
+    RVC training on an 8 GB GPU OOMs when the TTS model (~2–4 GB), the Applio
+    inference worker and cached ASR sit resident beside it. Opt out with
+    ``OMNIVOICE_RVC_TRAIN_KEEP_GPU=1``.
+    """
+    if os.environ.get("OMNIVOICE_RVC_TRAIN_KEEP_GPU", "").strip() == "1":
+        job.log.append("Keeping loaded models on the GPU (OMNIVOICE_RVC_TRAIN_KEEP_GPU=1).")
+        return
+    try:
+        from services.gpu_memory import release_gpu_holders
+
+        released = release_gpu_holders(reason=f"rvc {job.kind} job")
+    except Exception as exc:  # noqa: BLE001 — never fail the job over this
+        job.log.append(f"Could not free the GPU first: {exc}")
+        return
+    job.log.append("Freed GPU before starting: " + (", ".join(released) or "nothing was loaded"))
 
 
 # ── Applio setup ─────────────────────────────────────────────────────────────

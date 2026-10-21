@@ -393,9 +393,58 @@ class RvcPythonBackend(ConverterBackend):
         self._loaded = None
         _empty_cuda_cache()
 
+    def close(self) -> None:
+        self.unload()
+        self._engine = None
+        _empty_cuda_cache()
+
+
+#: Environment variables never handed to the Applio worker: credentials have
+#: no business in a third-party inference process (it runs code from a cloned
+#: repo and its pip deps).
+_WORKER_ENV_DENY = re.compile(r"(TOKEN|SECRET|PASSWORD|PASSWD|API_KEY|_PIN$|CREDENTIAL)", re.I)
+_WORKER_LOG_MAX_BYTES = 5 * 1024 * 1024
+
+
+def worker_env(base: Optional[dict] = None) -> dict:
+    env = dict(os.environ if base is None else base)
+    for name in list(env):
+        if _WORKER_ENV_DENY.search(name):
+            env.pop(name, None)
+    env.pop("PYTHONPATH", None)  # never leak the backend's site into Applio
+    return env
+
+
+def _rotate_log(path: Path, max_bytes: int = _WORKER_LOG_MAX_BYTES) -> None:
+    """Keep the worker log bounded: one ``.1`` generation, then start fresh."""
+    try:
+        if path.is_file() and path.stat().st_size > max_bytes:
+            old = path.with_suffix(path.suffix + ".1")
+            if old.exists():
+                old.unlink()
+            path.rename(old)
+    except OSError:
+        logger.debug("worker log rotation failed", exc_info=True)
+
+
+def idle_timeout_s() -> float:
+    """Seconds an idle Applio worker may keep its process (and CUDA context).
+
+    ``OMNIVOICE_RVC_IDLE_S``; default 300 s. ``0`` disables the reaper.
+    """
+    try:
+        return max(0.0, float(os.environ.get("OMNIVOICE_RVC_IDLE_S", "300")))
+    except ValueError:
+        return 300.0
+
 
 class ApplioBackend(ConverterBackend):
-    """Applio ``VoiceConverter`` in a persistent worker process."""
+    """Applio ``VoiceConverter`` in a persistent worker process.
+
+    The worker owns a CUDA context (~0.5–1.5 GB on an 8 GB laptop GPU) for as
+    long as it lives, so it is reaped after :func:`idle_timeout_s` of
+    inactivity and respawned on the next conversion.
+    """
 
     name = "applio"
 
@@ -409,6 +458,7 @@ class ApplioBackend(ConverterBackend):
         self._loaded: Optional[str] = None
         self.worker_device: Optional[str] = None
         self.worker_gpu: Optional[str] = None
+        self._last_used = time.monotonic()
 
     @property
     def device(self) -> str:
@@ -423,16 +473,16 @@ class ApplioBackend(ConverterBackend):
 
     def _spawn(self):
         worker = Path(__file__).with_name("rvc_applio_worker.py")
-        env = dict(os.environ)
+        env = worker_env()
         env["OMNIVOICE_RVC_WORKER_DEVICE"] = self._device_override or "auto"
         env["PYTHONUNBUFFERED"] = "1"
         env["PYTHONIOENCODING"] = "utf-8"
-        env.pop("PYTHONPATH", None)  # never leak the backend's site into Applio
         ffmpeg = cleanup_ffmpeg_status(self.root).get("selected")
         if ffmpeg:
             env["OMNIVOICE_RVC_FFMPEG"] = ffmpeg["path"]
         else:
             env.pop("OMNIVOICE_RVC_FFMPEG", None)
+        _rotate_log(self._log_path())
         log = open(self._log_path(), "ab")
         argv = [str(self.python), str(worker)]
         try:
@@ -516,6 +566,7 @@ class ApplioBackend(ConverterBackend):
                            "index_rate": params.index_rate if index_path else 0.0},
             }, CONVERT_TIMEOUT_S)
             self._loaded = model_path
+            self._last_used = time.monotonic()
             return int(reply.get("sample_rate") or _wav_rate(output_path))
 
     def unload(self) -> None:
@@ -536,9 +587,47 @@ class ApplioBackend(ConverterBackend):
             except Exception:  # noqa: BLE001
                 pass
 
+    def running(self) -> bool:
+        return self._proc is not None and self._proc.poll() is None
+
+    @property
+    def pid(self) -> Optional[int]:
+        return self._proc.pid if self.running() else None
+
+    def idle_seconds(self) -> float:
+        return time.monotonic() - self._last_used
+
+    def _stop(self) -> None:
+        """Graceful exit (worker frees CUDA, then the process ends), else kill."""
+        proc = self._proc
+        if proc is not None and proc.poll() is None:
+            try:
+                self._send({"op": "exit"}, 15)
+                proc.wait(timeout=10)
+            except Exception:  # noqa: BLE001 — fall through to a hard kill
+                logger.debug("Applio worker graceful exit failed", exc_info=True)
+        self._kill()
+
     def close(self) -> None:
         with self._lock:
-            self._kill()
+            self._stop()
+
+    def reap_if_idle(self, idle_s: float) -> bool:
+        """Stop the worker process once idle for ``idle_s``. Never blocks a
+        running conversion: a busy lock means "in use", so nothing happens."""
+        if idle_s <= 0 or not self.running() or self.idle_seconds() < idle_s:
+            return False
+        if not self._lock.acquire(blocking=False):
+            return False
+        try:
+            if not self.running() or self.idle_seconds() < idle_s:
+                return False
+            logger.info("Applio worker idle for %.0fs; stopping it to free the GPU.",
+                        self.idle_seconds())
+            self._stop()
+            return True
+        finally:
+            self._lock.release()
 
 
 def _safe_cleanup_status(root: Path) -> Optional[dict]:
@@ -719,6 +808,33 @@ class VoiceConversionService:
                 self._backend.close()
             self._backend = None
             self._backend_key = None
+
+    def loaded_info(self) -> Optional[dict]:
+        """What this service currently holds, for the loaded-models panel."""
+        b = self._backend
+        if isinstance(b, ApplioBackend) and b.running():
+            return {"backend": "applio", "pid": b.pid, "device": b.device,
+                    "model": b._loaded, "idle_s": round(b.idle_seconds(), 1)}
+        if isinstance(b, RvcPythonBackend) and b._engine is not None:
+            return {"backend": "rvc-python", "pid": os.getpid(), "device": b.device,
+                    "model": (b._loaded or (None,))[0], "idle_s": None}
+        return None
+
+    def release(self) -> bool:
+        """Free everything (stop the worker). True when something was held."""
+        held = self.loaded_info() is not None
+        if held:
+            with self._lock:
+                if self._backend is not None:
+                    self._backend.close()
+        return held
+
+    def release_idle(self, idle_s: Optional[float] = None) -> bool:
+        idle_s = idle_timeout_s() if idle_s is None else idle_s
+        b = self._backend
+        if isinstance(b, ApplioBackend):
+            return b.reap_if_idle(idle_s)
+        return False
 
 
 def _write_wav(path: str, audio_tensor, sample_rate: int) -> None:
