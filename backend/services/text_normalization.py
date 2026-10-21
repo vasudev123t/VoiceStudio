@@ -81,6 +81,7 @@ ENV_VAR = "OMNIVOICE_TEXT_NORMALIZATION"
 _FULL_NAME_TO_CODE = {
     "english": "en",
     "malayalam": "ml",
+    "kannada": "kn",
     "german": "de",
     "spanish": "es",
     "french": "fr",
@@ -616,7 +617,10 @@ def _numbers_to_words(text: str, lang: str) -> str:
 # digits. Each module exposes ``cardinal(int)``, ``decimal(int, str)`` and
 # ``percent(str)``; any exception leaves that occurrence untouched.
 
-_NATIVE_VERBALIZERS = {"ml": "services.number_words_ml"}
+# kn: num2words has a Kannada locale but it is wrong for speech (21 →
+# "ಇಪ್ಪತ್ತ್ ಒಂದು", 100000 → "ಒಂದು ಒಂದು ಲಕ್ಷ"), so kn is NOT in
+# _NUM2WORDS_LANGS and uses its native module instead.
+_NATIVE_VERBALIZERS = {"ml": "services.number_words_ml", "kn": "services.number_words_kn"}
 
 
 def _native_lang(language: Optional[str]) -> Optional[str]:
