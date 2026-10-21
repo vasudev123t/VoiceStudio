@@ -2544,7 +2544,8 @@
     "converting": "Перетворення…",
     "transcript": "Що було почуто",
     "result_kicker": "Перетворений дубль",
-    "need_source_and_voice": "Спочатку додайте вихідний кліп і виберіть цільовий голос."
+    "need_source_and_voice": "Спочатку додайте вихідний кліп і виберіть цільовий голос.",
+    "title": "Re-speak in voice"
   },
   "glossary": {
     "title": "Глосарій",

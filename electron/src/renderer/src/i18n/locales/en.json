@@ -306,7 +306,7 @@
     "batch_dub": "Batch Dubbing",
     "transcribe": "Transcribe",
     "calls": "Calls",
-    "voice_conversion": "Voice conversion",
+    "voice_conversion": "Voice changer",
     "voice_lab": "Voice Lab"
   },
   "backend": {
@@ -2603,7 +2603,8 @@
     "converting": "Converting…",
     "transcript": "What it heard",
     "result_kicker": "Converted take",
-    "need_source_and_voice": "Add a source clip and pick a target voice first."
+    "need_source_and_voice": "Add a source clip and pick a target voice first.",
+    "title": "Re-speak in voice"
   },
   "glossary": {
     "title": "Glossary",
@@ -3727,7 +3728,7 @@
     }
   },
   "voiceConversion": {
-    "title": "Voice conversion",
+    "title": "Voice changer (keeps your performance)",
     "subtitle": "Perform a line yourself, then re-voice it with an RVC model. Timing, breaths, laughs and emphasis stay yours.",
     "consent_note": "Only convert into voices you own or have explicit permission to use.",
     "tab_convert": "Convert",

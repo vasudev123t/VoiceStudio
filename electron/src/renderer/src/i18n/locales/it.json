@@ -2542,7 +2542,8 @@
     "converting": "Conversione…",
     "transcript": "Cosa è stato sentito",
     "result_kicker": "Take convertito",
-    "need_source_and_voice": "Aggiungi prima un clip sorgente e scegli una voce di destinazione."
+    "need_source_and_voice": "Aggiungi prima un clip sorgente e scegli una voce di destinazione.",
+    "title": "Re-speak in voice"
   },
   "glossary": {
     "title": "Glossario",

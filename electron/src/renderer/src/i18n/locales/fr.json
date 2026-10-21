@@ -2542,7 +2542,8 @@
     "converting": "Conversion…",
     "transcript": "Ce qui a été entendu",
     "result_kicker": "Prise convertie",
-    "need_source_and_voice": "Ajoutez d'abord un clip source et choisissez une voix cible."
+    "need_source_and_voice": "Ajoutez d'abord un clip source et choisissez une voix cible.",
+    "title": "Re-speak in voice"
   },
   "glossary": {
     "title": "Glossaire",

@@ -2540,7 +2540,8 @@
     "converting": "轉換中…",
     "transcript": "辨識到的內容",
     "result_kicker": "轉換後的音訊",
-    "need_source_and_voice": "請先加入來源音訊並選擇目標聲音。"
+    "need_source_and_voice": "請先加入來源音訊並選擇目標聲音。",
+    "title": "Re-speak in voice"
   },
   "glossary": {
     "title": "詞彙表",

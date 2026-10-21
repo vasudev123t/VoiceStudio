@@ -2544,7 +2544,8 @@
     "converting": "Konwertowanie…",
     "transcript": "Co usłyszano",
     "result_kicker": "Skonwertowane nagranie",
-    "need_source_and_voice": "Najpierw dodaj klip źródłowy i wybierz głos docelowy."
+    "need_source_and_voice": "Najpierw dodaj klip źródłowy i wybierz głos docelowy.",
+    "title": "Re-speak in voice"
   },
   "glossary": {
     "title": "Glosariusz",

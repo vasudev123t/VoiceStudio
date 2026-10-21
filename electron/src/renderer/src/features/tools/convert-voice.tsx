@@ -113,7 +113,7 @@ export function ConvertVoice() {
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6">
       <div>
-        <h2 className="text-lg font-semibold">{t('convert.convert')}</h2>
+        <h2 className="text-lg font-semibold">{t('convert.title')}</h2>
         <p className="mt-1 text-sm text-muted-foreground">{t('convert.need_source_and_voice')}</p>
       </div>
       <section className="space-y-3" aria-label={t('convert.source_kicker')}>

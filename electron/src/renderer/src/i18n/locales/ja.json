@@ -2540,7 +2540,8 @@
     "converting": "変換中…",
     "transcript": "聞き取った内容",
     "result_kicker": "変換されたテイク",
-    "need_source_and_voice": "先にソースクリップを追加し、変換先の声を選んでください。"
+    "need_source_and_voice": "先にソースクリップを追加し、変換先の声を選んでください。",
+    "title": "Re-speak in voice"
   },
   "glossary": {
     "title": "用語集",

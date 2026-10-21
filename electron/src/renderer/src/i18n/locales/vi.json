@@ -2540,7 +2540,8 @@
     "converting": "Đang chuyển đổi…",
     "transcript": "Nội dung nghe được",
     "result_kicker": "Bản thu đã chuyển đổi",
-    "need_source_and_voice": "Hãy thêm clip nguồn và chọn giọng đích trước."
+    "need_source_and_voice": "Hãy thêm clip nguồn và chọn giọng đích trước.",
+    "title": "Re-speak in voice"
   },
   "glossary": {
     "title": "Thuật ngữ",

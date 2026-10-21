@@ -2540,7 +2540,8 @@
     "converting": "Converteren…",
     "transcript": "Wat er is gehoord",
     "result_kicker": "Geconverteerde take",
-    "need_source_and_voice": "Voeg eerst een bronclip toe en kies een doelstem."
+    "need_source_and_voice": "Voeg eerst een bronclip toe en kies een doelstem.",
+    "title": "Re-speak in voice"
   },
   "glossary": {
     "title": "Woordenlijst",

@@ -2544,7 +2544,8 @@
     "converting": "Преобразование…",
     "transcript": "Что было услышано",
     "result_kicker": "Преобразованный дубль",
-    "need_source_and_voice": "Сначала добавьте исходный клип и выберите целевой голос."
+    "need_source_and_voice": "Сначала добавьте исходный клип и выберите целевой голос.",
+    "title": "Re-speak in voice"
   },
   "glossary": {
     "title": "Глоссарий",

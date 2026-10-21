@@ -2540,7 +2540,8 @@
     "converting": "변환 중…",
     "transcript": "인식된 내용",
     "result_kicker": "변환된 테이크",
-    "need_source_and_voice": "먼저 소스 클립을 추가하고 대상 목소리를 선택하세요."
+    "need_source_and_voice": "먼저 소스 클립을 추가하고 대상 목소리를 선택하세요.",
+    "title": "Re-speak in voice"
   },
   "glossary": {
     "title": "용어집",

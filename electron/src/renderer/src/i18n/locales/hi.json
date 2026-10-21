@@ -2540,7 +2540,8 @@
     "converting": "कन्वर्ट हो रहा है…",
     "transcript": "जो सुना गया",
     "result_kicker": "कन्वर्ट किया गया टेक",
-    "need_source_and_voice": "पहले एक स्रोत क्लिप जोड़ें और लक्ष्य आवाज़ चुनें।"
+    "need_source_and_voice": "पहले एक स्रोत क्लिप जोड़ें और लक्ष्य आवाज़ चुनें।",
+    "title": "Re-speak in voice"
   },
   "glossary": {
     "title": "शब्दावली",
