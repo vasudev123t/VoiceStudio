@@ -36,3 +36,19 @@ describe('voice lab api helpers', () => {
     );
   });
 });
+
+describe('take score formatting', () => {
+  it('labels proxy MOS and uses the metric unit', async () => {
+    const { formatTakeScore } = await import('./voice-lab');
+    expect(
+      formatTakeScore({
+        id: 'a',
+        secs: { value: 0.7123, method: 'mfcc-stats' },
+        wer: { value: 0.04, method: 'fw', unit: 'cer' },
+        mos: { value: 3.94, method: 'dsp-proxy', research_grade: false },
+        overall: 0.8,
+        error: null,
+      }),
+    ).toBe('SECS 0.71 · CER 4% · MOS 3.9*');
+  });
+});

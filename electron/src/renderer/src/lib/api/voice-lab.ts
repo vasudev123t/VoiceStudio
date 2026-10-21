@@ -160,3 +160,52 @@ export function missingModels(caps: VoiceLabCapabilities | undefined): string[] 
     .map((stage) => stage.missing)
     .filter((m): m is string => Boolean(m));
 }
+
+// ── A/B take scoring ─────────────────────────────────────────────────────────
+
+export interface MetricScore {
+  value: number;
+  method: string;
+  research_grade?: boolean;
+  unit?: 'wer' | 'cer';
+  transcript?: string;
+}
+
+export interface TakeScore {
+  id: string;
+  secs: MetricScore | null;
+  wer: MetricScore | null;
+  mos: MetricScore | null;
+  overall: number;
+  rank?: number;
+  error: string | null;
+}
+
+export interface ScoreResponse {
+  results: TakeScore[];
+  reference_used: boolean;
+}
+
+export const scoreTakes = (historyIds: string[], referenceProfileId?: string | null) =>
+  apiJson<ScoreResponse>(`${BASE}/score`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ history_ids: historyIds, reference_profile_id: referenceProfileId ?? null }),
+  });
+
+export const getScores = async (ids: string[], signal?: AbortSignal) =>
+  ids.length === 0
+    ? {}
+    : (await apiJson<{ scores: Record<string, TakeScore> }>(
+        `${BASE}/scores?ids=${encodeURIComponent(ids.join(','))}`,
+        { signal },
+      )).scores;
+
+/** "SECS 0.71 · CER 4% · MOS 3.9" — compact per-take label. */
+export function formatTakeScore(score: TakeScore): string {
+  const parts: string[] = [];
+  if (score.secs) parts.push(`SECS ${score.secs.value.toFixed(2)}`);
+  if (score.wer) parts.push(`${(score.wer.unit ?? 'wer').toUpperCase()} ${Math.round(score.wer.value * 100)}%`);
+  if (score.mos) parts.push(`MOS ${score.mos.value.toFixed(1)}${score.mos.research_grade ? '' : '*'}`);
+  return parts.join(' · ');
+}

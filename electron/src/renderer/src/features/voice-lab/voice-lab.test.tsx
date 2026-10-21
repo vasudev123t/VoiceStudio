@@ -24,6 +24,7 @@ vi.mock('@tanstack/react-query', () => ({
 vi.mock('@/components/app-shell/workspace-header', () => ({
   WorkspaceHeader: ({ children }: { children: React.ReactNode }) => <header>{children}</header>,
 }));
+vi.mock('@/hooks/use-history', () => ({ useHistory: () => ({ data: [] }) }));
 vi.mock('@/components/free-gpu-button', () => ({ FreeGpuButton: () => <button type="button">free</button> }));
 
 import { VoiceLabPage } from './voice-lab-page';

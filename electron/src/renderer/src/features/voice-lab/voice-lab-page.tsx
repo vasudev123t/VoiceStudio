@@ -4,9 +4,10 @@ import { WorkspaceHeader } from '@/components/app-shell/workspace-header';
 import { FreeGpuButton } from '@/components/free-gpu-button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DatasetBuilder } from './dataset-builder';
+import { TakeCompare } from './take-compare';
 
-type Tab = 'dataset';
-const TABS: Tab[] = ['dataset'];
+type Tab = 'dataset' | 'compare';
+const TABS: Tab[] = ['dataset', 'compare'];
 
 /** Voice Lab: build datasets from real recordings, score takes, fine-tune. */
 export function VoiceLabPage() {
@@ -35,6 +36,9 @@ export function VoiceLabPage() {
             </TabsList>
             <TabsContent value="dataset">
               <DatasetBuilder />
+            </TabsContent>
+            <TabsContent value="compare">
+              <TakeCompare />
             </TabsContent>
           </Tabs>
         </div>

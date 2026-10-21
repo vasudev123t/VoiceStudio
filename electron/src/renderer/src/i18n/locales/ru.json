@@ -3923,6 +3923,17 @@
     "stage_transcribe": "Transcribing",
     "stage_transcription": "Transcription",
     "stage_score": "Scoring",
-    "stage_nonverbal": "Nonverbal tags"
+    "stage_nonverbal": "Nonverbal tags",
+    "tab_compare": "Compare takes",
+    "compare_hint": "Pick up to {{max}} takes (ideally the same line) and score them.",
+    "score_selected": "Score {{count}} take(s)",
+    "scoring": "Scoring…",
+    "no_takes": "No generated takes yet.",
+    "pick_take": "Select take",
+    "score_no_reference": "No reference clip for this voice, so speaker similarity was skipped.",
+    "score_legend": "SECS: speaker similarity to the voice's reference (higher is better). WER/CER: recognition errors against the script (lower is better). MOS: predicted naturalness 1–5; * marks the local DSP estimate used until the UTMOS model is downloaded.",
+    "not_scored": "Not scored",
+    "score_take": "Score take",
+    "rescore": "Re-score"
   }
 }

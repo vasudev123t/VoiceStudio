@@ -22,6 +22,7 @@ import { designDraftFromTake, writeDraft } from '@/features/design/design-draft'
 import { openTake } from '@/lib/store/takes';
 import { setCloneSetting } from '@/lib/store/clone-settings';
 import { formatRelative, formatSeconds } from './format';
+import { TakeScoreRow } from '@/features/voice-lab/take-score-row';
 
 const NUMERIC_SETTINGS = [
   ['steps', 'clone.steps'],
@@ -157,6 +158,7 @@ export function TakeDetails({ item }: { item: HistoryItem }) {
             {t('clone.output_title')}
           </p>
           <WaveformPlayer src={audioUrl(item.audio_path)} source="history" height={64} />
+          <TakeScoreRow item={item} />
         </div>
       )}
       <SaveTakeProfile key={item.id + '-save'} item={item} />

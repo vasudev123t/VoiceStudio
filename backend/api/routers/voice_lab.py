@@ -177,3 +177,114 @@ def cancel_job(job_id: str):
         return db.cancel_job(job_id).public()
     except KeyError:
         raise HTTPException(status_code=404, detail="Job not found.") from None
+
+
+# ── A/B take scoring (review item 5) ────────────────────────────────────────
+
+import asyncio as _asyncio  # noqa: E402
+import json as _json  # noqa: E402
+import threading as _threading  # noqa: E402
+
+from pydantic import BaseModel, Field  # noqa: E402
+
+_score_lock = _threading.Lock()
+
+
+class ScoreRequest(BaseModel):
+    history_ids: List[str] = Field(..., min_length=1, max_length=12)
+    reference_profile_id: Optional[str] = Field(None, max_length=64)
+
+
+def _scores_path() -> Path:
+    from core.config import DATA_DIR
+
+    return Path(DATA_DIR) / "take_scores.json"
+
+
+def _load_scores() -> dict:
+    try:
+        return _json.loads(_scores_path().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_scores(new: dict) -> None:
+    data = _load_scores()
+    data.update(new)
+    if len(data) > 2000:  # bounded: keep the newest
+        data = dict(sorted(data.items(), key=lambda kv: kv[1].get("scored_at", 0))[-2000:])
+    tmp = _scores_path().with_suffix(".tmp")
+    tmp.write_text(_json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    tmp.replace(_scores_path())
+
+
+def _resolve_takes(history_ids: list[str], reference_profile_id: Optional[str]):
+    import os
+
+    from core.config import OUTPUTS_DIR, VOICES_DIR
+    from core.db import db_conn
+
+    def inside(root: str, name: Optional[str]) -> Optional[str]:
+        if not name or os.path.basename(name) != name:
+            return None
+        path = os.path.realpath(os.path.join(root, name))
+        return path if path.startswith(os.path.realpath(root)) and os.path.isfile(path) else None
+
+    takes, profile_ids = [], []
+    with db_conn() as conn:
+        for hid in history_ids:
+            row = conn.execute(
+                "SELECT id, text, language, profile_id, audio_path FROM generation_history WHERE id = ?",
+                (hid,)).fetchone()
+            if row is None:
+                raise HTTPException(status_code=404, detail=f"Take {hid} not found.")
+            path = inside(OUTPUTS_DIR, row["audio_path"])
+            if path is None:
+                raise HTTPException(status_code=404, detail=f"Audio for take {hid} is missing.")
+            takes.append({"id": row["id"], "path": path, "text": row["text"] or "",
+                          "language": row["language"]})
+            profile_ids.append(row["profile_id"])
+        pid = reference_profile_id or next((p for p in profile_ids if p), None)
+        reference = None
+        if pid:
+            prof = conn.execute("SELECT ref_audio_path FROM voice_profiles WHERE id = ?",
+                                (pid,)).fetchone()
+            if prof is not None:
+                reference = inside(VOICES_DIR, prof["ref_audio_path"])
+    return takes, reference
+
+
+@router.get("/score/capabilities")
+def score_capabilities():
+    from services import take_scoring
+
+    return take_scoring.capabilities()
+
+
+@router.post("/score")
+async def score_takes(body: ScoreRequest):
+    """Score takes (SECS vs the voice's reference, WER/CER vs the take's text,
+    MOS) and rank them. Results persist and are returned by ``GET /scores``."""
+    import time as _time
+
+    from services import take_scoring
+
+    takes, reference = _resolve_takes(body.history_ids, body.reference_profile_id)
+    if not _score_lock.acquire(blocking=False):
+        raise HTTPException(status_code=409, detail="Scoring is already running.")
+    try:
+        results = await _asyncio.to_thread(take_scoring.score_takes, takes, reference=reference)
+    finally:
+        _score_lock.release()
+    now = _time.time()
+    _save_scores({r["id"]: {**r, "scored_at": now, "reference": bool(reference)}
+                  for r in results if not r.get("error")})
+    return {"results": results, "reference_used": bool(reference),
+            "capabilities": take_scoring.capabilities()}
+
+
+@router.get("/scores")
+def get_scores(ids: str = Query(..., max_length=2000)):
+    wanted = [i for i in ids.split(",") if i][:200]
+    data = _load_scores()
+    return {"scores": {i: data[i] for i in wanted if i in data}}
