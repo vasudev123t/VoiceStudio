@@ -30,6 +30,8 @@ import json
 import logging
 import os
 import queue
+import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -201,6 +203,111 @@ def rvc_python_available() -> bool:
         return False
 
 
+# ── FFmpeg used by Applio's "light" noise cleanup ───────────────────────────
+#
+# Applio's ``rvc/lib/tools/audio_cleanup.py::_ffmpeg()`` prefers an
+# ``ffmpeg.exe`` in the Applio root over PATH. The Windows bundle ships FFmpeg
+# 4.3.2 (2021), whose ``afftdn`` has no ``gs`` (gain smoothing) option, so
+# "Light noise cleanup" fails with ``Option 'gs' not found``. VoiceStudio probes
+# every candidate, hands the first one that supports ``afftdn gs`` to the worker
+# (``OMNIVOICE_RVC_FFMPEG``; the worker patches ``_ffmpeg``), and — when none
+# does — runs a gs-free ``afftdn`` pre-clean itself instead of letting Applio
+# fail. Nothing in the Applio checkout is modified.
+
+_FFMPEG_PROBES: dict[str, dict] = {}
+_FFMPEG_PROBE_LOCK = threading.Lock()
+_GS_OPTION_RE = re.compile(r"^\s+gs\s", re.M)
+
+
+def probe_ffmpeg(path: str) -> dict:
+    """``{"path", "version", "supports_gs", "ok"}`` for one ffmpeg binary (cached)."""
+    key = os.path.normcase(os.path.abspath(path))
+    with _FFMPEG_PROBE_LOCK:
+        if key in _FFMPEG_PROBES:
+            return dict(_FFMPEG_PROBES[key])
+    info = {"path": str(path), "version": None, "supports_gs": False, "ok": False}
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform == "win32" else 0
+    try:
+        ver = subprocess.run([str(path), "-hide_banner", "-version"], capture_output=True,
+                             timeout=15, creationflags=flags)
+        first = (ver.stdout or b"").decode("utf-8", "replace").splitlines()[:1]
+        if first:
+            match = re.search(r"ffmpeg version (\S+)", first[0])
+            info["version"] = match.group(1) if match else first[0][:80]
+        helptext = subprocess.run([str(path), "-hide_banner", "-h", "filter=afftdn"],
+                                  capture_output=True, timeout=15, creationflags=flags)
+        out = (helptext.stdout or b"").decode("utf-8", "replace")
+        info["ok"] = ver.returncode == 0
+        info["supports_gs"] = bool(_GS_OPTION_RE.search(out))
+    except (OSError, subprocess.SubprocessError):
+        pass
+    with _FFMPEG_PROBE_LOCK:
+        _FFMPEG_PROBES[key] = dict(info)
+    return info
+
+
+def _ffmpeg_candidates(root: Optional[Path]) -> list[str]:
+    name = "ffmpeg.exe" if os.name == "nt" else "ffmpeg"
+    seen: list[str] = []
+
+    def add(path) -> None:
+        if path and os.path.isfile(str(path)):
+            norm = os.path.normcase(os.path.abspath(str(path)))
+            if norm not in (os.path.normcase(os.path.abspath(p)) for p in seen):
+                seen.append(str(path))
+
+    add(os.environ.get("OMNIVOICE_RVC_FFMPEG", "").strip() or None)
+    add(shutil.which(name))
+    try:
+        from services.ffmpeg_utils import find_ffmpeg
+
+        add(find_ffmpeg())
+    except Exception:  # noqa: BLE001 — stand-alone use
+        pass
+    if root is not None:
+        add(Path(root) / name)
+    return seen
+
+
+def cleanup_ffmpeg_status(root: Optional[Path] = None) -> dict:
+    """Which ffmpeg Applio's light cleanup will use, and whether it can.
+
+    ``applio_bundled`` describes the binary Applio would pick on its own.
+    ``selected`` is what VoiceStudio passes to the worker (``supports_gs``
+    False means VoiceStudio pre-cleans with a gs-free filter instead).
+    """
+    root = root if root is not None else applio_dir()
+    candidates = [probe_ffmpeg(p) for p in _ffmpeg_candidates(root)]
+    bundled = None
+    if root is not None:
+        exe = Path(root) / ("ffmpeg.exe" if os.name == "nt" else "ffmpeg")
+        if exe.is_file():
+            bundled = probe_ffmpeg(str(exe))
+    selected = next((c for c in candidates if c["ok"] and c["supports_gs"]), None)
+    return {
+        "selected": selected,
+        "applio_bundled": bundled,
+        "candidates": candidates,
+        "fallback": None if selected else "voicestudio_afftdn",
+    }
+
+
+def preclean_audio(input_path: str, output_path: str, strength: float = 12.0) -> str:
+    """gs-free ``afftdn`` denoise with VoiceStudio's own ffmpeg (fallback path)."""
+    candidates = _ffmpeg_candidates(None)
+    if not candidates:
+        raise RVCConversionError("Noise cleanup needs FFmpeg; none was found.")
+    nr = max(1.0, min(30.0, float(strength)))
+    cmd = [candidates[0], "-y", "-hide_banner", "-loglevel", "error", "-i", input_path,
+           "-af", f"afftdn=nr={nr:g}:nf=-50:tn=1", "-ac", "1", output_path]
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform == "win32" else 0
+    proc = subprocess.run(cmd, capture_output=True, timeout=600, creationflags=flags)
+    if proc.returncode != 0 or not os.path.isfile(output_path):
+        tail = (proc.stderr or b"").decode("utf-8", "replace")[-300:]
+        raise RVCConversionError(f"Noise cleanup failed: {tail}")
+    return output_path
+
+
 # ── Backends ─────────────────────────────────────────────────────────────────
 
 
@@ -318,6 +425,11 @@ class ApplioBackend(ConverterBackend):
         env["PYTHONUNBUFFERED"] = "1"
         env["PYTHONIOENCODING"] = "utf-8"
         env.pop("PYTHONPATH", None)  # never leak the backend's site into Applio
+        ffmpeg = cleanup_ffmpeg_status(self.root).get("selected")
+        if ffmpeg:
+            env["OMNIVOICE_RVC_FFMPEG"] = ffmpeg["path"]
+        else:
+            env.pop("OMNIVOICE_RVC_FFMPEG", None)
         log = open(self._log_path(), "ab")
         argv = [str(self.python), str(worker)]
         try:
@@ -385,6 +497,12 @@ class ApplioBackend(ConverterBackend):
         if params.f0_method not in BACKEND_F0_METHODS["applio"]:
             raise ValueError(f"Applio does not support f0_method={params.f0_method!r}; use "
                              f"{', '.join(BACKEND_F0_METHODS['applio'])}.")
+        if params.clean_audio and not cleanup_ffmpeg_status(self.root).get("selected"):
+            # No ffmpeg with ``afftdn gs``: clean here instead of letting
+            # Applio fail with "Option 'gs' not found".
+            cleaned = str(Path(output_path).with_name(Path(output_path).stem + "_preclean.wav"))
+            input_path = preclean_audio(input_path, cleaned, params.clean_strength)
+            params = ConversionParams(**{**params.to_dict(), "clean_audio": False})
         with self._lock:
             if self._loaded and self._loaded != model_path:
                 self._request({"op": "unload"}, 60)  # free VRAM before the next voice
@@ -418,6 +536,23 @@ class ApplioBackend(ConverterBackend):
     def close(self) -> None:
         with self._lock:
             self._kill()
+
+
+def _safe_cleanup_status(root: Path) -> Optional[dict]:
+    try:
+        info = cleanup_ffmpeg_status(root)
+    except Exception:  # noqa: BLE001 — status must never fail
+        return None
+    sel = info.get("selected") or {}
+    bundled = info.get("applio_bundled") or {}
+    return {
+        "path": sel.get("path"),
+        "version": sel.get("version"),
+        "supports_gs": bool(sel),
+        "applio_bundled_version": bundled.get("version"),
+        "applio_bundled_supports_gs": bundled.get("supports_gs"),
+        "fallback": info.get("fallback"),
+    }
 
 
 def _wav_rate(path: str) -> int:
@@ -518,6 +653,7 @@ class VoiceConversionService:
             "worker_running": bool(isinstance(loaded, ApplioBackend)
                                    and loaded._proc is not None
                                    and loaded._proc.poll() is None),
+            "cleanup_ffmpeg": _safe_cleanup_status(root) if root else None,
         }
 
     def convert_file(self, input_path: str, output_path: str, model_path: str,

@@ -31,10 +31,31 @@ def _reply(payload):
     _PROTOCOL.flush()
 
 
+def _patch_cleanup_ffmpeg():
+    """Point Applio's light cleanup at the ffmpeg VoiceStudio selected.
+
+    Applio's ``audio_cleanup._ffmpeg()`` prefers the ``ffmpeg.exe`` in its own
+    root (FFmpeg 4.3.2 on Windows), which lacks ``afftdn gs``. The backend
+    probes for a capable binary and passes it as ``OMNIVOICE_RVC_FFMPEG``.
+    """
+    path = os.environ.get("OMNIVOICE_RVC_FFMPEG", "").strip()
+    if not path or not os.path.isfile(path):
+        return None
+    try:
+        from rvc.lib.tools import audio_cleanup
+    except Exception:  # noqa: BLE001 — older Applio without the module
+        return None
+    if hasattr(audio_cleanup, "_ffmpeg"):
+        audio_cleanup._ffmpeg = lambda: path
+        return path
+    return None
+
+
 def _make_converter(device_override):
     root = os.getcwd()
     if root not in sys.path:
         sys.path.insert(0, root)
+    _patch_cleanup_ffmpeg()
     from rvc.configs.config import inference_config
     from rvc.infer.infer import VoiceConverter
 
