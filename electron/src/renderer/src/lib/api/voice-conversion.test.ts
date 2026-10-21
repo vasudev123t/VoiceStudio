@@ -38,6 +38,19 @@ describe('toConvertForm', () => {
     });
   });
 
+  it('sends performance-transfer fields only when a nonverbal mode is chosen', () => {
+    const form = toConvertForm(clip(), 'v', {
+      ...DEFAULT_CONVERSION_PARAMS,
+      nonverbal: 'keep_source',
+      nonverbalRegions: ' 1.2-2.5 ',
+      detectNonverbal: true,
+    });
+    expect(form.get('nonverbal')).toBe('keep_source');
+    expect(form.get('nonverbal_regions')).toBe('1.2-2.5');
+    expect(form.get('detect_nonverbal')).toBe('true');
+    expect(toConvertForm(clip(), 'v', DEFAULT_CONVERSION_PARAMS).get('nonverbal')).toBeNull();
+  });
+
   it('clamps pitch into the RVC range before sending', () => {
     expect(toConvertForm(clip(), 'v', { ...DEFAULT_CONVERSION_PARAMS, pitch: 99 }).get('pitch')).toBe('24');
     expect(clampPitch(-40)).toBe(-24);

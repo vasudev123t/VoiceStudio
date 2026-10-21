@@ -47,3 +47,11 @@ it('shows the fine-tune tab with recipe blockers', async () => {
   expect(screen.getByRole('button', { name: /voiceLab.ft_start/ })).toBeDisabled();
   expect(screen.getByText('voiceLab.ft_no_adapters')).toBeInTheDocument();
 });
+
+it('shows the nonverbal library tab empty state', async () => {
+  const { NonverbalLibraryPanel } = await import('./nonverbal-library');
+  render(<NonverbalLibraryPanel />);
+  expect(screen.getByTestId('nonverbal-library')).toBeInTheDocument();
+  expect(screen.getByText('voiceLab.nv_none')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /voiceLab.nv_from_dataset/ })).toBeDisabled();
+});

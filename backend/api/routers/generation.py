@@ -511,6 +511,18 @@ def _note_generate_progress() -> None:
         pass
 
 
+def _nonverbal_plan(text):
+    """Pieces for real-nonverbal splicing, or None (review item 7). Never
+    raises: a broken library must not break synthesis."""
+    try:
+        from services.nonverbal_library import plan
+
+        return plan(text)
+    except Exception:  # noqa: BLE001
+        logger.warning("nonverbal library lookup failed", exc_info=True)
+        return None
+
+
 def _render_with_pauses(gen_span, segments, sample_rate):
     """Synthesize ``[(text, pause_ms), ...]`` spans and stitch silence between
     them (issue #276).
@@ -1167,8 +1179,19 @@ def _run_inference(
         from omnivoice.utils.text import parse_pause_markers
         segments = parse_pause_markers(text)
         has_pause = len(segments) > 1 or (segments and segments[0][1] > 0)
+        nv_pieces = _nonverbal_plan(text)
 
-        if has_pause:
+        if nv_pieces:
+            # Review item 7: real laughs/breaths from the active nonverbal
+            # library are spliced at their tags; text between them renders
+            # through the normal [pause]-aware path.
+            from services import nonverbal_library as _nvl
+
+            def _gen_piece(piece):
+                return _render_with_pauses(lambda s: _gen(s, None)[0],
+                                           parse_pause_markers(piece), sr)
+            audio_out = _nvl.render(_gen_piece, nv_pieces, sr, key=text)
+        elif has_pause:
             def _gen_span(span_text):
                 # Per-span duration is left to the model; an explicit overall
                 # `duration` can't be meaningfully split across spans.
@@ -1263,8 +1286,9 @@ def _run_backend_inference(
         from omnivoice.utils.text import parse_pause_markers
         segments = parse_pause_markers(text)
         has_pause = len(segments) > 1 or (segments and segments[0][1] > 0)
+        nv_pieces = _nonverbal_plan(text)
 
-        if has_pause:
+        if has_pause or nv_pieces:
             first_span = True
 
             def _gen_span(span_text):
@@ -1276,7 +1300,14 @@ def _run_backend_inference(
                     span_kwargs["seed"] = used_seed
                 first_span = False
                 return trace_call("synthesis", backend.generate, span_text, duration=None, **span_kwargs)
-            audio_out = _render_with_pauses(_gen_span, segments, sr)
+            if nv_pieces:
+                from services import nonverbal_library as _nvl
+
+                audio_out = _nvl.render(
+                    lambda piece: _render_with_pauses(_gen_span, parse_pause_markers(piece), sr),
+                    nv_pieces, sr, key=text)
+            else:
+                audio_out = _render_with_pauses(_gen_span, segments, sr)
         else:
             # Wave 1.2: sentence-boundary chunking for long text (see
             # _run_inference for the rationale; behavior is identical here).
@@ -2173,6 +2204,8 @@ async def generate_speech(
 
         _segments = parse_pause_markers(text)
         _has_pause = len(_segments) > 1 or (_segments and _segments[0][1] > 0)
+        # Nonverbal-library splicing renders through the single-shot path.
+        _has_pause = _has_pause or bool(_nonverbal_plan(text))
         _text_chunks = [] if _has_pause else split_text_into_chunks(text, max_chunk_chars)
         # #1330 — see the non-streaming path: chunks the engine rendered to
         # nothing land here so the stream can say the take is missing text

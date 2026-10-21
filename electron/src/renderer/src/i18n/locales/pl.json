@@ -3862,7 +3862,14 @@
     "no_index_voice_warning": "No .index — retrieval is off for this voice. Build one from a few minutes of clean recordings of the same speaker.",
     "build_index": "Build index",
     "index_building": "Building index…",
-    "index_build_started": "Building the index for {{name}}…"
+    "index_build_started": "Building the index for {{name}}…",
+    "nonverbal": "Laughs & breaths (performance transfer)",
+    "nonverbal_hint": "RVC tends to turn laughs into pseudo-speech. Keep your own laughs/breaths in the marked regions, or swap in laughs from the active Voice Lab library.",
+    "nonverbal_convert": "Convert everything (default)",
+    "nonverbal_keep_source": "Keep my laughs and breaths",
+    "nonverbal_library": "Use laughs from the library",
+    "nonverbal_regions": "Regions in seconds, e.g. 1.2-2.5, 7-8",
+    "nonverbal_detect": "Also detect laughs automatically (experimental)"
   },
   "gpuMemory": {
     "title": "GPU memory",
@@ -3950,6 +3957,16 @@
     "ft_activate": "Activate",
     "ft_active": "Active",
     "ft_activated": "Adapter activated. It is applied the next time the model loads.",
-    "ft_deactivated": "Adapter deactivated. The base model is used again."
+    "ft_deactivated": "Adapter deactivated. The base model is used again.",
+    "tab_nonverbal": "Laughs & breaths",
+    "nv_hint": "A library of the speaker's real laughs, breaths and sighs. When a library is active, [laughter], [breath] and [sigh] tags in your text are replaced by a real clip from it, level-matched to the speech. Tags it has no clips for are still voiced by the model.",
+    "nv_from_dataset": "Create from dataset",
+    "nv_created": "Library created.",
+    "nv_none": "No libraries yet. Build a dataset with laugh/breath tagging, then create one from it.",
+    "nv_kind_laugh": "Laughs",
+    "nv_kind_breath": "Breaths",
+    "nv_kind_sigh": "Sighs",
+    "nv_add_clip": "Add clip",
+    "nv_remove": "Remove clip"
   }
 }

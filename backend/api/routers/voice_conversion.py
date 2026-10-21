@@ -335,8 +335,17 @@ async def convert(
     clean_audio: bool = Form(False),
     clean_strength: float = Form(12.0, ge=1.0, le=30.0),
     f0_autotune: bool = Form(False),
+    nonverbal: str = Form("convert", pattern="^(convert|keep_source|library)$"),
+    nonverbal_regions: Optional[str] = Form(None, max_length=2000),
+    detect_nonverbal: bool = Form(False),
 ):
     """Convert ``audio`` with a registered voice.
+
+    Performance transfer (review item 7): with ``nonverbal`` = ``keep_source``
+    the performer's own laughs/breaths are kept inside ``nonverbal_regions``
+    ("1.2-2.5,7-8") and/or auto-detected laugh regions (RVC turns laughs into
+    pseudo-speech); ``library`` swaps in laughs from the active nonverbal
+    library instead.
 
     The upload is copied untouched (``source_url``) and the converted take is
     written as WAV at the voice model's sample rate (``audio_url``).
@@ -392,6 +401,15 @@ async def convert(
         except Exception:
             source_path.unlink(missing_ok=True)
             raise
+        nonverbal_applied = []
+        if nonverbal != "convert":
+            try:
+                nonverbal_applied = await asyncio.to_thread(
+                    _restore_nonverbal, work_in, raw_out, nonverbal, nonverbal_regions,
+                    detect_nonverbal, tmp)
+            except ValueError as exc:
+                source_path.unlink(missing_ok=True)
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
         duration = await _mark_and_save(raw_out, outputs / output_name)
 
     entry = rvc_history.add({
@@ -411,8 +429,29 @@ async def convert(
         # Without an index the index-rate knob has no effect (RVC skips
         # retrieval); record it so the UI can say why a take sounds less close.
         "index_used": bool(voice.get("has_index")),
+        "nonverbal": {"mode": nonverbal, "regions": nonverbal_applied} if nonverbal != "convert" else None,
     })
     return _entry_public(entry)
+
+
+def _restore_nonverbal(source: str, converted: str, mode: str, regions_spec: Optional[str],
+                       detect: bool, tmp: str) -> list:
+    """Performance-transfer post-step (see ``services.nonverbal_library``)."""
+    import soundfile as sf
+
+    from services import nonverbal_library as nvl
+    from services.dataset_builder import _read, decode
+
+    info = sf.info(converted)
+    total = info.frames / float(info.samplerate)
+    src_wav = decode(source, Path(tmp) / "source-mono.wav", int(info.samplerate))
+    regions = nvl.parse_regions(regions_spec, total)
+    if detect:
+        x, sr = _read(src_wav)
+        regions = sorted(set(regions) | {(a, b) for a, b, _ in nvl.detect_nonverbal(x, sr)})
+    if not regions:
+        return []
+    return nvl.restore_regions(src_wav, Path(converted), mode=mode, regions=regions)
 
 
 async def _mark_and_save(src: str, dest: Path) -> float:

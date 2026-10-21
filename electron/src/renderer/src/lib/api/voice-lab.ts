@@ -293,3 +293,60 @@ export function recipeBlockers(recipe: FinetuneRecipe): string[] {
   if (!recipe.runnable && out.length === 0) out.push(recipe.note ?? 'not wired yet');
   return out;
 }
+
+// ── Nonverbal library (review item 7) ───────────────────────────────────────
+
+export type NonverbalKind = 'laugh' | 'breath' | 'sigh';
+
+export interface NonverbalClip {
+  file: string;
+  kind: NonverbalKind;
+  duration: number;
+  rms_db: number;
+  source?: string | null;
+}
+
+export interface NonverbalLibrary {
+  id: string;
+  name: string;
+  created_at: number;
+  source_dataset?: string | null;
+  counts: Record<NonverbalKind, number>;
+  active: boolean;
+  clips?: NonverbalClip[];
+}
+
+export const listNonverbalLibraries = (signal?: AbortSignal) =>
+  apiJson<{ libraries: NonverbalLibrary[]; active: string | null }>(`${BASE}/nonverbal`, { signal });
+
+export const getNonverbalLibrary = (id: string, signal?: AbortSignal) =>
+  apiJson<NonverbalLibrary>(`${BASE}/nonverbal/${encodeURIComponent(id)}`, { signal });
+
+export const libraryFromDataset = (datasetId: string, name?: string) =>
+  apiJson<NonverbalLibrary & { added: number; skipped: number }>(`${BASE}/nonverbal/from-dataset`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dataset_id: datasetId, name: name || null }),
+  });
+
+export const setActiveNonverbalLibrary = (id: string | null) =>
+  apiJson<{ active: string | null }>(`${BASE}/nonverbal/active`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ library_id: id }),
+  });
+
+export function addNonverbalClip(id: string, kind: NonverbalKind, file: File) {
+  const body = new FormData();
+  body.append('kind', kind);
+  body.append('file', file, file.name);
+  return apiJson<NonverbalClip>(`${BASE}/nonverbal/${encodeURIComponent(id)}/clips`, { method: 'POST', body });
+}
+
+export const removeNonverbalClip = (id: string, file: string) =>
+  apiJson<{ ok: boolean }>(`${BASE}/nonverbal/${encodeURIComponent(id)}/clips/${encodeURIComponent(file)}`, {
+    method: 'DELETE',
+  });
+
+export const nonverbalAudioUrl = (id: string, file: string) =>
+  apiPath(`${BASE}/nonverbal/${encodeURIComponent(id)}/audio?file=${encodeURIComponent(file)}`);

@@ -50,7 +50,14 @@ export interface ConversionParams {
   filterRadius: number;
   rmsMixRate: number;
   cleanAudio: boolean;
+  /** Performance transfer: what happens to laughs/breaths in the source. */
+  nonverbal: NonverbalMode;
+  /** Optional "start-end" seconds list, e.g. "1.2-2.5, 7-8". */
+  nonverbalRegions: string;
+  detectNonverbal: boolean;
 }
+
+export type NonverbalMode = 'convert' | 'keep_source' | 'library';
 
 /**
  * Defaults tuned for acted performances: protect 0.33 keeps breaths and
@@ -65,6 +72,9 @@ export const DEFAULT_CONVERSION_PARAMS: ConversionParams = {
   filterRadius: 3,
   rmsMixRate: 0.1,
   cleanAudio: false,
+  nonverbal: 'convert',
+  nonverbalRegions: '',
+  detectNonverbal: false,
 };
 
 /** "Expressive" preset from the review: rmvpe, protect 0.33, envelope 0.1, index 0.6. */
@@ -196,6 +206,11 @@ export function toConvertForm(audio: File, voiceId: string, params: ConversionPa
   body.append('filter_radius', String(params.filterRadius));
   body.append('rms_mix_rate', String(params.rmsMixRate));
   body.append('clean_audio', params.cleanAudio ? 'true' : 'false');
+  if (params.nonverbal && params.nonverbal !== 'convert') {
+    body.append('nonverbal', params.nonverbal);
+    if (params.nonverbalRegions?.trim()) body.append('nonverbal_regions', params.nonverbalRegions.trim());
+    body.append('detect_nonverbal', params.detectNonverbal ? 'true' : 'false');
+  }
   return body;
 }
 

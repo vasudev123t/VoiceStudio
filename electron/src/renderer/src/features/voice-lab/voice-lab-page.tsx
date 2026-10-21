@@ -5,10 +5,11 @@ import { FreeGpuButton } from '@/components/free-gpu-button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DatasetBuilder } from './dataset-builder';
 import { FinetunePanel } from './finetune-panel';
+import { NonverbalLibraryPanel } from './nonverbal-library';
 import { TakeCompare } from './take-compare';
 
-type Tab = 'dataset' | 'compare' | 'finetune';
-const TABS: Tab[] = ['dataset', 'compare', 'finetune'];
+type Tab = 'dataset' | 'compare' | 'finetune' | 'nonverbal';
+const TABS: Tab[] = ['dataset', 'compare', 'finetune', 'nonverbal'];
 
 /** Voice Lab: build datasets from real recordings, score takes, fine-tune. */
 export function VoiceLabPage() {
@@ -43,6 +44,9 @@ export function VoiceLabPage() {
             </TabsContent>
             <TabsContent value="finetune">
               <FinetunePanel />
+            </TabsContent>
+            <TabsContent value="nonverbal">
+              <NonverbalLibraryPanel />
             </TabsContent>
           </Tabs>
         </div>

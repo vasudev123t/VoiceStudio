@@ -375,3 +375,99 @@ def finetune_set_active(body: ActiveAdapter):
         return {"active": finetune.set_active_adapter(body.adapter_id)}
     except KeyError:
         raise HTTPException(status_code=404, detail="Adapter not found.") from None
+
+
+# ── Nonverbal library (review item 7) ───────────────────────────────────────
+
+
+class LibraryFromDataset(BaseModel):
+    dataset_id: str = Field(..., max_length=64)
+    name: Optional[str] = Field(None, max_length=60)
+
+
+class ActiveLibrary(BaseModel):
+    library_id: Optional[str] = Field(None, max_length=64)
+
+
+@router.get("/nonverbal")
+def nonverbal_libraries():
+    from services import nonverbal_library as nvl
+
+    return {"libraries": nvl.list_libraries(), "active": nvl.active_library_id()}
+
+
+@router.post("/nonverbal/from-dataset")
+def nonverbal_from_dataset(body: LibraryFromDataset):
+    from services import nonverbal_library as nvl
+
+    try:
+        return nvl.from_dataset(body.dataset_id, body.name)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Dataset not found.") from None
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.put("/nonverbal/active")
+def nonverbal_set_active(body: ActiveLibrary):
+    from services import nonverbal_library as nvl
+
+    try:
+        return {"active": nvl.set_active(body.library_id)}
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Library not found.") from None
+
+
+@router.get("/nonverbal/{library_id}")
+def nonverbal_library(library_id: str):
+    from services import nonverbal_library as nvl
+
+    try:
+        return nvl.get_library(library_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Library not found.") from None
+
+
+@router.post("/nonverbal/{library_id}/clips")
+async def nonverbal_add_clip(library_id: str, kind: str = Form(..., pattern="^(laugh|breath|sigh)$"),
+                             file: UploadFile = File(...)):
+    import tempfile
+
+    from services import nonverbal_library as nvl
+    from services.dataset_builder import decode
+
+    ext = (upload_suffix(file.filename) or "").lower()
+    if ext not in AUDIO_EXTS:
+        raise HTTPException(status_code=415, detail="Unsupported audio file.")
+    with tempfile.TemporaryDirectory(prefix="ov-nv-") as tmp:
+        raw = Path(tmp) / f"upload{ext}"
+        await _save(file, raw, 64 * 1024 ** 2)
+        try:
+            wav = await _asyncio.to_thread(decode, str(raw), Path(tmp) / "clip.wav", 48_000)
+            return await _asyncio.to_thread(nvl.add_clip, library_id, wav, kind,
+                                            source=portable_filename(file.filename or "upload"))
+        except KeyError:
+            raise HTTPException(status_code=404, detail="Library not found.") from None
+        except (ValueError, RuntimeError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.delete("/nonverbal/{library_id}/clips/{file}")
+def nonverbal_remove_clip(library_id: str, file: str):
+    from services import nonverbal_library as nvl
+
+    try:
+        nvl.remove_clip(library_id, file)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Clip not found.") from None
+    return {"ok": True}
+
+
+@router.get("/nonverbal/{library_id}/audio")
+def nonverbal_audio(library_id: str, file: str = Query(..., max_length=120)):
+    from services import nonverbal_library as nvl
+
+    try:
+        return FileResponse(nvl.clip_path(library_id, file), media_type="audio/wav")
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Clip not found.") from None

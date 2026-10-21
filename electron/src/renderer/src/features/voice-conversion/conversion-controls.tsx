@@ -14,7 +14,10 @@ import {
   protectionOff,
   type ConversionParams,
   type F0Method,
+  type NonverbalMode,
 } from '@/lib/api/voice-conversion';
+
+const NONVERBAL_MODES: NonverbalMode[] = ['convert', 'keep_source', 'library'];
 
 const F0_LABEL_KEYS: Record<F0Method, string> = {
   rmvpe: 'voiceConversion.f0_rmvpe',
@@ -233,6 +236,45 @@ export function ConversionControls({
           />
         </div>
       )}
+      <div className="space-y-2 rounded-md border p-3 text-xs" data-testid="nonverbal-controls">
+        <span className="font-medium">{t('voiceConversion.nonverbal')}</span>
+        <span className="block text-[11px] text-muted-foreground">{t('voiceConversion.nonverbal_hint')}</span>
+        <select
+          aria-label={t('voiceConversion.nonverbal')}
+          className="h-8 w-full rounded-md border bg-background px-2"
+          value={params.nonverbal ?? 'convert'}
+          disabled={disabled}
+          onChange={(e) => set('nonverbal', e.target.value as NonverbalMode)}
+        >
+          {NONVERBAL_MODES.map((mode) => (
+            <option key={mode} value={mode}>
+              {t(`voiceConversion.nonverbal_${mode}`)}
+            </option>
+          ))}
+        </select>
+        {params.nonverbal && params.nonverbal !== 'convert' && (
+          <>
+            <input
+              aria-label={t('voiceConversion.nonverbal_regions')}
+              placeholder={t('voiceConversion.nonverbal_regions')}
+              className="h-8 w-full rounded-md border bg-background px-2"
+              value={params.nonverbalRegions ?? ''}
+              disabled={disabled}
+              maxLength={2000}
+              onChange={(e) => set('nonverbalRegions', e.target.value)}
+            />
+            <div className="flex items-center justify-between gap-3">
+              <span>{t('voiceConversion.nonverbal_detect')}</span>
+              <Switch
+                aria-label={t('voiceConversion.nonverbal_detect')}
+                checked={!!params.detectNonverbal}
+                disabled={disabled}
+                onCheckedChange={(checked) => set('detectNonverbal', checked)}
+              />
+            </div>
+          </>
+        )}
+      </div>
     </section>
   );
 }
