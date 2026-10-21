@@ -288,3 +288,90 @@ def get_scores(ids: str = Query(..., max_length=2000)):
     wanted = [i for i in ids.split(",") if i][:200]
     data = _load_scores()
     return {"scores": {i: data[i] for i in wanted if i in data}}
+
+
+# ── Fine-tuning (review item 6) ─────────────────────────────────────────────
+
+
+class FinetuneRequest(BaseModel):
+    recipe: str = Field("omnivoice-lora", max_length=40)
+    dataset_id: str = Field(..., max_length=64)
+    name: str = Field("My voice", min_length=1, max_length=60)
+    steps: Optional[int] = Field(None, ge=1, le=20000)
+    rank: Optional[int] = Field(None, ge=2, le=128)
+    learning_rate: Optional[float] = Field(None, gt=0, le=1e-2)
+    grad_accum: Optional[int] = Field(None, ge=1, le=64)
+
+
+class ActiveAdapter(BaseModel):
+    adapter_id: Optional[str] = Field(None, max_length=64)
+
+
+@router.get("/finetune/recipes")
+def finetune_recipes():
+    from services import finetune
+
+    return {"recipes": finetune.recipes()}
+
+
+@router.post("/finetune")
+def start_finetune(body: FinetuneRequest):
+    from services import finetune
+
+    try:
+        job = finetune.start(body.recipe, dataset_id=body.dataset_id, name=body.name.strip(),
+                             overrides={"steps": body.steps, "rank": body.rank,
+                                        "learning_rate": body.learning_rate,
+                                        "grad_accum": body.grad_accum})
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Unknown recipe or dataset.") from None
+    except ValueError as exc:
+        raise HTTPException(status_code=412, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return job.public()
+
+
+@router.get("/finetune/jobs")
+def finetune_jobs():
+    from services import finetune
+
+    return {"jobs": finetune.list_jobs()}
+
+
+@router.get("/finetune/jobs/{job_id}")
+def finetune_job(job_id: str):
+    from services import finetune
+
+    try:
+        return finetune.get_job(job_id).public()
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Job not found.") from None
+
+
+@router.post("/finetune/jobs/{job_id}/cancel")
+async def finetune_cancel(job_id: str):
+    from services import finetune
+
+    try:
+        job = await _asyncio.to_thread(finetune.cancel, job_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Job not found.") from None
+    return job.public()
+
+
+@router.get("/finetune/adapters")
+def finetune_adapters():
+    from services import finetune
+
+    return {"adapters": finetune.list_adapters(), "active": finetune.active_adapter_id()}
+
+
+@router.put("/finetune/active")
+def finetune_set_active(body: ActiveAdapter):
+    from services import finetune
+
+    try:
+        return {"active": finetune.set_active_adapter(body.adapter_id)}
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Adapter not found.") from None

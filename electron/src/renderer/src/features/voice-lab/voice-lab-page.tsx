@@ -4,10 +4,11 @@ import { WorkspaceHeader } from '@/components/app-shell/workspace-header';
 import { FreeGpuButton } from '@/components/free-gpu-button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DatasetBuilder } from './dataset-builder';
+import { FinetunePanel } from './finetune-panel';
 import { TakeCompare } from './take-compare';
 
-type Tab = 'dataset' | 'compare';
-const TABS: Tab[] = ['dataset', 'compare'];
+type Tab = 'dataset' | 'compare' | 'finetune';
+const TABS: Tab[] = ['dataset', 'compare', 'finetune'];
 
 /** Voice Lab: build datasets from real recordings, score takes, fine-tune. */
 export function VoiceLabPage() {
@@ -39,6 +40,9 @@ export function VoiceLabPage() {
             </TabsContent>
             <TabsContent value="compare">
               <TakeCompare />
+            </TabsContent>
+            <TabsContent value="finetune">
+              <FinetunePanel />
             </TabsContent>
           </Tabs>
         </div>

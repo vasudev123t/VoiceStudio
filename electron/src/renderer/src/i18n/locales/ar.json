@@ -3938,6 +3938,22 @@
     "score_legend": "SECS: speaker similarity to the voice's reference (higher is better). WER/CER: recognition errors against the script (lower is better). MOS: predicted naturalness 1–5; * marks the local DSP estimate used until the UTMOS model is downloaded.",
     "not_scored": "Not scored",
     "score_take": "Score take",
-    "rescore": "Re-score"
+    "rescore": "Re-score",
+    "tab_finetune": "Fine-tune",
+    "ft_hint": "Train a small LoRA adapter on one of your datasets. The base model is never changed; activate an adapter to use it for generation, deactivate it to go back. Defaults fit an 8 GB GPU.",
+    "ft_recipe": "Recipe",
+    "ft_dataset": "Dataset",
+    "ft_pick_dataset": "Choose a dataset…",
+    "ft_name": "Adapter name",
+    "ft_steps": "Training steps",
+    "ft_blocked": "needs setup",
+    "ft_missing": "Missing before this recipe can run",
+    "ft_start": "Start fine-tuning",
+    "ft_adapters": "Adapters",
+    "ft_no_adapters": "No adapters yet.",
+    "ft_activate": "Activate",
+    "ft_active": "Active",
+    "ft_activated": "Adapter activated. It is applied the next time the model loads.",
+    "ft_deactivated": "Adapter deactivated. The base model is used again."
   }
 }

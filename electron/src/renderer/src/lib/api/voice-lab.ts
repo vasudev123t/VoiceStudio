@@ -209,3 +209,87 @@ export function formatTakeScore(score: TakeScore): string {
   if (score.mos) parts.push(`MOS ${score.mos.value.toFixed(1)}${score.mos.research_grade ? '' : '*'}`);
   return parts.join(' · ');
 }
+
+// ── Fine-tuning (review item 6) ─────────────────────────────────────────────
+
+export interface FinetuneRecipe {
+  id: string;
+  label: string;
+  base: string;
+  runnable: boolean;
+  ready: boolean;
+  missing_packages: string[];
+  weights_on_disk: boolean;
+  defaults: Record<string, number | boolean>;
+  note?: string | null;
+}
+
+export interface FinetuneJob {
+  id: string;
+  recipe: string;
+  name: string;
+  dataset_id: string;
+  status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+  stage: string | null;
+  progress: number;
+  step: number;
+  steps: number;
+  loss: number | null;
+  peak_vram_mb: number | null;
+  error: string | null;
+  adapter_id: string | null;
+  log_tail?: string;
+}
+
+export interface FinetuneAdapter {
+  id: string;
+  name: string;
+  recipe: string;
+  steps?: number;
+  clips?: number;
+  language?: string | null;
+  final_loss_ema?: number | null;
+  active: boolean;
+}
+
+export interface FinetuneRequest {
+  recipe: string;
+  dataset_id: string;
+  name: string;
+  steps?: number;
+  rank?: number;
+}
+
+export const getFinetuneRecipes = async (signal?: AbortSignal) =>
+  (await apiJson<{ recipes: FinetuneRecipe[] }>(`${BASE}/finetune/recipes`, { signal })).recipes;
+
+export const startFinetune = (body: FinetuneRequest) =>
+  apiJson<FinetuneJob>(`${BASE}/finetune`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+export const getFinetuneJob = (id: string, signal?: AbortSignal) =>
+  apiJson<FinetuneJob>(`${BASE}/finetune/jobs/${encodeURIComponent(id)}`, { signal });
+
+export const cancelFinetuneJob = (id: string) =>
+  apiJson<FinetuneJob>(`${BASE}/finetune/jobs/${encodeURIComponent(id)}/cancel`, { method: 'POST' });
+
+export const listAdapters = (signal?: AbortSignal) =>
+  apiJson<{ adapters: FinetuneAdapter[]; active: string | null }>(`${BASE}/finetune/adapters`, { signal });
+
+export const setActiveAdapter = (adapterId: string | null) =>
+  apiJson<{ active: string | null }>(`${BASE}/finetune/active`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ adapter_id: adapterId }),
+  });
+
+/** Why a recipe can't run yet, as a short list (package names / weights repo). */
+export function recipeBlockers(recipe: FinetuneRecipe): string[] {
+  const out = [...(recipe.missing_packages ?? [])].map((p) => `pip: ${p}`);
+  if (!recipe.weights_on_disk) out.push(`weights: ${recipe.base}`);
+  if (!recipe.runnable && out.length === 0) out.push(recipe.note ?? 'not wired yet');
+  return out;
+}

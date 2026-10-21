@@ -39,3 +39,11 @@ it('renders the dataset builder tab with model warnings and a disabled build but
   expect(screen.getByRole('button', { name: /voiceLab.build$/ })).toBeDisabled();
   expect(screen.getByText('voiceLab.no_datasets')).toBeInTheDocument();
 });
+
+it('shows the fine-tune tab with recipe blockers', async () => {
+  const { FinetunePanel } = await import('./finetune-panel');
+  render(<FinetunePanel />);
+  expect(screen.getByTestId('finetune-panel')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /voiceLab.ft_start/ })).toBeDisabled();
+  expect(screen.getByText('voiceLab.ft_no_adapters')).toBeInTheDocument();
+});

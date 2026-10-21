@@ -52,3 +52,16 @@ describe('take score formatting', () => {
     ).toBe('SECS 0.71 · CER 4% · MOS 3.9*');
   });
 });
+
+describe('recipeBlockers', () => {
+  it('lists missing packages and weights', async () => {
+    const { recipeBlockers } = await import('./voice-lab');
+    const base = { id: 'x', label: 'X', base: 'openbmb/VoxCPM2', defaults: {}, ready: false };
+    expect(recipeBlockers({ ...base, runnable: false, missing_packages: ['voxcpm'], weights_on_disk: false })).toEqual([
+      'pip: voxcpm',
+      'weights: openbmb/VoxCPM2',
+    ]);
+    expect(recipeBlockers({ ...base, runnable: true, ready: true, missing_packages: [], weights_on_disk: true })).toEqual([]);
+    expect(recipeBlockers({ ...base, runnable: false, missing_packages: [], weights_on_disk: true, note: 'n' })).toEqual(['n']);
+  });
+});

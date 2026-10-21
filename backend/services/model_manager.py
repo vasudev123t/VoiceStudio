@@ -2806,6 +2806,15 @@ def _load_model_sync():
                     "to stop preloading it alongside TTS."
                 ) from asr_exc
 
+        # Voice Lab fine-tune (review item 6): merge the user's active LoRA
+        # adapter, if any. Best-effort — a bad adapter keeps the base model.
+        try:
+            from services.finetune import apply_active_adapter
+
+            apply_active_adapter(_model)
+        except Exception:  # noqa: BLE001
+            logger.warning("LoRA adapter step failed", exc_info=True)
+
         # FlashInfer opt-in (upstream k2-fsa port): packed CFG attention +
         # fused kernels, ~2x on upstream's benchmarks. Applied INSTEAD of
         # torch.compile — both rewrite the llm's execution and they do not
