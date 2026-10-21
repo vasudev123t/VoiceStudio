@@ -545,3 +545,12 @@ it('asserts the desktop origin in main-owned backend headers', () => {
   const supervisor = new BackendSupervisor();
   expect(supervisor.requestHeaders()).toMatchObject({ 'X-VoiceStudio-Desktop-Origin': 'app://voicestudio' });
 });
+
+it('sends the per-launch local admin token to its own backend only', async () => {
+  const { LOCAL_ADMIN_TOKEN_HEADER, localAdminToken } = await import('./local-admin-token');
+  const supervisor = new BackendSupervisor();
+  const token = localAdminToken();
+  expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/);
+  expect(localAdminToken()).toBe(token);
+  expect(supervisor.requestHeaders()[LOCAL_ADMIN_TOKEN_HEADER]).toBe(token);
+});

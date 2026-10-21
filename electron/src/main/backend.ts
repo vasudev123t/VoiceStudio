@@ -1,3 +1,8 @@
+import {
+  LOCAL_ADMIN_TOKEN_ENV,
+  LOCAL_ADMIN_TOKEN_HEADER,
+  localAdminToken,
+} from './local-admin-token';
 import { decideMissingRuntime, runtimeWasInstalled } from './runtime-repair';
 import {
   installRuntime,
@@ -522,6 +527,9 @@ function childEnv(
   // Arms backend/core/parent_liveness.py: stdin EOF == "the shell is gone".
   env.OMNIVOICE_DESKTOP_CONTAINED = '1';
   env.OMNIVOICE_PORT = String(port);
+  // Admin routes require this per-launch secret even from loopback; main
+  // injects it into every request it proxies (requestHeaders()).
+  env[LOCAL_ADMIN_TOKEN_ENV] = localAdminToken();
   // The dev renderer is served by Vite on a real port; tell the backend so
   // Settings -> Sharing reports it. Packaged builds serve app:// (no port).
   const rendererPort = devRendererPort(env.ELECTRON_RENDERER_URL);
@@ -689,6 +697,8 @@ export class BackendSupervisor extends EventEmitter<{
     return {
       'X-VoiceStudio-Desktop-Origin': APP_ORIGIN,
       ...(session ? { Authorization: `Bearer ${session.token}` } : {}),
+      // Only our own local backend knows this token; never send it remotely.
+      ...(this.remoteUrl ? {} : { [LOCAL_ADMIN_TOKEN_HEADER]: localAdminToken() }),
     };
   }
 

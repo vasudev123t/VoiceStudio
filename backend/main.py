@@ -33,6 +33,12 @@ from core.contained_subprocess import secure_backend_drain_fd  # noqa: E402
 
 secure_backend_drain_fd()
 
+from core import local_admin as _local_admin  # noqa: E402
+
+# Read the desktop's per-launch admin token and drop it from os.environ before
+# any sidecar, worker or engine subprocess can inherit it.
+_local_admin.configured()
+
 # The shell reads our stdout/stderr through pipes; a reader that falls behind
 # would otherwise block uvicorn's access-log write on the event loop and freeze
 # /health (#2970 class). Producers get a bounded buffer instead.

@@ -489,10 +489,13 @@ def create_mcp_server(app=None):
         import httpx
         # OMNIVOICE_API_URL is an explicit "send tool calls there" override.
         if app is not None and not os.environ.get("OMNIVOICE_API_URL", "").strip():
+            from core import local_admin
+
             return httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=app, client=("127.0.0.1", 0)),
                 base_url="http://127.0.0.1",
                 timeout=timeout,
+                headers=local_admin.headers(),
             )
         from services.network_share import backend_auth_headers
         base = _api_base()

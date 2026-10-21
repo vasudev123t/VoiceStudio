@@ -711,7 +711,13 @@ def test_api_train_validation_and_job_lifecycle(client, rvc, tmp_path, monkeypat
 
 
 def test_api_setup_requires_explicit_confirmation(client):
-    r = client.post("/voice-conversion/setup", json={})
+    # Setup clones a repo and pip-installs: admin-gated (review item 1e), so a
+    # non-loopback client is refused before the handler runs.
+    assert client.post("/voice-conversion/setup", json={}).status_code == 403
+    from fastapi.testclient import TestClient
+
+    local = TestClient(client.app, client=("127.0.0.1", 50000))
+    r = local.post("/voice-conversion/setup", json={})
     assert r.status_code == 400 and "confirm" in r.json()["detail"]
 
 

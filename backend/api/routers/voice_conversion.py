@@ -35,9 +35,10 @@ import uuid
 from pathlib import Path
 from typing import List, Literal, Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 
+from api.dependencies import require_admin
 from core.path_security import portable_filename, upload_suffix
 
 router = APIRouter(prefix="/voice-conversion", tags=["voice-conversion"])
@@ -155,7 +156,7 @@ class VoiceConversionSetupBody(BaseModel):
     cuda: Optional[bool] = None
 
 
-@router.post("/setup")
+@router.post("/setup", dependencies=[Depends(require_admin)])
 def setup_applio(body: VoiceConversionSetupBody):
     """Download + install Applio into ``<data>/tools/applio`` (several GB).
 

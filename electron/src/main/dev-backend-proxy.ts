@@ -10,6 +10,7 @@ const STRIP_HEADERS = new Set([
   'host',
   'origin',
   'x-voicestudio-desktop-origin',
+  'x-voicestudio-local-token',
   'proxy-authorization',
   'referer',
   'te',

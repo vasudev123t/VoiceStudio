@@ -34,6 +34,26 @@ tools keep working unchanged whichever gate is set.
 
 ---
 
+## Desktop per-launch admin token
+
+When the **desktop app** starts its own backend it generates a random 256-bit
+token for that launch and passes it in `OMNIVOICE_LOCAL_ADMIN_TOKEN`. The
+backend reads it once at startup and removes it from its environment (so
+engine sidecars and the Applio worker never inherit it). While it is set,
+**admin routes** (`require_admin`, `require_admin_action`, `require_desktop`,
+`require_native_access`, `/voice-conversion/setup`) also require the header
+`X-VoiceStudio-Local-Token: <token>` from loopback callers. The Electron main
+process injects it into every request it proxies for the renderer; the
+renderer never sees it. A missing or wrong token returns
+`403 {"detail": "local admin token required (call through the VoiceStudio desktop app)"}`.
+
+Consumption routes (TTS, voices, `/health`, `/audio/*`) are unchanged, and a
+backend you start yourself (`uvicorn`, Docker) has no token, so loopback stays
+trusted there exactly as described below. WebSocket handshakes keep their own
+guards and are not checked against this token.
+
+---
+
 ## Share PIN
 
 The PIN is the lightweight, in-app path: flip on **Network** sharing (footer

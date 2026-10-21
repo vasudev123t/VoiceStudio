@@ -29,6 +29,7 @@ from core.auth import (
     principal_for,
     remote_api_key,
 )
+from core import local_admin
 from core.browser_guard import reject_cross_site_get
 from core.csrf import SAFE_HTTP_METHODS, cookie_csrf_allowed
 
@@ -182,6 +183,19 @@ def require_loopback(request: Request) -> None:
     raise HTTPException(status_code=403, detail="loopback origin required")
 
 
+def _local_admin_403() -> None:
+    raise HTTPException(
+        status_code=403,
+        detail="local admin token required (call through the VoiceStudio desktop app)",
+    )
+
+
+def _loopback_admin(request) -> None:
+    """Loopback admin needs the per-launch token when the desktop set one."""
+    if not local_admin.request_authorized(request):
+        _local_admin_403()
+
+
 def _admin_gate_403() -> None:
     """Raise the admin-gate 403 with a detail that states what would ACTUALLY
     satisfy the gate. The bundled UI routes any 403 whose detail mentions
@@ -233,6 +247,7 @@ def check_admin(request: Request) -> None:
     """
     host = request.client.host if request.client else None
     if is_loopback(host):
+        _loopback_admin(request)
         return
     if _server_mode():
         method = str(getattr(request, "method", "GET")).upper()
@@ -255,6 +270,7 @@ def require_admin_action(request: Request) -> None:
     reject_cross_site_get(request)
     host = request.client.host if request.client else None
     if is_loopback(host):
+        _loopback_admin(request)
         return
     if _server_mode() and _request_presents_admin_credential(
         request,
@@ -273,6 +289,7 @@ def require_desktop(request: Request) -> None:
     """
     host = request.client.host if request.client else None
     if is_loopback(host):
+        _loopback_admin(request)
         return
     raise HTTPException(status_code=403, detail="desktop origin required")
 
@@ -305,6 +322,7 @@ def require_native_access(request: Request) -> None:
     host = request.client.host if request.client else None
     if not is_loopback(host):
         raise HTTPException(status_code=403, detail="native filesystem access requires loopback origin")
+    _loopback_admin(request)
 
 
 def ws_remote_authorized(websocket) -> bool:
