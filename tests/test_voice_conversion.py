@@ -412,6 +412,25 @@ def test_train_argv_matches_applio_cli(rvc):
     assert t[t.index("--total-epoch") + 1] == "200" and t[t.index("--batch-size") + 1] == "8"
     assert "--save-only-latest" in t and "--checkpointing" not in t
     assert cmds["index"][-2:] == ["--index-algorithm", "Auto"]
+    assert "--no-pretrained" not in t
+    s.pretrained = False
+    t2 = tr.build_stage_commands(s, python="py", applio="/A", model_name="Vasu",
+                                 dataset="/d", gpu="0", cores=6)["train"]
+    assert t2[-1] == "--no-pretrained"
+
+
+def test_pretrained_status_lists_missing_base_models(tmp_path):
+    from services import rvc_training as tr
+
+    hg = tmp_path / "rvc" / "models" / "pretraineds" / "hifi-gan"
+    hg.mkdir(parents=True)
+    (hg / "f0G40k.pth").write_bytes(b"x")
+    (hg / "f0D40k.pth").write_bytes(b"x")
+    (hg / "f0G48k.pth").write_bytes(b"")  # empty = missing
+    st = tr.pretrained_status(tmp_path)
+    assert st["40000"] == {"present": True, "missing": [], "download_bytes": 0}
+    assert [m["file"] for m in st["48000"]["missing"]] == ["f0G48k.pth", "f0D48k.pth"]
+    assert st["32000"]["download_bytes"] == 73_950_049 + 142_875_703
 
 
 @pytest.mark.parametrize("kw", [{"sample_rate": 44100}, {"epochs": 0}, {"batch_size": 64},

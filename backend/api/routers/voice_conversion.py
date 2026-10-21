@@ -112,6 +112,10 @@ def status():
     active = next((j for j in rvc_training.list_jobs() if j.status in ("queued", "running")), None)
     data["active_job"] = active.public(tail=0) if active else None
     data["docs"] = SETUP_DOC
+    try:
+        data["pretrained"] = rvc_training.pretrained_status()
+    except Exception:  # noqa: BLE001
+        data["pretrained"] = None
     return data
 
 
@@ -512,6 +516,7 @@ async def train(
     f0_method: TrainF0Method = Form("rmvpe"),
     save_every: int = Form(25, ge=1, le=100),
     checkpointing: bool = Form(False),
+    pretrained: bool = Form(True),
     files: Optional[List[UploadFile]] = File(None),
     dataset_authorization: Optional[str] = Form(None),
     dataset_id: Optional[str] = Form(None, max_length=64),
@@ -527,6 +532,7 @@ async def train(
     settings = rvc_training.TrainSettings(
         name=name, sample_rate=int(sample_rate), epochs=epochs, batch_size=batch_size,
         f0_method=f0_method, save_every=min(save_every, epochs), checkpointing=checkpointing,
+        pretrained=pretrained,
     )
     try:
         settings.validate()

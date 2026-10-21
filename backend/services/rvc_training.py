@@ -257,6 +257,9 @@ class TrainSettings:
     cpu_cores: int = 0              # 0 = auto (cpu_count - 1, max 8)
     checkpointing: bool = False     # lower VRAM, slower
     gpu: Optional[str] = None       # None = auto ("0" when CUDA, "-" for CPU)
+    #: Initialise from Applio's HiFi-GAN base models (f0G/f0D<sr>). False
+    #: trains from scratch — no download, but needs far more epochs.
+    pretrained: bool = True
 
     def validate(self) -> "TrainSettings":
         from services.rvc_registry import clean_name
@@ -350,6 +353,39 @@ def start_training(settings: TrainSettings, *, dataset_dir: Path, job_id: Option
     return job
 
 
+#: Applio HiFi-GAN base models (IAHispano/Applio Resources/pretrained_v2),
+#: byte sizes from the HF CDN. Applio's ``train`` downloads the pair for the
+#: chosen sample rate on first use when they are missing.
+PRETRAINED_URL = "https://huggingface.co/IAHispano/Applio/resolve/main/Resources/pretrained_v2/"
+PRETRAINED_SIZES = {
+    "f0G32k.pth": 73_950_049, "f0D32k.pth": 142_875_703,
+    "f0G40k.pth": 73_106_273, "f0D40k.pth": 142_875_703,
+    "f0G48k.pth": 75_465_569, "f0D48k.pth": 142_875_703,
+}
+
+
+def pretrained_status(applio: Optional[Path] = None) -> dict:
+    """Which HiFi-GAN base models are on disk, per sample rate."""
+    if applio is None:
+        from services.rvc import applio_dir
+
+        applio = applio_dir()
+    root = applio
+    out = {}
+    for sr in SAMPLE_RATES:
+        k = f"{sr // 1000}k"
+        missing = []
+        for kind in ("G", "D"):
+            name = f"f0{kind}{k}.pth"
+            path = (Path(root) / "rvc" / "models" / "pretraineds" / "hifi-gan" / name) if root else None
+            if path is None or not (path.is_file() and path.stat().st_size > 0):
+                missing.append({"file": name, "size_bytes": PRETRAINED_SIZES[name],
+                                "path": str(path) if path else None, "url": PRETRAINED_URL + name})
+        out[str(sr)] = {"present": not missing, "missing": missing,
+                        "download_bytes": sum(m["size_bytes"] for m in missing)}
+    return out
+
+
 def build_stage_commands(settings: TrainSettings, *, python: str, applio: str,
                          model_name: str, dataset: str, gpu: str, cores: int) -> dict:
     core = os.path.join(applio, "core.py")
@@ -361,6 +397,8 @@ def build_stage_commands(settings: TrainSettings, *, python: str, applio: str,
              "--index-algorithm", "Auto", "--vocoder", "HiFi-GAN"]
     if settings.checkpointing:
         train.append("--checkpointing")
+    if not settings.pretrained:
+        train.append("--no-pretrained")
     return {
         "preprocess": [python, core, "preprocess", "--model-name", model_name,
                        "--dataset-path", dataset, "--sample-rate", sr,
@@ -410,6 +448,15 @@ def _run_training(job: Job, settings: TrainSettings, applio: Path, python: Path,
                                 cores=_cpu_cores(settings.cpu_cores))
     job.settings["gpu"] = gpu
     job.log.append(f"Applio: {applio}  python: {python}  gpu: {gpu}")
+    if settings.pretrained:
+        need = pretrained_status(applio).get(str(settings.sample_rate), {})
+        if need.get("missing"):
+            job.log.append(
+                "[note] Applio will download the %d kHz base models first (%s, %.0f MB)."
+                % (settings.sample_rate // 1000, ", ".join(m["file"] for m in need["missing"]),
+                   need["download_bytes"] / 1e6))
+    else:
+        job.log.append("[note] Training from scratch (no pretrained base models).")
 
     def _check(stage: str, rc: int, ok: bool, start_line: int) -> None:
         tail = list(job.log)[start_line:]
