@@ -562,6 +562,60 @@ def _segmented_retry_note(disable: bool, reraise: bool) -> str:
     return "disabled for this install — falling back to snapshot_download now"
 
 
+#: What still works when a gated diarisation model cannot be installed.
+DIARIZATION_FALLBACK = (
+    "Until then diarisation falls back to the gap-based speaker split, the Voice "
+    "Dataset Builder filters speakers against your reference clip without "
+    "pyannote, and the audio.cpp Sortformer diarizer (Settings → Diarisation) "
+    "needs no Hugging Face token."
+)
+
+
+def gated_token_preflight(model_spec: dict) -> "dict | None":
+    """Structured 412 detail when a token-gated repo is installed without a token.
+
+    Hugging Face answers such downloads with 401/403 after the install has
+    already started (pyannote 3.1: "401 gated"). Checking first gives the user
+    the exact steps plus the fallback, and never touches the network.
+    """
+    if not (model_spec.get("requires_hf_token") or model_spec.get("gated")):
+        return None
+    try:
+        from services.token_resolver import resolve as resolve_token
+
+        resolved = resolve_token()
+    except Exception:  # noqa: BLE001 — resolver failure = treat as no token
+        resolved = None
+    if resolved is not None and getattr(resolved, "token", None):
+        return None
+    urls = [u for u in (model_spec.get("access_url"), model_spec.get("prerequisite_access_url")) if u]
+    for dep in model_spec.get("dependencies") or []:
+        dep_url = f"https://huggingface.co/{dep.get('repo_id')}" if dep.get("repo_id") else None
+        if dep_url and dep_url not in urls:
+            urls.append(dep_url)
+    steps = [
+        "Create a free Hugging Face account and a read token (huggingface.co/settings/tokens).",
+        *[f"Open {u} and accept the access conditions." for u in urls],
+        "Paste the token in Settings → Hugging Face (it is stored locally), then retry.",
+    ]
+    is_diarization = str(model_spec.get("role", "")).lower().startswith("diar")
+    message = (
+        f"{model_spec.get('label') or model_spec['repo_id']} is gated on Hugging Face and no "
+        "token is configured, so the download would fail with 401. "
+        + " ".join(f"{i}) {step}" for i, step in enumerate(steps, 1))
+        + ((" " + DIARIZATION_FALLBACK) if is_diarization else "")
+    )
+    return {
+        "code": "hf_token_required",
+        "message": message,
+        "repo_id": model_spec["repo_id"],
+        "steps": steps,
+        "access_urls": urls,
+        "docs_topic": str(model_spec.get("failure_topic") or "HF_AUTH_FAILED"),
+        "fallback": DIARIZATION_FALLBACK if is_diarization else None,
+    }
+
+
 @router.post("/models/install")
 async def install_model(req: InstallModelRequest):
     """Download one HF repo snapshot; progress goes through the shared
@@ -578,6 +632,10 @@ async def install_model(req: InstallModelRequest):
                 + ", ".join(m["repo_id"] for m in KNOWN_MODELS)
             ),
         )
+    preflight = gated_token_preflight(model_spec)
+    if preflight is not None:
+        logger.info("model install refused before download: %s needs an HF token", req.repo_id)
+        raise HTTPException(status_code=412, detail=preflight)
     allow_patterns = list(model_spec.get("allow_patterns") or []) or None
     target = (req.target or "local").strip() or "local"
     if target != "local":
