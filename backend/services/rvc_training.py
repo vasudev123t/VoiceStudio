@@ -260,6 +260,9 @@ class TrainSettings:
     #: Initialise from Applio's HiFi-GAN base models (f0G/f0D<sr>). False
     #: trains from scratch — no download, but needs far more epochs.
     pretrained: bool = True
+    #: Keep every saved epoch's small inference .pth (~55 MB each) instead of
+    #: only the latest, so checkpoints can be compared (review 2.2 #4).
+    keep_checkpoints: bool = False
 
     def validate(self) -> "TrainSettings":
         from services.rvc_registry import clean_name
@@ -391,7 +394,8 @@ def build_stage_commands(settings: TrainSettings, *, python: str, applio: str,
     core = os.path.join(applio, "core.py")
     sr = str(settings.sample_rate)
     train = [python, core, "train", "--model-name", model_name,
-             "--save-every-epoch", str(settings.save_every), "--save-only-latest",
+             "--save-every-epoch", str(settings.save_every),
+             *([] if settings.keep_checkpoints else ["--save-only-latest"]),
              "--total-epoch", str(settings.epochs), "--sample-rate", sr,
              "--batch-size", str(settings.batch_size), "--gpu", gpu,
              "--index-algorithm", "Auto", "--vocoder", "HiFi-GAN"]
@@ -438,8 +442,9 @@ def _run_training(job: Job, settings: TrainSettings, applio: Path, python: Path,
     logs_dir = workdir / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
     exp_dir = logs_dir / model_name
-    env = dict(os.environ)
-    env.pop("PYTHONPATH", None)
+    from services.rvc import worker_env
+
+    env = worker_env()  # no tokens/secrets/PYTHONPATH for third-party code
     env.update({"APPLIO_LOGS_DIR": str(logs_dir), "PYTHONUNBUFFERED": "1",
                 "PYTHONIOENCODING": "utf-8"})
     gpu = settings.gpu or _auto_gpu()
@@ -703,8 +708,9 @@ def _run_index_build(job: Job, voice_id: str, applio: Path, python: Path,
 
 def _applio_env(logs_dir: Path) -> dict:
     logs_dir.mkdir(parents=True, exist_ok=True)
-    env = dict(os.environ)
-    env.pop("PYTHONPATH", None)
+    from services.rvc import worker_env
+
+    env = worker_env()  # no tokens/secrets/PYTHONPATH for third-party code
     env.update({"APPLIO_LOGS_DIR": str(logs_dir), "PYTHONUNBUFFERED": "1",
                 "PYTHONIOENCODING": "utf-8"})
     return env

@@ -517,6 +517,7 @@ async def train(
     save_every: int = Form(25, ge=1, le=100),
     checkpointing: bool = Form(False),
     pretrained: bool = Form(True),
+    keep_checkpoints: bool = Form(False),
     files: Optional[List[UploadFile]] = File(None),
     dataset_authorization: Optional[str] = Form(None),
     dataset_id: Optional[str] = Form(None, max_length=64),
@@ -532,7 +533,7 @@ async def train(
     settings = rvc_training.TrainSettings(
         name=name, sample_rate=int(sample_rate), epochs=epochs, batch_size=batch_size,
         f0_method=f0_method, save_every=min(save_every, epochs), checkpointing=checkpointing,
-        pretrained=pretrained,
+        pretrained=pretrained, keep_checkpoints=keep_checkpoints,
     )
     try:
         settings.validate()

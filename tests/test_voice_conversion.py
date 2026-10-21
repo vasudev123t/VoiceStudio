@@ -417,6 +417,38 @@ def test_train_argv_matches_applio_cli(rvc):
     t2 = tr.build_stage_commands(s, python="py", applio="/A", model_name="Vasu",
                                  dataset="/d", gpu="0", cores=6)["train"]
     assert t2[-1] == "--no-pretrained"
+    s.keep_checkpoints = True
+    t3 = tr.build_stage_commands(s, python="py", applio="/A", model_name="Vasu",
+                                 dataset="/d", gpu="0", cores=6)["train"]
+    assert "--save-only-latest" not in t3 and "--save-every-epoch" in t3
+
+
+def test_training_env_drops_secrets(tmp_path, monkeypatch):
+    from services import rvc_training as tr
+
+    monkeypatch.setenv("HF_TOKEN", "hf_secret")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-secret")
+    monkeypatch.setenv("PYTHONPATH", "/somewhere")
+    env = tr._applio_env(tmp_path / "logs")
+    assert "HF_TOKEN" not in env and "OPENAI_API_KEY" not in env and "PYTHONPATH" not in env
+    assert env["APPLIO_LOGS_DIR"] == str(tmp_path / "logs")
+
+
+def test_voicestudio_never_unpickles_rvc_checkpoints():
+    """Third-party .pth files must only ever be loaded with weights_only=True:
+    nothing in the RVC integration may call Applio's inspect_checkpoint (which
+    falls back to weights_only=False) or pass weights_only=False itself."""
+    import re
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1] / "backend" / "services"
+    for name in ("rvc.py", "rvc_registry.py", "rvc_training.py", "rvc_applio_worker.py"):
+        path = root / name
+        if not path.is_file():
+            continue
+        code = "\n".join(line.split("#", 1)[0] for line in path.read_text(encoding="utf-8").splitlines())
+        assert "inspect_checkpoint" not in code, name
+        assert not re.search(r"weights_only\s*=\s*False", code), name
 
 
 def test_pretrained_status_lists_missing_base_models(tmp_path):
