@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { describeError } from '@/lib/api/client';
 import {
   addNonverbalClip,
+  createNonverbalLibrary,
   getNonverbalLibrary,
   labQueryKeys,
   libraryFromDataset,
@@ -64,6 +65,9 @@ export function NonverbalLibraryPanel() {
         <Button size="sm" disabled={!datasetId} onClick={() => void act(() => libraryFromDataset(datasetId), t('voiceLab.nv_created'))}>
           <LibraryIcon />
           {t('voiceLab.nv_from_dataset')}
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => void act(() => createNonverbalLibrary(t('voiceLab.nv_default_name')), t('voiceLab.nv_created'))}>
+          {t('voiceLab.nv_new')}
         </Button>
       </div>
       {libraries.length === 0 && <p className="text-xs text-muted-foreground">{t('voiceLab.nv_none')}</p>}

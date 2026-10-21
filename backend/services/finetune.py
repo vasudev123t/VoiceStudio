@@ -171,6 +171,11 @@ def start(recipe_id: str, *, dataset_id: str, name: str, overrides: Optional[dic
     if not info["ready"]:
         what = info["missing_packages"] + ([] if info["weights_on_disk"] else [info["base"]])
         raise ValueError("Missing: " + ", ".join(what))
+    if recipe_id == "omnivoice-lora":
+        # Same licence gate as generation: training loads the gated weights.
+        from services.model_acceptance import ensure_engine_accepted
+
+        ensure_engine_accepted("omnivoice")
     from services.dataset_builder import dataset_dir
 
     ds = dataset_dir(dataset_id)  # KeyError → 404

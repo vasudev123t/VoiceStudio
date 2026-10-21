@@ -3964,6 +3964,8 @@
     "nv_kind_breath": "Breaths",
     "nv_kind_sigh": "Sighs",
     "nv_add_clip": "Add clip",
-    "nv_remove": "Remove clip"
+    "nv_remove": "Remove clip",
+    "nv_new": "New empty library",
+    "nv_default_name": "My nonverbals"
   }
 }

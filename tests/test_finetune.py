@@ -26,6 +26,9 @@ def env(tmp_path, monkeypatch):
     import services.gpu_memory as gm
 
     monkeypatch.setattr(gm, "release_gpu_holders", lambda reason="": ["tts"])
+    import services.model_acceptance as ma
+
+    monkeypatch.setattr(ma, "ensure_engine_accepted", lambda engine, identity=None: None)
     ft._JOBS.clear()
     yield tmp_path, prefs
     ft._JOBS.clear()
@@ -166,3 +169,18 @@ def test_finetune_routes(env, monkeypatch):
     assert c.put("/voice-lab/finetune/active", json={"adapter_id": "nope-nope"}).status_code == 404
     r = c.post("/voice-lab/finetune", json={"dataset_id": "x", "steps": 0})
     assert r.status_code == 422
+
+
+def test_finetune_respects_the_model_licence_gate(env, monkeypatch):
+    import services.model_acceptance as ma
+
+    _ready(monkeypatch, env[0])
+
+    def refuse(engine, identity=None):
+        raise ma.ModelLicenceNotAccepted([{"repo_id": "k2-fsa/OmniVoice", "license": "x",
+                                           "category": "noncommercial", "fingerprint": "f"}])
+
+    monkeypatch.setattr(ma, "ensure_engine_accepted", refuse)
+    with pytest.raises(ma.ModelLicenceNotAccepted):
+        ft.start("omnivoice-lora", dataset_id="me-abc123", name="x")
+    assert not ft._JOBS

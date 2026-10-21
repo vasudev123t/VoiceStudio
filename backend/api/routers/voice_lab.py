@@ -317,12 +317,15 @@ def finetune_recipes():
 @router.post("/finetune")
 def start_finetune(body: FinetuneRequest):
     from services import finetune
+    from services.model_acceptance import ModelLicenceNotAccepted
 
     try:
         job = finetune.start(body.recipe, dataset_id=body.dataset_id, name=body.name.strip(),
                              overrides={"steps": body.steps, "rank": body.rank,
                                         "learning_rate": body.learning_rate,
                                         "grad_accum": body.grad_accum})
+    except ModelLicenceNotAccepted as exc:
+        raise HTTPException(status_code=403, detail=exc.detail()) from exc
     except KeyError:
         raise HTTPException(status_code=404, detail="Unknown recipe or dataset.") from None
     except ValueError as exc:
@@ -394,6 +397,17 @@ def nonverbal_libraries():
     from services import nonverbal_library as nvl
 
     return {"libraries": nvl.list_libraries(), "active": nvl.active_library_id()}
+
+
+class NewLibrary(BaseModel):
+    name: str = Field("My nonverbals", min_length=1, max_length=60)
+
+
+@router.post("/nonverbal")
+def nonverbal_create(body: NewLibrary):
+    from services import nonverbal_library as nvl
+
+    return nvl.get_library(nvl.create_library(body.name.strip())["id"])
 
 
 @router.post("/nonverbal/from-dataset")

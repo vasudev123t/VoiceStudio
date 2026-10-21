@@ -350,3 +350,10 @@ export const removeNonverbalClip = (id: string, file: string) =>
 
 export const nonverbalAudioUrl = (id: string, file: string) =>
   apiPath(`${BASE}/nonverbal/${encodeURIComponent(id)}/audio?file=${encodeURIComponent(file)}`);
+
+export const createNonverbalLibrary = (name: string) =>
+  apiJson<NonverbalLibrary>(`${BASE}/nonverbal`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });

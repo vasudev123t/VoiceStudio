@@ -134,3 +134,18 @@ def test_restore_regions_keep_source_and_library(env, tmp_path):
     assert nvl.restore_regions(src, conv, mode="library", regions=[(1.0, 2.0)])[0]["mode"] == "library"
     with pytest.raises(ValueError):
         nvl.restore_regions(src, conv, mode="bogus", regions=[(0.5, 1.5)])
+
+
+def test_empty_library_accepts_uploaded_clips(env, tmp_path):
+    lib = nvl.create_library("Mine")
+    wav = tmp_path / "l.wav"
+    sf.write(wav, _laugh(0.8), SR)
+    clip = nvl.add_clip(lib["id"], wav, "laugh", source="l.wav")
+    assert clip["kind"] == "laugh" and 0.7 < clip["duration"] < 0.9
+    assert nvl.get_library(lib["id"])["counts"]["laugh"] == 1
+    with pytest.raises(ValueError):
+        nvl.add_clip(lib["id"], wav, "cough")
+    short = tmp_path / "s.wav"
+    sf.write(short, _laugh(0.05), SR)
+    with pytest.raises(ValueError):
+        nvl.add_clip(lib["id"], short, "laugh")
