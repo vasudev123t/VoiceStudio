@@ -753,12 +753,14 @@ def _phase_a_build_inner() -> None:
         auth as auth_router,
         voice_convert,  # Studio Convert: speech-to-speech via ASR → TTS
         voice_conversion,  # Voice conversion: RVC / Applio speech-to-speech
+        voice_lab,  # Voice Lab: dataset builder, A/B scoring, fine-tuning
     )
     from api.routers import mcp_bindings as _mcp_bindings_router  # noqa: E402
     from api.routers import telephony_twilio as _telephony_twilio_router  # noqa: E402
     from api.routers import calls as _calls_router  # noqa: E402
     _router_modules.extend([
         system, profiles, profile_images, exports, generation, voice_convert, voice_conversion,
+        voice_lab,
         dub_core, dub_generate,
         dub_export, dub_translate, projects, glossary, engines, tools,
         stories, setup, gallery, archetypes, describe_voice, community,

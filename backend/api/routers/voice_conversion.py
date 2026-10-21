@@ -475,8 +475,10 @@ async def train(
     checkpointing: bool = Form(False),
     files: Optional[List[UploadFile]] = File(None),
     dataset_authorization: Optional[str] = Form(None),
+    dataset_id: Optional[str] = Form(None, max_length=64),
 ):
-    """Train a new voice with Applio: uploaded clips or a desktop-picked folder.
+    """Train a new voice with Applio: uploaded clips, a desktop-picked folder,
+    or a Voice Lab dataset (``dataset_id``).
 
     Defaults are sized for an 8 GB GPU (batch 8, 48 kHz, rmvpe). Progress is
     pushed as ``voice_conversion`` events and polled via ``GET /train/{id}``.
@@ -492,14 +494,21 @@ async def train(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     uploads = [f for f in (files or []) if f is not None and f.filename]
-    if not uploads and not dataset_authorization:
+    if not uploads and not dataset_authorization and not dataset_id:
         raise HTTPException(status_code=400, detail="Add dataset audio files or choose a folder.")
     if rvc_training._active("train") is not None:
         raise HTTPException(status_code=409, detail="A training job is already running.")
 
     job_id = uuid.uuid4().hex[:12]
     workdir = rvc_training.training_root() / job_id
-    if dataset_authorization:
+    if dataset_id and not dataset_authorization and not uploads:
+        from services.dataset_builder import dataset_clips_dir
+
+        try:
+            dataset_dir = dataset_clips_dir(dataset_id)
+        except KeyError:
+            raise HTTPException(status_code=404, detail="That dataset doesn't exist.") from None
+    elif dataset_authorization:
         from core.path_authorization import PathAuthorizationError, consume
 
         try:

@@ -17,6 +17,7 @@ import {
   BlocksIcon,
   WorkflowIcon,
   ArrowLeftRightIcon,
+  FlaskConicalIcon,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -39,7 +40,8 @@ type Destination = readonly [
     | '/personas'
     | '/calls'
     | '/integrations'
-    | '/voice-conversion',
+    | '/voice-conversion'
+    | '/voice-lab',
   label: string,
   icon: typeof AudioLinesIcon,
   activate?: () => void,
@@ -51,6 +53,7 @@ const voiceDestinations: Destination[] = [
   ['/clone', 'nav.clone_short', FingerprintIcon, openSaved],
   ['/design', 'designWorkspace.title', WandSparklesIcon],
   ['/voice-conversion', 'nav.voice_conversion', ArrowLeftRightIcon],
+  ['/voice-lab', 'nav.voice_lab', FlaskConicalIcon],
   ['/personas', 'nav.saved', UsersRoundIcon, openSaved],
   ['/gallery', 'nav.gallery', LibraryIcon],
 ];
@@ -90,6 +93,7 @@ const iconMotion: Record<Destination[0], string> = {
   '/tools': 'tilt',
   '/integrations': 'turn',
   '/voice-conversion': 'nudge',
+  '/voice-lab': 'tilt',
 };
 
 function NavigationLink({

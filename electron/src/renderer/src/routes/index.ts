@@ -129,6 +129,12 @@ export const voiceConversionRoute = createRoute({
   ),
 });
 
+export const voiceLabRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/voice-lab',
+  component: lazyRouteComponent(() => import('@/features/voice-lab/voice-lab-page'), 'VoiceLabPage'),
+});
+
 export const dubRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/dub',
@@ -300,6 +306,7 @@ export const routeTree = rootRoute.addChildren([
   dubRoute,
   designRoute,
   voiceConversionRoute,
+  voiceLabRoute,
   transcriptionsRoute,
   settingsRoute,
   appearanceRoute,

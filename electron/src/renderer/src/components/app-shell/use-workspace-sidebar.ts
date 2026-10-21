@@ -13,6 +13,7 @@ const SECONDARY_ROUTES = new Set([
   '/dub',
   '/design',
   '/voice-conversion',
+  '/voice-lab',
   '/transcriptions',
   '/calls',
   '/settings',
