@@ -3848,6 +3848,9 @@
     "post_step_on": "RVC-stem: {{name}}",
     "post_step_hint": "Geef elke take na de synthese een andere stem met een RVC-model. Kost een paar seconden per take.",
     "post_step_unavailable": "Stemconversie is niet ingesteld, dus takes mislukken tot dat wel zo is.",
-    "open_workspace": "Stemconversie openen"
+    "open_workspace": "Stemconversie openen",
+    "expressive_preset": "Expressive",
+    "expressive_preset_hint": "Expressive preset: rmvpe, protect 0.33, volume envelope 0.1, index 0.6 — keeps breaths, laughs and your loudness contour.",
+    "protect_off_warning": "Protect at 0.5 switches protection off: breaths and consonants are forced through the model. 0.33 keeps micro-expressions."
   }
 }

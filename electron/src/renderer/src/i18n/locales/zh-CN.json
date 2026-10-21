@@ -3848,6 +3848,9 @@
     "post_step_on": "RVC 声音：{{name}}",
     "post_step_hint": "合成后，用 RVC 模型为每条录音换声。每条会多花几秒。",
     "post_step_unavailable": "尚未设置声音转换，设置完成前录音会失败。",
-    "open_workspace": "打开声音转换"
+    "open_workspace": "打开声音转换",
+    "expressive_preset": "Expressive",
+    "expressive_preset_hint": "Expressive preset: rmvpe, protect 0.33, volume envelope 0.1, index 0.6 — keeps breaths, laughs and your loudness contour.",
+    "protect_off_warning": "Protect at 0.5 switches protection off: breaths and consonants are forced through the model. 0.33 keeps micro-expressions."
   }
 }

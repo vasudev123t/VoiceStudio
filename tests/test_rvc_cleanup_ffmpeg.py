@@ -191,3 +191,22 @@ def test_no_capable_ffmpeg_precleans_in_voicestudio(rvc, monkeypatch, tmp_path):
         assert sent["input"] == cleaned[0][1]
     finally:
         rvc.reset_service()
+
+
+# ── Conversion defaults (review item 1c) ─────────────────────────────────────
+
+
+def test_conversion_defaults_keep_the_performance(rvc):
+    p = rvc.ConversionParams().validate()
+    assert p.protect == pytest.approx(0.33)
+    assert p.rms_mix_rate == pytest.approx(0.1), "volume envelope 1.0 replaces the loudness contour"
+
+
+def test_convert_route_defaults_match_service_defaults():
+    import inspect
+
+    from api.routers import voice_conversion as vc
+
+    params = inspect.signature(vc.convert).parameters
+    assert params["protect"].default.default == pytest.approx(0.33)
+    assert params["rms_mix_rate"].default.default == pytest.approx(0.1)

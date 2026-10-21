@@ -3848,6 +3848,9 @@
     "post_step_on": "RVC ボイス: {{name}}",
     "post_step_hint": "合成後、各テイクを RVC モデルで別の声に変換します。テイクごとに数秒かかります。",
     "post_step_unavailable": "ボイス変換が設定されていないため、設定するまでテイクは失敗します。",
-    "open_workspace": "ボイス変換を開く"
+    "open_workspace": "ボイス変換を開く",
+    "expressive_preset": "Expressive",
+    "expressive_preset_hint": "Expressive preset: rmvpe, protect 0.33, volume envelope 0.1, index 0.6 — keeps breaths, laughs and your loudness contour.",
+    "protect_off_warning": "Protect at 0.5 switches protection off: breaths and consonants are forced through the model. 0.33 keeps micro-expressions."
   }
 }

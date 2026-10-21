@@ -3850,6 +3850,9 @@
     "post_step_on": "Voix RVC : {{name}}",
     "post_step_hint": "Après la synthèse, change la voix de chaque prise avec un modèle RVC. Ajoute quelques secondes par prise.",
     "post_step_unavailable": "La conversion vocale n’est pas configurée ; les prises échoueront tant qu’elle ne le sera pas.",
-    "open_workspace": "Ouvrir Conversion vocale"
+    "open_workspace": "Ouvrir Conversion vocale",
+    "expressive_preset": "Expressive",
+    "expressive_preset_hint": "Expressive preset: rmvpe, protect 0.33, volume envelope 0.1, index 0.6 — keeps breaths, laughs and your loudness contour.",
+    "protect_off_warning": "Protect at 0.5 switches protection off: breaths and consonants are forced through the model. 0.33 keeps micro-expressions."
   }
 }

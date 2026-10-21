@@ -117,7 +117,7 @@ def main():
                     "pitch": int(params.get("pitch", 0)),
                     "f0_method": params.get("f0_method", "rmvpe"),
                     "index_rate": float(params.get("index_rate", 0.75)),
-                    "volume_envelope": float(params.get("rms_mix_rate", 1.0)),
+                    "volume_envelope": float(params.get("rms_mix_rate", 0.1)),
                     "protect": float(params.get("protect", 0.33)),
                     "f0_autotune": bool(params.get("f0_autotune", False)),
                     "embedder_model": params.get("embedder_model", "contentvec"),

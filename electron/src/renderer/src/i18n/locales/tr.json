@@ -3848,6 +3848,9 @@
     "post_step_on": "RVC sesi: {{name}}",
     "post_step_hint": "Sentezden sonra her kaydı bir RVC modeliyle yeniden seslendirir. Kayıt başına birkaç saniye ekler.",
     "post_step_unavailable": "Ses dönüştürme kurulu değil; kurulana kadar kayıtlar başarısız olur.",
-    "open_workspace": "Ses dönüştürmeyi aç"
+    "open_workspace": "Ses dönüştürmeyi aç",
+    "expressive_preset": "Expressive",
+    "expressive_preset_hint": "Expressive preset: rmvpe, protect 0.33, volume envelope 0.1, index 0.6 — keeps breaths, laughs and your loudness contour.",
+    "protect_off_warning": "Protect at 0.5 switches protection off: breaths and consonants are forced through the model. 0.33 keeps micro-expressions."
   }
 }

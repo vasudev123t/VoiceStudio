@@ -3848,6 +3848,9 @@
     "post_step_on": "RVC 음성: {{name}}",
     "post_step_hint": "합성 후 각 테이크를 RVC 모델로 다시 입힙니다. 테이크마다 몇 초가 더 걸립니다.",
     "post_step_unavailable": "음성 변환이 설정되지 않아 설정할 때까지 테이크가 실패합니다.",
-    "open_workspace": "음성 변환 열기"
+    "open_workspace": "음성 변환 열기",
+    "expressive_preset": "Expressive",
+    "expressive_preset_hint": "Expressive preset: rmvpe, protect 0.33, volume envelope 0.1, index 0.6 — keeps breaths, laughs and your loudness contour.",
+    "protect_off_warning": "Protect at 0.5 switches protection off: breaths and consonants are forced through the model. 0.33 keeps micro-expressions."
   }
 }

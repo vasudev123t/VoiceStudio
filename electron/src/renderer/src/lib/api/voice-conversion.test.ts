@@ -3,7 +3,9 @@ import {
   clampPitch,
   DEFAULT_CONVERSION_PARAMS,
   DEFAULT_TRAIN_SETTINGS,
+  EXPRESSIVE_CONVERSION_PRESET,
   isTerminal,
+  protectionOff,
   toConvertForm,
   toTrainForm,
   vcQueryKeys,
@@ -46,6 +48,19 @@ describe('toConvertForm', () => {
   it('defaults keep the performance: protect 0.33 and the expressive volume envelope option', () => {
     expect(DEFAULT_CONVERSION_PARAMS.protect).toBeCloseTo(0.33);
     expect(DEFAULT_CONVERSION_PARAMS.f0Method).toBe('rmvpe');
+    expect(DEFAULT_CONVERSION_PARAMS.rmsMixRate).toBeCloseTo(0.1);
+    expect(toConvertForm(clip(), 'v', DEFAULT_CONVERSION_PARAMS).get('rms_mix_rate')).toBe('0.1');
+  });
+
+  it('flags protect 0.5 as protection off and offers the expressive preset', () => {
+    expect(protectionOff({ protect: 0.5 })).toBe(true);
+    expect(protectionOff({ protect: 0.33 })).toBe(false);
+    expect(EXPRESSIVE_CONVERSION_PRESET).toEqual({
+      f0Method: 'rmvpe',
+      protect: 0.33,
+      rmsMixRate: 0.1,
+      indexRate: 0.6,
+    });
   });
 });
 

@@ -3848,6 +3848,9 @@
     "post_step_on": "RVC आवाज़: {{name}}",
     "post_step_hint": "संश्लेषण के बाद हर टेक की आवाज़ RVC मॉडल से बदलें। हर टेक पर कुछ सेकंड जुड़ते हैं।",
     "post_step_unavailable": "आवाज़ रूपांतरण सेट नहीं है, इसलिए सेट होने तक टेक विफल होंगे।",
-    "open_workspace": "आवाज़ रूपांतरण खोलें"
+    "open_workspace": "आवाज़ रूपांतरण खोलें",
+    "expressive_preset": "Expressive",
+    "expressive_preset_hint": "Expressive preset: rmvpe, protect 0.33, volume envelope 0.1, index 0.6 — keeps breaths, laughs and your loudness contour.",
+    "protect_off_warning": "Protect at 0.5 switches protection off: breaths and consonants are forced through the model. 0.33 keeps micro-expressions."
   }
 }

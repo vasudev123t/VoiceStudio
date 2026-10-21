@@ -3852,6 +3852,9 @@
     "post_step_on": "Голос RVC: {{name}}",
     "post_step_hint": "После синтеза каждый дубль переозвучивается моделью RVC. Добавляет несколько секунд на дубль.",
     "post_step_unavailable": "Преобразование голоса не настроено, поэтому дубли будут завершаться ошибкой, пока вы его не настроите.",
-    "open_workspace": "Открыть «Преобразование голоса»"
+    "open_workspace": "Открыть «Преобразование голоса»",
+    "expressive_preset": "Expressive",
+    "expressive_preset_hint": "Expressive preset: rmvpe, protect 0.33, volume envelope 0.1, index 0.6 — keeps breaths, laughs and your loudness contour.",
+    "protect_off_warning": "Protect at 0.5 switches protection off: breaths and consonants are forced through the model. 0.33 keeps micro-expressions."
   }
 }

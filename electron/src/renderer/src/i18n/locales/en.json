@@ -3848,6 +3848,9 @@
     "post_step_on": "RVC voice: {{name}}",
     "post_step_hint": "After synthesis, re-voice each take with an RVC model. Adds a few seconds per take.",
     "post_step_unavailable": "Voice conversion isn't set up, so takes will fail until it is.",
-    "open_workspace": "Open Voice conversion"
+    "open_workspace": "Open Voice conversion",
+    "expressive_preset": "Expressive",
+    "expressive_preset_hint": "Expressive preset: rmvpe, protect 0.33, volume envelope 0.1, index 0.6 — keeps breaths, laughs and your loudness contour.",
+    "protect_off_warning": "Protect at 0.5 switches protection off: breaths and consonants are forced through the model. 0.33 keeps micro-expressions."
   }
 }

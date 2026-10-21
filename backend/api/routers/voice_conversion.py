@@ -265,7 +265,7 @@ async def convert(
     index_rate: float = Form(0.75, ge=0.0, le=1.0),
     protect: float = Form(0.33, ge=0.0, le=0.5),
     filter_radius: int = Form(3, ge=0, le=7),
-    rms_mix_rate: float = Form(1.0, ge=0.0, le=1.0),
+    rms_mix_rate: float = Form(0.1, ge=0.0, le=1.0),
     clean_audio: bool = Form(False),
     clean_strength: float = Form(12.0, ge=1.0, le=30.0),
     f0_autotune: bool = Form(False),

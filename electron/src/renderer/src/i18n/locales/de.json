@@ -3848,6 +3848,9 @@
     "post_step_on": "RVC-Stimme: {{name}}",
     "post_step_hint": "Nach der Synthese jeden Take mit einem RVC-Modell neu vertonen. Kostet einige Sekunden pro Take.",
     "post_step_unavailable": "Die Stimmumwandlung ist nicht eingerichtet, daher schlagen Takes fehl, bis sie es ist.",
-    "open_workspace": "Stimmumwandlung öffnen"
+    "open_workspace": "Stimmumwandlung öffnen",
+    "expressive_preset": "Expressive",
+    "expressive_preset_hint": "Expressive preset: rmvpe, protect 0.33, volume envelope 0.1, index 0.6 — keeps breaths, laughs and your loudness contour.",
+    "protect_off_warning": "Protect at 0.5 switches protection off: breaths and consonants are forced through the model. 0.33 keeps micro-expressions."
   }
 }

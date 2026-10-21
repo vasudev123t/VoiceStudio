@@ -1,6 +1,6 @@
 import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
-import { InfoIcon, RotateCcwIcon } from 'lucide-react';
+import { InfoIcon, RotateCcwIcon, SparklesIcon, TriangleAlertIcon } from 'lucide-react';
 // @ts-expect-error Shared JSX has no declaration file.
 import SearchableSelect from '@shared/components/SearchableSelect';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,9 @@ import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   DEFAULT_CONVERSION_PARAMS,
+  EXPRESSIVE_CONVERSION_PRESET,
   PITCH_RANGE,
+  protectionOff,
   type ConversionParams,
   type F0Method,
 } from '@/lib/api/voice-conversion';
@@ -95,6 +97,23 @@ export function ConversionControls({
     <section className="space-y-4" aria-label={t('voiceConversion.controls')}>
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-medium">{t('voiceConversion.controls')}</h3>
+        <div className="flex items-center gap-1">
+        <Button
+          variant="ghost"
+          size="xs"
+          title={t('voiceConversion.expressive_preset_hint')}
+          disabled={disabled}
+          onClick={() =>
+            onChange({
+              ...params,
+              ...EXPRESSIVE_CONVERSION_PRESET,
+              f0Method: methods.includes('rmvpe') ? 'rmvpe' : methods[0],
+            })
+          }
+        >
+          <SparklesIcon />
+          {t('voiceConversion.expressive_preset')}
+        </Button>
         <Button
           variant="ghost"
           size="icon-xs"
@@ -105,6 +124,7 @@ export function ConversionControls({
         >
           <RotateCcwIcon />
         </Button>
+        </div>
       </div>
       <SliderRow
         label={t('voiceConversion.pitch')}
@@ -151,6 +171,16 @@ export function ConversionControls({
         disabled={disabled}
         onChange={(v) => set('protect', v)}
       />
+      {protectionOff(params) && (
+        <p
+          role="status"
+          data-testid="vc-protect-off"
+          className="flex items-start gap-1.5 text-[11px] text-warning"
+        >
+          <TriangleAlertIcon className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
+          {t('voiceConversion.protect_off_warning')}
+        </p>
+      )}
       <SliderRow
         label={t('voiceConversion.rms_mix')}
         hint={t('voiceConversion.rms_mix_hint')}

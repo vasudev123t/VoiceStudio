@@ -79,9 +79,12 @@ class ConversionParams:
     pitch: int = 0                 # semitones, -24..24
     f0_method: str = "rmvpe"
     index_rate: float = 0.75       # 0..1 — how strongly the index pulls timbre
-    protect: float = 0.33          # 0..0.5 — keeps breaths / voiceless consonants
+    protect: float = 0.33          # 0..0.5 — keeps breaths / voiceless consonants (0.5 = off)
     filter_radius: int = 3         # 0..7 — median filter on pitch (rvc-python)
-    rms_mix_rate: float = 1.0      # 0..1 — 1 keeps the INPUT loudness envelope
+    #: 0..1 — Applio's "volume envelope". 0 keeps the performer's (input)
+    #: loudness contour, 1 replaces it with the converted audio's own. 0.1
+    #: keeps the micro-dynamics of an acted line (breaths, laughs, emphasis).
+    rms_mix_rate: float = 0.1
     clean_audio: bool = False      # Applio noise cleanup on the input
     clean_strength: float = 12.0
     f0_autotune: bool = False

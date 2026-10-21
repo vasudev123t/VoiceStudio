@@ -36,13 +36,26 @@ import { ConversionControls } from './conversion-controls';
 import { useConversionHistory, useRvcVoices } from './queries';
 
 const AUDIO_NAME = /\.(mp3|wav|m4a|flac|ogg|aac|webm|opus)$/i;
-const PARAMS_KEY = 'voicestudio.voiceConversion.params.v1';
+const PARAMS_KEY = 'voicestudio.voiceConversion.params.v2';
+// v1 stored protect 0.5 / envelope 1.0 for many users (old defaults and the
+// common "protect off" habit). v2 keeps every other saved knob but resets
+// those two to the expressive defaults once.
+const LEGACY_PARAMS_KEY = 'voicestudio.voiceConversion.params.v1';
 const VOICE_KEY = 'voicestudio.voiceConversion.voice.v1';
 
 function loadParams(): ConversionParams {
   try {
     const raw = localStorage.getItem(PARAMS_KEY);
-    const parsed = raw ? (JSON.parse(raw) as Partial<ConversionParams>) : {};
+    const legacy = raw ? null : localStorage.getItem(LEGACY_PARAMS_KEY);
+    const parsed = raw
+      ? (JSON.parse(raw) as Partial<ConversionParams>)
+      : legacy
+        ? {
+            ...(JSON.parse(legacy) as Partial<ConversionParams>),
+            protect: DEFAULT_CONVERSION_PARAMS.protect,
+            rmsMixRate: DEFAULT_CONVERSION_PARAMS.rmsMixRate,
+          }
+        : {};
     const merged = { ...DEFAULT_CONVERSION_PARAMS };
     for (const key of Object.keys(merged) as (keyof ConversionParams)[]) {
       if (typeof parsed[key] === typeof merged[key]) Object.assign(merged, { [key]: parsed[key] });

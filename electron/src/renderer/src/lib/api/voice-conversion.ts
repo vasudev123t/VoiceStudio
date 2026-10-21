@@ -50,15 +50,33 @@ export interface ConversionParams {
   cleanAudio: boolean;
 }
 
+/**
+ * Defaults tuned for acted performances: protect 0.33 keeps breaths and
+ * voiceless consonants (0.5 switches protection off) and a 0.1 volume envelope
+ * keeps the performer's loudness contour (1.0 replaces it).
+ */
 export const DEFAULT_CONVERSION_PARAMS: ConversionParams = {
   pitch: 0,
   f0Method: 'rmvpe',
   indexRate: 0.75,
   protect: 0.33,
   filterRadius: 3,
-  rmsMixRate: 1,
+  rmsMixRate: 0.1,
   cleanAudio: false,
 };
+
+/** "Expressive" preset from the review: rmvpe, protect 0.33, envelope 0.1, index 0.6. */
+export const EXPRESSIVE_CONVERSION_PRESET: Partial<ConversionParams> = {
+  f0Method: 'rmvpe',
+  protect: 0.33,
+  rmsMixRate: 0.1,
+  indexRate: 0.6,
+};
+
+/** protect ≥ 0.5 disables consonant/breath protection entirely in RVC. */
+export function protectionOff(params: Pick<ConversionParams, 'protect'>): boolean {
+  return params.protect >= 0.5;
+}
 
 export interface ConversionEntry {
   id: string;

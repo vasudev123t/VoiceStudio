@@ -3856,6 +3856,9 @@
     "post_step_on": "صوت RVC: {{name}}",
     "post_step_hint": "بعد التوليف، يُعاد تأدية كل تسجيل بنموذج RVC. يضيف بضع ثوانٍ لكل تسجيل.",
     "post_step_unavailable": "تحويل الصوت غير مُعدّ، لذا ستفشل التسجيلات حتى يتم إعداده.",
-    "open_workspace": "فتح تحويل الصوت"
+    "open_workspace": "فتح تحويل الصوت",
+    "expressive_preset": "Expressive",
+    "expressive_preset_hint": "Expressive preset: rmvpe, protect 0.33, volume envelope 0.1, index 0.6 — keeps breaths, laughs and your loudness contour.",
+    "protect_off_warning": "Protect at 0.5 switches protection off: breaths and consonants are forced through the model. 0.33 keeps micro-expressions."
   }
 }
