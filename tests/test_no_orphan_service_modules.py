@@ -27,6 +27,8 @@ _INTENTIONALLY_UNREFERENCED: dict[str, str] = {
     # Standalone script executed by path inside Applio's own interpreter
     # (services/rvc.py ApplioBackend spawns it); never imported by VoiceStudio.
     "rvc_applio_worker": "subprocess entry point run by file path",
+    # LoRA trainer executed by path in a subprocess (services/finetune.py TRAINER).
+    "finetune_omnivoice_lora": "subprocess entry point run by file path",
 }
 
 
