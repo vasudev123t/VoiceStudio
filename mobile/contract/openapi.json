@@ -29,6 +29,42 @@
     "title": "AcceptRequest",
     "type": "object"
    },
+   "ActiveAdapter": {
+    "properties": {
+     "adapter_id": {
+      "anyOf": [
+       {
+        "maxLength": 64,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Adapter Id"
+     }
+    },
+    "title": "ActiveAdapter",
+    "type": "object"
+   },
+   "ActiveLibrary": {
+    "properties": {
+     "library_id": {
+      "anyOf": [
+       {
+        "maxLength": 64,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Library Id"
+     }
+    },
+    "title": "ActiveLibrary",
+    "type": "object"
+   },
    "AgentFitRequest": {
     "description": "Revise only rendered lines that missed their exact timeline slot.",
     "properties": {
@@ -702,6 +738,143 @@
     "title": "Body_audiobook_import_audiobook_import_post",
     "type": "object"
    },
+   "Body_build_dataset_voice_lab_datasets_post": {
+    "properties": {
+     "files": {
+      "items": {
+       "contentMediaType": "application/octet-stream",
+       "type": "string"
+      },
+      "title": "Files",
+      "type": "array"
+     },
+     "language": {
+      "anyOf": [
+       {
+        "maxLength": 12,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Language"
+     },
+     "max_clip_s": {
+      "default": 12.0,
+      "title": "Max Clip S",
+      "type": "number"
+     },
+     "min_clip_s": {
+      "default": 1.5,
+      "title": "Min Clip S",
+      "type": "number"
+     },
+     "min_quality": {
+      "default": 0.45,
+      "title": "Min Quality",
+      "type": "number"
+     },
+     "name": {
+      "default": "My voice",
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+     },
+     "reference": {
+      "anyOf": [
+       {
+        "contentMediaType": "application/octet-stream",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Reference"
+     },
+     "separate": {
+      "default": true,
+      "title": "Separate",
+      "type": "boolean"
+     },
+     "speaker_filter": {
+      "default": true,
+      "title": "Speaker Filter",
+      "type": "boolean"
+     },
+     "speaker_threshold": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Speaker Threshold"
+     },
+     "tag_nonverbal": {
+      "default": true,
+      "title": "Tag Nonverbal",
+      "type": "boolean"
+     },
+     "transcribe": {
+      "default": true,
+      "title": "Transcribe",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "files"
+    ],
+    "title": "Body_build_dataset_voice_lab_datasets_post",
+    "type": "object"
+   },
+   "Body_build_voice_index_voice_conversion_voices__voice_id__index_post": {
+    "properties": {
+     "dataset_authorization": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Dataset Authorization"
+     },
+     "dataset_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Dataset Id"
+     },
+     "files": {
+      "anyOf": [
+       {
+        "items": {
+         "contentMediaType": "application/octet-stream",
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Files"
+     }
+    },
+    "title": "Body_build_voice_index_voice_conversion_voices__voice_id__index_post",
+    "type": "object"
+   },
    "Body_clean_audio_clean_audio_post": {
     "properties": {
      "audio": {
@@ -759,6 +932,11 @@
       "title": "Clean Strength",
       "type": "number"
      },
+     "detect_nonverbal": {
+      "default": false,
+      "title": "Detect Nonverbal",
+      "type": "boolean"
+     },
      "f0_autotune": {
       "default": false,
       "title": "F0 Autotune",
@@ -790,6 +968,24 @@
       "title": "Index Rate",
       "type": "number"
      },
+     "nonverbal": {
+      "default": "convert",
+      "pattern": "^(convert|keep_source|library)$",
+      "title": "Nonverbal",
+      "type": "string"
+     },
+     "nonverbal_regions": {
+      "anyOf": [
+       {
+        "maxLength": 2000,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Nonverbal Regions"
+     },
      "pitch": {
       "default": 0,
       "maximum": 24.0,
@@ -805,7 +1001,7 @@
       "type": "number"
      },
      "rms_mix_rate": {
-      "default": 1.0,
+      "default": 0.1,
       "maximum": 1.0,
       "minimum": 0.0,
       "title": "Rms Mix Rate",
@@ -1564,6 +1760,26 @@
     "title": "Body_lock_profile_profiles__profile_id__lock_post",
     "type": "object"
    },
+   "Body_nonverbal_add_clip_voice_lab_nonverbal__library_id__clips_post": {
+    "properties": {
+     "file": {
+      "contentMediaType": "application/octet-stream",
+      "title": "File",
+      "type": "string"
+     },
+     "kind": {
+      "pattern": "^(laugh|breath|sigh)$",
+      "title": "Kind",
+      "type": "string"
+     }
+    },
+    "required": [
+     "kind",
+     "file"
+    ],
+    "title": "Body_nonverbal_add_clip_voice_lab_nonverbal__library_id__clips_post",
+    "type": "object"
+   },
    "Body_normalize_workflow_speech_tools_normalize_speech_post": {
     "properties": {
      "audio": {
@@ -1749,6 +1965,18 @@
       ],
       "title": "Dataset Authorization"
      },
+     "dataset_id": {
+      "anyOf": [
+       {
+        "maxLength": 64,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Dataset Id"
+     },
      "epochs": {
       "default": 300,
       "maximum": 10000.0,
@@ -1781,11 +2009,21 @@
       ],
       "title": "Files"
      },
+     "keep_checkpoints": {
+      "default": false,
+      "title": "Keep Checkpoints",
+      "type": "boolean"
+     },
      "name": {
       "maxLength": 80,
       "minLength": 1,
       "title": "Name",
       "type": "string"
+     },
+     "pretrained": {
+      "default": true,
+      "title": "Pretrained",
+      "type": "boolean"
      },
      "sample_rate": {
       "default": "48000",
@@ -2468,6 +2706,85 @@
     "title": "ExportRequest",
     "type": "object"
    },
+   "FinetuneRequest": {
+    "properties": {
+     "dataset_id": {
+      "maxLength": 64,
+      "title": "Dataset Id",
+      "type": "string"
+     },
+     "grad_accum": {
+      "anyOf": [
+       {
+        "maximum": 64.0,
+        "minimum": 1.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Grad Accum"
+     },
+     "learning_rate": {
+      "anyOf": [
+       {
+        "exclusiveMinimum": 0.0,
+        "maximum": 0.01,
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Learning Rate"
+     },
+     "name": {
+      "default": "My voice",
+      "maxLength": 60,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+     },
+     "rank": {
+      "anyOf": [
+       {
+        "maximum": 128.0,
+        "minimum": 2.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Rank"
+     },
+     "recipe": {
+      "default": "omnivoice-lora",
+      "maxLength": 40,
+      "title": "Recipe",
+      "type": "string"
+     },
+     "steps": {
+      "anyOf": [
+       {
+        "maximum": 20000.0,
+        "minimum": 1.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Steps"
+     }
+    },
+    "required": [
+     "dataset_id"
+    ],
+    "title": "FinetuneRequest",
+    "type": "object"
+   },
    "FitOptions": {
     "description": "Optional knob overrides for the `smart_fit` timing strategy.\n\nAll fields default to None \u2014 the server fills in the canonical\ndefaults (services.fit_planner.FitParams) so old clients and sparse\npayloads behave identically to a fully-populated default payload.",
     "properties": {
@@ -2755,6 +3072,32 @@
      "repo_id"
     ],
     "title": "InstallModelRequest",
+    "type": "object"
+   },
+   "LibraryFromDataset": {
+    "properties": {
+     "dataset_id": {
+      "maxLength": 64,
+      "title": "Dataset Id",
+      "type": "string"
+     },
+     "name": {
+      "anyOf": [
+       {
+        "maxLength": 60,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Name"
+     }
+    },
+    "required": [
+     "dataset_id"
+    ],
+    "title": "LibraryFromDataset",
     "type": "object"
    },
    "LongformChapter": {
@@ -3168,6 +3511,19 @@
      "status"
     ],
     "title": "ModelStatusResponse",
+    "type": "object"
+   },
+   "NewLibrary": {
+    "properties": {
+     "name": {
+      "default": "My nonverbals",
+      "maxLength": 60,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "title": "NewLibrary",
     "type": "object"
    },
    "ParseSubtitleTextRequest": {
@@ -3713,6 +4069,36 @@
      "name"
     ],
     "title": "RvcVoiceRenameBody",
+    "type": "object"
+   },
+   "ScoreRequest": {
+    "properties": {
+     "history_ids": {
+      "items": {
+       "type": "string"
+      },
+      "maxItems": 12,
+      "minItems": 1,
+      "title": "History Ids",
+      "type": "array"
+     },
+     "reference_profile_id": {
+      "anyOf": [
+       {
+        "maxLength": 64,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Reference Profile Id"
+     }
+    },
+    "required": [
+     "history_ids"
+    ],
+    "title": "ScoreRequest",
     "type": "object"
    },
    "SegmentPreviewRequest": {
@@ -17137,6 +17523,62 @@
     "summary": "Flush Memory"
    }
   },
+  "/system/free-gpu": {
+   "post": {
+    "description": "Release everything VoiceStudio holds on the GPU \u2014 TTS, sidecars,\ndictation ASR, aligners, the Applio worker, in-process engines \u2014 and\nreport VRAM before/after (review item 2).",
+    "operationId": "free_gpu_system_free_gpu_post",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Free Gpu"
+   }
+  },
+  "/system/gpu-memory": {
+   "get": {
+    "description": "Device VRAM totals plus per-process usage, VoiceStudio's own processes\nlabelled (backend, rvc-worker, sidecars). Never initialises CUDA here.",
+    "operationId": "gpu_memory_system_gpu_memory_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "include_other",
+      "required": false,
+      "schema": {
+       "default": true,
+       "title": "Include Other",
+       "type": "boolean"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Gpu Memory"
+   }
+  },
   "/system/hf-token/state": {
    "get": {
     "description": "Return the 3-source HF token cascade state for the Settings UI\n(Wave 2 React panel consumes this). Never returns the raw token \u2014\nonly a masked preview and local presence; no outbound validation.",
@@ -18144,7 +18586,7 @@
   },
   "/voice-conversion/convert": {
    "post": {
-    "description": "Convert ``audio`` with a registered voice.\n\nThe upload is copied untouched (``source_url``) and the converted take is\nwritten as WAV at the voice model's sample rate (``audio_url``).",
+    "description": "Convert ``audio`` with a registered voice.\n\nPerformance transfer (review item 7): with ``nonverbal`` = ``keep_source``\nthe performer's own laughs/breaths are kept inside ``nonverbal_regions``\n(\"1.2-2.5,7-8\") and/or auto-detected laugh regions (RVC turns laughs into\npseudo-speech); ``library`` swaps in laughs from the active nonverbal\nlibrary instead.\n\nThe upload is copied untouched (``source_url``) and the converted take is\nwritten as WAV at the voice model's sample rate (``audio_url``).",
     "operationId": "convert_voice_conversion_convert_post",
     "requestBody": {
      "content": {
@@ -18377,7 +18819,7 @@
   },
   "/voice-conversion/train": {
    "post": {
-    "description": "Train a new voice with Applio: uploaded clips or a desktop-picked folder.\n\nDefaults are sized for an 8 GB GPU (batch 8, 48 kHz, rmvpe). Progress is\npushed as ``voice_conversion`` events and polled via ``GET /train/{id}``.",
+    "description": "Train a new voice with Applio: uploaded clips, a desktop-picked folder,\nor a Voice Lab dataset (``dataset_id``).\n\nDefaults are sized for an 8 GB GPU (batch 8, 48 kHz, rmvpe). Progress is\npushed as ``voice_conversion`` events and polled via ``GET /train/{id}``.",
     "operationId": "train_voice_conversion_train_post",
     "requestBody": {
      "content": {
@@ -18670,6 +19112,1006 @@
     "summary": "Rename Voice",
     "tags": [
      "voice-conversion"
+    ]
+   }
+  },
+  "/voice-conversion/voices/{voice_id}/index": {
+   "post": {
+    "description": "(Re)build the FAISS ``.index`` of a voice from recordings of its speaker.\n\nImported voices often ship without an index, which silently turns the\nindex-rate knob off. Sources: uploaded clips, a desktop-picked folder, or\na Voice Dataset Builder dataset (``dataset_id``). A trained voice whose\ntraining features are still on disk needs no audio at all.",
+    "operationId": "build_voice_index_voice_conversion_voices__voice_id__index_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "voice_id",
+      "required": true,
+      "schema": {
+       "title": "Voice Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "multipart/form-data": {
+       "schema": {
+        "$ref": "#/components/schemas/Body_build_voice_index_voice_conversion_voices__voice_id__index_post"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Build Voice Index",
+    "tags": [
+     "voice-conversion"
+    ]
+   }
+  },
+  "/voice-lab/capabilities": {
+   "get": {
+    "operationId": "capabilities_voice_lab_capabilities_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "asr_model",
+      "required": false,
+      "schema": {
+       "default": "Systran/faster-whisper-large-v3",
+       "maxLength": 200,
+       "title": "Asr Model",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Capabilities",
+    "tags": [
+     "voice-lab"
+    ]
+   }
+  },
+  "/voice-lab/datasets": {
+   "get": {
+    "operationId": "list_datasets_voice_lab_datasets_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "List Datasets",
+    "tags": [
+     "voice-lab"
+    ]
+   },
+   "post": {
+    "description": "Build a dataset from uploaded recordings, optionally filtered against\na reference clip of the target speaker. Returns the job; poll\n``GET /voice-lab/jobs/{id}``.",
+    "operationId": "build_dataset_voice_lab_datasets_post",
+    "requestBody": {
+     "content": {
+      "multipart/form-data": {
+       "schema": {
+        "$ref": "#/components/schemas/Body_build_dataset_voice_lab_datasets_post"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Build Dataset",
+    "tags": [
+     "voice-lab"
+    ]
+   }
+  },
+  "/voice-lab/datasets/{dataset_id}": {
+   "get": {
+    "operationId": "get_dataset_voice_lab_datasets__dataset_id__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "dataset_id",
+      "required": true,
+      "schema": {
+       "title": "Dataset Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "default": 2000,
+       "maximum": 20000,
+       "minimum": 1,
+       "title": "Limit",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Dataset",
+    "tags": [
+     "voice-lab"
+    ]
+   }
+  },
+  "/voice-lab/datasets/{dataset_id}/audio": {
+   "get": {
+    "operationId": "dataset_audio_voice_lab_datasets__dataset_id__audio_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "dataset_id",
+      "required": true,
+      "schema": {
+       "title": "Dataset Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "file",
+      "required": true,
+      "schema": {
+       "maxLength": 200,
+       "title": "File",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Dataset Audio",
+    "tags": [
+     "voice-lab"
+    ]
+   }
+  },
+  "/voice-lab/finetune": {
+   "post": {
+    "operationId": "start_finetune_voice_lab_finetune_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/FinetuneRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Start Finetune",
+    "tags": [
+     "voice-lab"
+    ]
+   }
+  },
+  "/voice-lab/finetune/active": {
+   "put": {
+    "operationId": "finetune_set_active_voice_lab_finetune_active_put",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ActiveAdapter"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Finetune Set Active",
+    "tags": [
+     "voice-lab"
+    ]
+   }
+  },
+  "/voice-lab/finetune/adapters": {
+   "get": {
+    "operationId": "finetune_adapters_voice_lab_finetune_adapters_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Finetune Adapters",
+    "tags": [
+     "voice-lab"
+    ]
+   }
+  },
+  "/voice-lab/finetune/jobs": {
+   "get": {
+    "operationId": "finetune_jobs_voice_lab_finetune_jobs_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Finetune Jobs",
+    "tags": [
+     "voice-lab"
+    ]
+   }
+  },
+  "/voice-lab/finetune/jobs/{job_id}": {
+   "get": {
+    "operationId": "finetune_job_voice_lab_finetune_jobs__job_id__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "job_id",
+      "required": true,
+      "schema": {
+       "title": "Job Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Finetune Job",
+    "tags": [
+     "voice-lab"
+    ]
+   }
+  },
+  "/voice-lab/finetune/jobs/{job_id}/cancel": {
+   "post": {
+    "operationId": "finetune_cancel_voice_lab_finetune_jobs__job_id__cancel_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "job_id",
+      "required": true,
+      "schema": {
+       "title": "Job Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Finetune Cancel",
+    "tags": [
+     "voice-lab"
+    ]
+   }
+  },
+  "/voice-lab/finetune/recipes": {
+   "get": {
+    "operationId": "finetune_recipes_voice_lab_finetune_recipes_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Finetune Recipes",
+    "tags": [
+     "voice-lab"
+    ]
+   }
+  },
+  "/voice-lab/jobs": {
+   "get": {
+    "operationId": "list_jobs_voice_lab_jobs_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "List Jobs",
+    "tags": [
+     "voice-lab"
+    ]
+   }
+  },
+  "/voice-lab/jobs/{job_id}": {
+   "get": {
+    "operationId": "get_job_voice_lab_jobs__job_id__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "job_id",
+      "required": true,
+      "schema": {
+       "title": "Job Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "log_tail",
+      "required": false,
+      "schema": {
+       "default": 80,
+       "maximum": 2000,
+       "minimum": 0,
+       "title": "Log Tail",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Job",
+    "tags": [
+     "voice-lab"
+    ]
+   }
+  },
+  "/voice-lab/jobs/{job_id}/cancel": {
+   "post": {
+    "operationId": "cancel_job_voice_lab_jobs__job_id__cancel_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "job_id",
+      "required": true,
+      "schema": {
+       "title": "Job Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Cancel Job",
+    "tags": [
+     "voice-lab"
+    ]
+   }
+  },
+  "/voice-lab/nonverbal": {
+   "get": {
+    "operationId": "nonverbal_libraries_voice_lab_nonverbal_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Nonverbal Libraries",
+    "tags": [
+     "voice-lab"
+    ]
+   },
+   "post": {
+    "operationId": "nonverbal_create_voice_lab_nonverbal_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/NewLibrary"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Nonverbal Create",
+    "tags": [
+     "voice-lab"
+    ]
+   }
+  },
+  "/voice-lab/nonverbal/active": {
+   "put": {
+    "operationId": "nonverbal_set_active_voice_lab_nonverbal_active_put",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ActiveLibrary"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Nonverbal Set Active",
+    "tags": [
+     "voice-lab"
+    ]
+   }
+  },
+  "/voice-lab/nonverbal/from-dataset": {
+   "post": {
+    "operationId": "nonverbal_from_dataset_voice_lab_nonverbal_from_dataset_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/LibraryFromDataset"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Nonverbal From Dataset",
+    "tags": [
+     "voice-lab"
+    ]
+   }
+  },
+  "/voice-lab/nonverbal/{library_id}": {
+   "get": {
+    "operationId": "nonverbal_library_voice_lab_nonverbal__library_id__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "library_id",
+      "required": true,
+      "schema": {
+       "title": "Library Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Nonverbal Library",
+    "tags": [
+     "voice-lab"
+    ]
+   }
+  },
+  "/voice-lab/nonverbal/{library_id}/audio": {
+   "get": {
+    "operationId": "nonverbal_audio_voice_lab_nonverbal__library_id__audio_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "library_id",
+      "required": true,
+      "schema": {
+       "title": "Library Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "file",
+      "required": true,
+      "schema": {
+       "maxLength": 120,
+       "title": "File",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Nonverbal Audio",
+    "tags": [
+     "voice-lab"
+    ]
+   }
+  },
+  "/voice-lab/nonverbal/{library_id}/clips": {
+   "post": {
+    "operationId": "nonverbal_add_clip_voice_lab_nonverbal__library_id__clips_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "library_id",
+      "required": true,
+      "schema": {
+       "title": "Library Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "multipart/form-data": {
+       "schema": {
+        "$ref": "#/components/schemas/Body_nonverbal_add_clip_voice_lab_nonverbal__library_id__clips_post"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Nonverbal Add Clip",
+    "tags": [
+     "voice-lab"
+    ]
+   }
+  },
+  "/voice-lab/nonverbal/{library_id}/clips/{file}": {
+   "delete": {
+    "operationId": "nonverbal_remove_clip_voice_lab_nonverbal__library_id__clips__file__delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "library_id",
+      "required": true,
+      "schema": {
+       "title": "Library Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "file",
+      "required": true,
+      "schema": {
+       "title": "File",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Nonverbal Remove Clip",
+    "tags": [
+     "voice-lab"
+    ]
+   }
+  },
+  "/voice-lab/score": {
+   "post": {
+    "description": "Score takes (SECS vs the voice's reference, WER/CER vs the take's text,\nMOS) and rank them. Results persist and are returned by ``GET /scores``.",
+    "operationId": "score_takes_voice_lab_score_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ScoreRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Score Takes",
+    "tags": [
+     "voice-lab"
+    ]
+   }
+  },
+  "/voice-lab/score/capabilities": {
+   "get": {
+    "operationId": "score_capabilities_voice_lab_score_capabilities_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Score Capabilities",
+    "tags": [
+     "voice-lab"
+    ]
+   }
+  },
+  "/voice-lab/scores": {
+   "get": {
+    "operationId": "get_scores_voice_lab_scores_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "ids",
+      "required": true,
+      "schema": {
+       "maxLength": 2000,
+       "title": "Ids",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Scores",
+    "tags": [
+     "voice-lab"
     ]
    }
   },

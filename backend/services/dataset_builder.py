@@ -229,8 +229,11 @@ def _ffmpeg() -> str:
 
 
 def decode(path: str, out_wav: Path, sr: int = 44_100) -> Path:
-    cmd = [_ffmpeg(), "-hide_banner", "-loglevel", "error", "-y", "-i", str(path),
-           "-vn", "-ac", "1", "-ar", str(sr), "-c:a", "pcm_f32le", str(out_wav)]
+    from services.ffmpeg_utils import local_inputs_only
+
+    cmd = local_inputs_only([_ffmpeg(), "-hide_banner", "-loglevel", "error", "-y", "-i", str(path),
+                             "-vn", "-ac", "1", "-ar", str(sr), "-c:a", "pcm_f32le", str(out_wav)],
+                            tool="ffmpeg")
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
     if proc.returncode != 0 or not out_wav.is_file():
         raise RuntimeError(f"Could not decode {Path(path).name}: {proc.stderr.strip()[-300:]}")

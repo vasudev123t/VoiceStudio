@@ -2947,6 +2947,45 @@
         ],
         "identified_components": []
       }
+    },
+    {
+      "id": "k2-fsa/TTS_eval_models",
+      "license": "apache-2.0",
+      "commercial_use": false,
+      "review_status": "unreviewed",
+      "credit": "k2-fsa/TTS_eval_models",
+      "source_url": "https://huggingface.co/k2-fsa/TTS_eval_models",
+      "evidence_url": "https://huggingface.co/k2-fsa/TTS_eval_models/blob/e876de7154845cd668b599bd4866f1d354c723df/README.md",
+      "revision": "e876de7154845cd668b599bd4866f1d354c723df",
+      "engines": [
+        "take-scoring"
+      ],
+      "configured_at": "backend/services/take_scoring.py",
+      "notes": "Optional evaluation bundle (UTMOS, WavLM speaker similarity, HuBERT/Whisper WER) used by A/B take scoring only when already on disk; never downloaded automatically. Licence identifier is upstream model-card metadata, not verified permission for this distribution; bundled sub-models carry their own terms and require review.",
+      "component_closure": "incomplete",
+      "commercial_inference": "unknown",
+      "commercial_outputs": "unknown",
+      "documents": [],
+      "artifacts": [],
+      "required_components": [],
+      "upstream_access": "unknown",
+      "audit_observations": {
+        "commercial_inference": {
+          "status": "unreviewed",
+          "scope": "Selected weight/component only; not complete workflow clearance."
+        },
+        "output_terms": {
+          "status": "not_assessed",
+          "ownership_or_all_rights_cleared": false
+        },
+        "sources": [],
+        "open_questions": [
+          "Governing terms at installed revision and relevant required components",
+          "Attribution/NOTICE/redistribution duties",
+          "Reference voice and input rights, consent, training-provenance scope"
+        ],
+        "identified_components": []
+      }
     }
   ],
   "dynamic_assets": [
