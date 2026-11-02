@@ -16,6 +16,7 @@ metadata and the backend fallback mirror it.
 
 - Preview iOS and Android companion apps: drive your own VoiceStudio from your phone (speak, voices and cloning, dubbing, dictation) after pairing by QR code; build from source for now ([guide](docs/mobile.md)) (#2965)
 - Smart Fit speed limits: set the fastest and slowest speed dubbing may apply to a line, from the Timing section (#3026) — thanks @MoonDragon-MD!
+- Audio Edit: change, add or remove words in a speech recording or a song's vocals and render only those words again, with F5-TTS for speech and ACE-Step, YingMusic or Vevo2 (optionally through RVC) for singing; untouched audio stays bit-identical and every render is watermarked
 
 ### Fixed
 
@@ -39,7 +40,7 @@ metadata and the backend fallback mirror it.
 ### Changed
 
 - New Voice conversion workspace: perform a line and re-voice it with an RVC model through Applio, import or train voices, or add an RVC step to clone takes; the dubbing RVC hook no longer drops converted audio ([guide](docs/voice-conversion.md))
-- One-command source setup: `install.sh` (Linux, macOS, WSL2) and `install.ps1` (Windows) install the toolchains, the backend, Applio and the starter models, then verify a backend boot; they cope with slow connections (longer uv timeouts and retries, Applio's dependency download retried when it times out), accept `-Models a,b` unquoted in PowerShell, and take `--cache-dir` / `-CacheDir` to keep download caches on another drive ([guide](docs/install/full-setup.md))
+- One-command source setup: `install.sh` (Linux, macOS, WSL2) and `install.ps1` (Windows) install the toolchains, the backend, Applio and the starter models, then verify a backend boot; they retry slow downloads, accept `-Models a,b` unquoted in PowerShell, and take `--cache-dir` / `-CacheDir` to keep download caches on another drive ([guide](docs/install/full-setup.md))
 
 ### Docs
 

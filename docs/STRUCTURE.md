@@ -35,15 +35,15 @@ VoiceStudio/
 ├── backend/                     ⟵ FastAPI server
 │   ├── main.py                  the one entry point; its boot order is load-bearing —
 │   │                            read the comments before reordering anything
-│   ├── api/routers/             44 routers, auto-included; thin HTTP/WS surface
+│   ├── api/routers/             45 routers, auto-included; thin HTTP/WS surface
 │   │   └── setup/               first-run wizard, model download
 │   ├── core/                    config, db, job queue, event bus, auth/CSRF, path security,
 │   │                            opt-in analytics, version, diagnostics
-│   ├── services/                111 modules of business logic — TTS, dubbing pipeline,
+│   ├── services/                115 modules of business logic — TTS, dubbing pipeline,
 │   │                            audio DSP, GPU gateway, engine routing, model lifecycle
-│   ├── engines/                 per-engine adapters: indextts, supertonic3, confucius4,
-│   │                            dots_tts, moss_tts_v15, pockettts, audiocpp,
-│   │                            omnivoice_gguf, omnivoice_subprocess, _asr_sidecar, _echo,
+│   ├── engines/                 per-engine adapters: indextts, supertonic3, confucius4, f5tts,
+│   │                            dots_tts, moss_tts_v15, pockettts, audiocpp, yingmusic, vevo2,
+│   │                            omnivoice_gguf, omnivoice_subprocess, _asr_sidecar, _echo, _edit_protocol,
 │   │                            voxcpm2_subprocess, moss_tts_nano_subprocess, cosyvoice_subprocess
 │   ├── mcp_shim/                MCP server entry point (docs/mcp.md)
 │   ├── speech_client/           speech sidecar client entry point
