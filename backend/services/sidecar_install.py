@@ -406,6 +406,7 @@ _VEVO2_REQUIREMENTS = str(_ENGINES_ROOT / "vevo2" / "requirements.txt")
 _YINGMUSIC_REV = "baa409c2e7e5e775f09b4e92a220808f4827d2cc"
 _AMPHION_REV = "26f6883110181f1dbfe95c70a7c7dbaf4de5f42a"
 _WHISPER_MEDIUM_SHA = "345ae4da62f9b3d59415adc60127b97c714f32e89e936602e85993674d08dcb1"
+_ACESTEP_REV = "ca1e85fe9430179831e6bc6be790c332190a3866"
 
 
 def _venv_installed(env_var: str) -> Callable[[], bool]:
@@ -701,6 +702,34 @@ SPECS: dict[str, SidecarSpec] = {
         required_bytes=16 * _GIB,
         installed_probe=_venv_installed("OMNIVOICE_VEVO2_DIR"),
         host_supported=_no_intel_mac("Vevo2 needs a PyTorch version that has no Intel Mac build."),
+    ),
+    # Audio Edit song repaint (services/acestep_client.py). Upstream's own
+    # pyproject selects the CUDA torch per platform through [tool.uv.sources].
+    "ace-step": SidecarSpec(
+        engine_id="ace-step",
+        display_name="ACE-Step 1.5 (Audio Edit)",
+        repo_url="https://github.com/ace-step/ACE-Step-1.5.git",
+        tarball_url=f"https://github.com/ace-step/ACE-Step-1.5/archive/{_ACESTEP_REV}.tar.gz",
+        checkout_dirname="ACE-Step-1.5",
+        env_var="OMNIVOICE_ACESTEP_DIR",
+        probe_module="acestep",
+        source_revision=_ACESTEP_REV,
+        source_required_path="acestep/api_server.py",
+        venv_args=("--python", "3.11"),
+        install_args=("-e", "{checkout}"),
+        weights_repo_id="ACE-Step/Ace-Step1.5",
+        weights_revision="19671f406d603126926c1b7e2adc169acbcade22",
+        weights_config_names=("config.json",),
+        weights_allow_patterns=(
+            "config.json",
+            "acestep-v15-turbo/*",
+            "vae/*",
+            "Qwen3-Embedding-0.6B/*",
+        ),
+        docs_path="docs/engines/ace-step.md",
+        required_bytes=20 * _GIB,
+        installed_probe=_venv_installed("OMNIVOICE_ACESTEP_DIR"),
+        host_supported=_no_intel_mac("ACE-Step 1.5 has no Intel Mac PyTorch build."),
     ),
     # Upstream is unpinned and its entry point has moved before (#1287), so the
     # install pins a reviewed commit (2026-09-06) and the sidecar drives the

@@ -1186,7 +1186,7 @@ def test_verify_probe_runs_in_the_engines_venv_and_compiles(monkeypatch, engine_
 
 
 #: Audio Edit engines: offered everywhere PyTorch still publishes builds.
-AUDIO_EDIT_SPEC_IDS = {"f5tts", "yingmusic", "vevo2"}
+AUDIO_EDIT_SPEC_IDS = {"f5tts", "yingmusic", "vevo2", "ace-step"}
 
 
 @pytest.mark.parametrize(
