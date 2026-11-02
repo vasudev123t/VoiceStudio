@@ -1184,3 +1184,31 @@ def _render_song(job: EditJob, session: dict, render: dict) -> np.ndarray:
     new_vocals = dsp.apply_splices(vocals, sr, edits, params["crossfade_ms"])
     write_audio(rdir / "vocals.edited.wav", new_vocals, sr)
     return song_mix(source, vocals, new_vocals, instrumental, params["vocal_gain_db"])
+
+
+# ── listings ─────────────────────────────────────────────────────────────
+
+def _dir_size(path: Path) -> int:
+    return sum(p.stat().st_size for p in path.rglob("*") if p.is_file())
+
+
+def session_summary(session: dict) -> dict:
+    renders = session.get("renders") or []
+    latest = renders[0] if renders else None
+    return {
+        "id": session["id"], "mode": session["mode"], "name": session["name"],
+        "stage": session["stage"], "error": session.get("error"),
+        "duration_s": session["duration_s"], "created_at": session["created_at"],
+        "render_count": len(renders),
+        "latest_render": ({k: latest.get(k) for k in
+                           ("id", "engine", "status", "commercial_use", "output_path", "created_at")}
+                          if latest else None),
+        "size_bytes": _dir_size(session_dir(session["id"])),
+    }
+
+
+def list_session_summaries(mode: Optional[str] = None, limit: int = 50, offset: int = 0) -> dict:
+    if mode is not None and mode not in MODES:
+        raise AudioEditError("invalid_mode", "Mode must be speech or song.", 422)
+    sessions = [s for s in list_sessions() if mode is None or s["mode"] == mode]
+    return {"items": [session_summary(s) for s in sessions[offset:offset + limit]], "total": len(sessions)}
