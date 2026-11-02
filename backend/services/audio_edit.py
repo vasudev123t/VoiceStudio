@@ -749,3 +749,286 @@ def _transcribe_work(job: EditJob) -> None:
                   "text": " ".join(w["word"] for w in words), "words": words}
     _write_json(d / "transcript.json", transcript)
     update_session(job.session_id, stage="ready", error=None, transcript=transcript, spans=[])
+
+
+# ── render requests ──────────────────────────────────────────────────────
+
+CROSSFADE_RANGE_MS = (5, 200)
+RVC_PITCH_RANGE = (-12, 12)
+VOCAL_GAIN_RANGE_DB = (-12.0, 6.0)
+
+
+def _bad_request(message: str) -> AudioEditError:
+    return AudioEditError("invalid_request", message, 422)
+
+
+def _number(raw: dict, key: str, default, lo, hi, kind=float):
+    value = raw.get(key, default)
+    if value is None:
+        value = default
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise _bad_request(f"{key} must be a number.")
+    if kind is int and float(value) != int(value):
+        raise _bad_request(f"{key} must be a whole number.")
+    value = kind(value)
+    if not lo <= value <= hi:
+        raise _bad_request(f"{key} must be between {lo:g} and {hi:g}.")
+    return value
+
+
+def _rvc_voice_files(voice_id: str) -> tuple[str, Optional[str]]:
+    from services import rvc_registry
+
+    try:
+        return rvc_registry.voice_files(voice_id)
+    except (rvc_registry.VoiceNotFound, ValueError):
+        raise AudioEditError("invalid_rvc_model", "That RVC voice is not installed.", 422) from None
+
+
+def validate_render_request(mode: str, raw: object) -> dict:
+    if not isinstance(raw, dict):
+        raise _bad_request("The render request must be an object.")
+    engine = raw.get("engine")
+    if engine not in MODE_ENGINES[mode]:
+        raise AudioEditError("invalid_engine",
+                             f"{mode.capitalize()} sessions use: {', '.join(MODE_ENGINES[mode])}.", 422)
+    rvc_id = raw.get("rvc_model_id") or None
+    if rvc_id is not None:
+        if not isinstance(rvc_id, str):
+            raise _bad_request("rvc_model_id must be a string.")
+        _rvc_voice_files(rvc_id)
+    if raw.get("seed") is None:
+        seed = int.from_bytes(os.urandom(4), "big") & 0x7FFFFFFF
+    else:
+        seed = _number(raw, "seed", 0, 0, 2 ** 31 - 1, int)
+    ace = raw.get("ace_step") or {}
+    if not isinstance(ace, dict):
+        raise _bad_request("ace_step must be an object.")
+    return {
+        "engine": engine,
+        "crossfade_ms": _number(raw, "crossfade_ms", 30, *CROSSFADE_RANGE_MS, kind=int),
+        "rvc_model_id": rvc_id,
+        "rvc_pitch": _number(raw, "rvc_pitch", 0, *RVC_PITCH_RANGE, kind=int),
+        "vocal_gain_db": _number(raw, "vocal_gain_db", 0.0, *VOCAL_GAIN_RANGE_DB),
+        "seed": seed,
+        "ace_step": {
+            "strength": _number(ace, "strength", 0.7, 0.0, 1.0),
+            "padding_s": _number(ace, "padding_s", 2.0, 0.0, 10.0),
+            "caption": str(ace.get("caption") or "").strip()[:300],
+        },
+    }
+
+
+def start_render(session_id: str, raw: object) -> tuple[EditJob, dict]:
+    from services import audio_edit_engines as aee
+
+    session = load_session(session_id)
+    if session.get("stage") != "ready" or not session.get("transcript"):
+        raise AudioEditError("not_ready", "Transcribe the audio before rendering.", 409)
+    if not session.get("spans"):
+        raise AudioEditError("no_spans", "Mark at least one span to edit.", 400)
+    params = validate_render_request(session["mode"], raw)
+    engine = params["engine"]
+    regenerates = any(s["replacement_text"] for s in session["spans"])
+    if regenerates:
+        status = aee.engine_status(engine)
+        if not status["available"]:
+            raise AudioEditError("engine_not_installed",
+                                 status["reason"] or f"{aee.DISPLAY_NAMES[engine]} is not available.", 409)
+        require_licence(engine)
+    rvc_used = bool(params["rvc_model_id"]) and regenerates
+    render_id = uuid.uuid4().hex
+    with _STATE_LOCK:
+        if _job_alive(session_id, "separate") or _job_alive(session_id, "transcribe"):
+            raise AudioEditError("busy", "Wait for the current step to finish.", 409)
+        job = _new_job(session_id, "render", render_id)
+        render = {
+            "id": render_id, "session_id": session_id, "engine": engine, "status": "queued",
+            "progress": 0.0, "spans": [{"span_id": s["id"], "status": "queued", "path": None}
+                                       for s in session["spans"]],
+            "output_path": None, "error": None, "message": None,
+            "created_at": time.time(), "finished_at": None,
+            "commercial_use": render_commercial_use(engine, rvc=rvc_used, demucs=session["mode"] == "song"),
+            "params": params, "span_snapshot": [dict(s) for s in session["spans"]],
+        }
+        _save_render(render)
+        current = _load_raw(session_id)
+        current["render_ids"] = list(current.get("render_ids") or []) + [render_id]
+        _save_session(current)
+    _launch(job, _render_work)
+    return job, load_render(session_id, render_id)
+
+
+# ── render helpers ───────────────────────────────────────────────────────
+
+def _edit_engine(engine_id: str):
+    from services.audio_edit_engines import get_edit_engine
+
+    return get_edit_engine(engine_id)
+
+
+def _engine_edit(engine, payload: dict, job: EditJob, on_progress) -> dict:
+    """The one place Audio Edit asks a sidecar for synthetic audio."""
+    from services.audio_edit_engines import EngineError
+
+    try:
+        reply = engine.edit(payload, on_progress)
+    except EngineError as exc:
+        if job.cancel.is_set():
+            raise Cancelled() from None
+        raise AudioEditError("engine_failed", str(exc)[:500], 500) from None
+    _check_cancel(job)
+    return reply
+
+
+def _mark(audio: np.ndarray, sr: int) -> np.ndarray:
+    """Watermark one synthetic insert (never the untouched original)."""
+    import torch
+
+    from services import watermark
+
+    a = as_2d(audio)
+    marked = watermark.mark_synthetic(torch.from_numpy(np.ascontiguousarray(a)), sr,
+                                      context="audio_edit.render")
+    return np.asarray(marked.detach().cpu().numpy(), dtype=np.float32).reshape(a.shape)
+
+
+def _with_margins(audio, r0: int, r1: int, x: int) -> np.ndarray:
+    """``audio[r0 - x : r1 + x]``, zero-padded where it runs off either end."""
+    a = as_2d(audio)
+    lo, hi = r0 - x, r1 + x
+    seg = a[:, max(0, lo):min(a.shape[1], hi)]
+    return np.pad(seg, ((0, 0), (max(0, -lo), max(0, hi - a.shape[1])))).astype(np.float32)
+
+
+def _set_span(job: EditJob, states: list[dict], idx: int, status: str, path: Optional[str] = None) -> None:
+    states[idx]["status"] = status
+    if path:
+        states[idx]["path"] = path
+    update_render(job.session_id, job.render_id, spans=states, progress=round(job.progress, 3))
+
+
+def _progress(job: EditJob, n: int, total: int, lo: float = 0.05, width: float = 0.6):
+    def report(fraction: float) -> None:
+        job.progress = round(lo + width * (n + min(max(fraction, 0.0), 1.0)) / total, 3)
+    return report
+
+
+def _run_rvc(src: Path, dst: Path, voice_id: str, pitch: int) -> Path:
+    from services import rvc
+
+    model_path, index_path = _rvc_voice_files(voice_id)
+    try:
+        rvc.get_service().convert_file(str(src), str(dst), model_path, index_path,
+                                       rvc.ConversionParams(pitch=pitch))
+    except (rvc.RVCUnavailable, rvc.RVCConversionError, ValueError, OSError) as exc:
+        raise AudioEditError("rvc_failed", f"RVC failed: {exc}"[:500], 500) from None
+    return dst
+
+
+def _apply_rvc(job: EditJob, inserts: dict[int, np.ndarray], rdir: Path, params: dict) -> dict[int, np.ndarray]:
+    if not params.get("rvc_model_id") or not inserts:
+        return inserts
+    job.stage = "rvc"
+    _release_gpu()
+    converted: dict[int, np.ndarray] = {}
+    try:
+        for idx, audio in inserts.items():
+            _check_cancel(job)
+            src, dst = rdir / f"span-{idx}.insert.wav", rdir / f"span-{idx}.rvc.wav"
+            write_audio(src, audio, SAMPLE_RATE)
+            _run_rvc(src, dst, params["rvc_model_id"], params["rvc_pitch"])
+            out, sr = read_audio(dst)
+            out = dsp.resample(out, sr, SAMPLE_RATE)
+            converted[idx] = dsp.fit_length(dsp.match_channels(out, audio.shape[0]), audio.shape[1])
+    finally:
+        _release_gpu()
+    return converted
+
+
+def _write_output(path: Path, audio, sr: int, render: dict) -> None:
+    import soundfile as sf
+
+    a = as_2d(audio)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    flag = "true" if render.get("commercial_use") else "false"
+    with sf.SoundFile(str(path), "w", samplerate=sr, channels=a.shape[0], format="WAV", subtype="FLOAT") as f:
+        f.software = "VoiceStudio Audio Edit"
+        f.comment = f"synthetic=audio_edit; engine={render['engine']}; commercial_use={flag}"
+        f.write(a.T)
+
+
+def _render_work(job: EditJob) -> None:
+    session = _load_raw(job.session_id)
+    render = load_render(job.session_id, job.render_id)
+    if session["mode"] == "speech":
+        audio = _render_speech(job, session, render)
+    else:
+        audio = _render_song(job, session, render)
+    _check_cancel(job)
+    job.stage, job.progress = "write", 0.97
+    _write_output(render_dir(job.session_id, job.render_id) / "output.wav", audio, SAMPLE_RATE, render)
+    update_render(job.session_id, job.render_id, output_path=f"renders/{job.render_id}/output.wav")
+
+
+def _render_speech(job: EditJob, session: dict, render: dict) -> np.ndarray:
+    sid, rid = job.session_id, job.render_id
+    rdir = render_dir(sid, rid)
+    params, spans = render["params"], render["span_snapshot"]
+    words = session["transcript"]["words"]
+    source, sr = read_audio(session_dir(sid) / "source.wav")
+    duration = source.shape[1] / sr
+    x = dsp.ms_to_samples(params["crossfade_ms"], sr)
+    states = [dict(item) for item in render["spans"]]
+    todo = [i for i, s in enumerate(spans) if s["replacement_text"]]
+    inserts: dict[int, np.ndarray] = {}
+    if todo:
+        job.stage = "regenerate"
+        _release_gpu()
+        engine = _edit_engine("f5tts")
+        job.engine = engine.kill
+        try:
+            for n, idx in enumerate(todo):
+                _check_cancel(job)
+                span = spans[idx]
+                lo, hi = window_bounds(spans, idx, duration)
+                win = span_window(span, words, duration, SPEECH_CONTEXT_S, lo, hi)
+                ws, we = int(round(win.start_s * sr)), int(round(win.end_s * sr))
+                window_path = rdir / f"span-{idx}.window.wav"
+                write_audio(window_path, source[:, ws:we], sr)
+                new_len = dsp.estimate_duration(span["original_text"], span["replacement_text"],
+                                                span["end_s"] - span["start_s"])
+                _set_span(job, states, idx, "running")
+                reply = _engine_edit(engine, {
+                    "audio_path": str(window_path), "out_path": str(rdir / f"span-{idx}.wav"),
+                    "raw_text": win.raw_text, "target_text": win.target_text, "seed": params["seed"],
+                    "parts": [[round(span["start_s"] - win.start_s, 4), round(span["end_s"] - win.start_s, 4)]],
+                    "fix_duration": [round(new_len, 4)],
+                }, job, _progress(job, n, len(todo)))
+                regions = reply.get("regions") or []
+                if not regions:
+                    raise AudioEditError("engine_failed", "F5-TTS did not say where the new words are.", 500)
+                out, out_sr = read_audio(Path(reply["path"]))
+                out = dsp.resample(dsp.match_channels(out, 1), out_sr, sr)
+                r0, r1 = (int(round(float(t) * sr)) for t in regions[0])
+                inserts[idx] = _with_margins(out, r0, r1, x)
+                _set_span(job, states, idx, "generated", f"renders/{rid}/span-{idx}.wav")
+        finally:
+            job.engine = None
+            engine.shutdown()
+    inserts = _apply_rvc(job, inserts, rdir, params)
+    job.stage, job.progress = "splice", 0.85
+    edits = []
+    for idx, span in enumerate(spans):
+        insert = None
+        if idx in inserts:
+            context = dsp.context_around(source, sr, span["start_s"], span["end_s"])
+            insert = _mark(dsp.match_loudness(inserts[idx], context, sr), sr)
+        edits.append((span["start_s"], span["end_s"], insert))
+        states[idx]["status"] = "done"
+    update_render(sid, rid, spans=states)
+    return dsp.apply_splices(source, sr, edits, params["crossfade_ms"])
+
+
+def _render_song(job: EditJob, session: dict, render: dict) -> np.ndarray:
+    raise AudioEditError("not_ready", "Song renders arrive in the next task.", 409)
