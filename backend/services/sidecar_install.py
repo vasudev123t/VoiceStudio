@@ -45,6 +45,7 @@ layout resolved per-OS (``Scripts/python.exe`` vs ``bin/python``).
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 import re
@@ -98,6 +99,16 @@ class ExtraSource(NamedTuple):
     revision: str       # reviewed upstream commit
     tarball_url: str    # GitHub archive of that commit
     required_path: str  # a file, relative to *path*, proving the tree is there
+
+
+class ExtraFile(NamedTuple):
+    """One pinned file an engine loads at run time that upstream would
+    otherwise download on first use (Vevo2's Whisper checkpoint). Fetched
+    during the weights step and checked against its SHA-256."""
+
+    url: str     # direct download URL
+    path: str    # destination, relative to the checkout
+    sha256: str  # expected hex digest
 
 
 @dataclass(frozen=True)
@@ -194,6 +205,8 @@ class SidecarSpec:
     # before an Install button is offered and again when an install starts, so
     # a host the upstream does not support never gets a job that can only fail.
     host_supported: Callable[[], tuple[bool, str]] = field(default=lambda: (True, ""))
+    # Pinned single files fetched with the weights (see ExtraFile).
+    extra_files: tuple[ExtraFile, ...] = ()
 
 
 def _indextts_invalidate() -> None:
@@ -386,6 +399,13 @@ def _in_app_env(module: str) -> Callable[[], bool]:
 _COSYVOICE_REQUIREMENTS = str(
     Path(__file__).resolve().parents[1] / "engines" / "cosyvoice_subprocess" / "requirements.txt"
 )
+
+_ENGINES_ROOT = Path(__file__).resolve().parents[1] / "engines"
+_YINGMUSIC_REQUIREMENTS = str(_ENGINES_ROOT / "yingmusic" / "requirements.txt")
+_VEVO2_REQUIREMENTS = str(_ENGINES_ROOT / "vevo2" / "requirements.txt")
+_YINGMUSIC_REV = "baa409c2e7e5e775f09b4e92a220808f4827d2cc"
+_AMPHION_REV = "26f6883110181f1dbfe95c70a7c7dbaf4de5f42a"
+_WHISPER_MEDIUM_SHA = "345ae4da62f9b3d59415adc60127b97c714f32e89e936602e85993674d08dcb1"
 
 
 def _venv_installed(env_var: str) -> Callable[[], bool]:
@@ -610,6 +630,77 @@ SPECS: dict[str, SidecarSpec] = {
         required_bytes=8 * _GIB,
         installed_probe=_venv_installed("OMNIVOICE_F5TTS_DIR"),
         host_supported=_no_intel_mac("F5-TTS needs a PyTorch version that has no Intel Mac build."),
+    ),
+    # Audio Edit singing engines (services/audio_edit_engines.py).
+    "yingmusic": SidecarSpec(
+        engine_id="yingmusic",
+        display_name="YingMusic-Singer-Plus (Audio Edit)",
+        repo_url="https://github.com/ASLP-lab/YingMusic-Singer-Plus.git",
+        tarball_url=f"https://github.com/ASLP-lab/YingMusic-Singer-Plus/archive/{_YINGMUSIC_REV}.tar.gz",
+        checkout_dirname="YingMusic-Singer-Plus",
+        env_var="OMNIVOICE_YINGMUSIC_DIR",
+        probe_module="src.YingMusicSinger",
+        probe_code=(
+            "import sys; sys.path.insert(0, {checkout_repr}); "
+            "import src.YingMusicSinger.infer.YingMusicSinger"
+        ),
+        source_revision=_YINGMUSIC_REV,
+        source_manifest="requirements.txt",
+        source_required_path="src/YingMusicSinger/infer/YingMusicSinger.py",
+        venv_args=("--python", "3.10"),
+        install_args=("-r", _YINGMUSIC_REQUIREMENTS),
+        torch_pins=("torch==2.7.1", "torchaudio==2.7.1"),
+        weights_repo_id="ASLP-lab/YingMusic-Singer-Plus",
+        weights_revision="9b3f444f2bccd77fbc03e32eb7c334fc96040b8d",
+        weights_config_names=("config.json",),
+        weights_allow_patterns=("config.json", "model.safetensors"),
+        docs_path="docs/engines/yingmusic.md",
+        required_bytes=12 * _GIB,
+        installed_probe=_venv_installed("OMNIVOICE_YINGMUSIC_DIR"),
+        host_supported=_no_intel_mac("YingMusic needs a PyTorch version that has no Intel Mac build."),
+    ),
+    "vevo2": SidecarSpec(
+        engine_id="vevo2",
+        display_name="Vevo2 (Audio Edit)",
+        repo_url="https://github.com/open-mmlab/Amphion.git",
+        tarball_url=f"https://github.com/open-mmlab/Amphion/archive/{_AMPHION_REV}.tar.gz",
+        checkout_dirname="Amphion",
+        env_var="OMNIVOICE_VEVO2_DIR",
+        probe_module="models.svc.vevo2",
+        probe_code=(
+            "import sys, os; sys.path.insert(0, {checkout_repr}); os.chdir({checkout_repr}); "
+            "import models.svc.vevo2.vevo2_utils"
+        ),
+        source_revision=_AMPHION_REV,
+        source_manifest="README.md",
+        source_required_path="models/svc/vevo2/vevo2_utils.py",
+        venv_args=("--python", "3.10"),
+        install_args=("-r", _VEVO2_REQUIREMENTS),
+        torch_pins=("torch==2.7.1", "torchaudio==2.7.1", "torchvision==0.22.1"),
+        weights_repo_id="RMSnow/Vevo2",
+        weights_revision="2674843cbaa50aa89ee7ccaf5bb15d6ccf46c6c8",
+        weights_subdir="checkpoints/Vevo2",
+        weights_config_names=("vocoder/config.json",),
+        weights_allow_patterns=(
+            "tokenizer/*",
+            "contentstyle_modeling/posttrained/*.json",
+            "contentstyle_modeling/posttrained/*.txt",
+            "contentstyle_modeling/posttrained/model.safetensors",
+            "acoustic_modeling/fm_emilia101k_singnet7k_repa/*",
+            "vocoder/*",
+        ),
+        extra_files=(
+            ExtraFile(
+                url=("https://openaipublic.azureedge.net/main/whisper/models/"
+                     f"{_WHISPER_MEDIUM_SHA}/medium.pt"),
+                path="checkpoints/whisper/medium.pt",
+                sha256=_WHISPER_MEDIUM_SHA,
+            ),
+        ),
+        docs_path="docs/engines/vevo2.md",
+        required_bytes=16 * _GIB,
+        installed_probe=_venv_installed("OMNIVOICE_VEVO2_DIR"),
+        host_supported=_no_intel_mac("Vevo2 needs a PyTorch version that has no Intel Mac build."),
     ),
     # Upstream is unpinned and its entry point has moved before (#1287), so the
     # install pins a reviewed commit (2026-09-06) and the sidecar drives the
@@ -1096,7 +1187,7 @@ def _log(job: dict, line: str) -> None:
     if line:
         with _log_lock:
             job["log"].append(line)
-        logger.info("[%s install] %s", job["engine_id"], line)
+        logger.info("[%s install] %s", job.get("engine_id", "?"), line)
 
 
 def _serialize_job(job: Optional[dict]) -> Optional[dict]:
@@ -1782,8 +1873,53 @@ def _weights_floor_ok(wdir: Path, *, config_names: tuple[str, ...] = ("config.ya
     return False
 
 
+def _stream_to_file(url: str, dest: Path) -> None:
+    import httpx
+
+    with open(dest, "wb") as out:
+        with httpx.stream("GET", url, follow_redirects=True, timeout=_TARBALL_TIMEOUT_S) as resp:
+            resp.raise_for_status()
+            for chunk in resp.iter_bytes():
+                out.write(chunk)
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for block in iter(lambda: fh.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _ensure_extra_files(spec: SidecarSpec, job: dict) -> None:
+    checkout = managed_checkout(spec)
+    for extra in spec.extra_files:
+        dest = checkout / extra.path
+        if dest.is_file() and _sha256_file(dest) == extra.sha256:
+            continue
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        part = dest.with_name(dest.name + ".part")
+        _log(job, f"Downloading {extra.path} …")
+        try:
+            _stream_to_file(extra.url, part)
+        except Exception as exc:
+            part.unlink(missing_ok=True)
+            raise _StepError(
+                f"Download of {extra.path} failed: {_redact(exc)}",
+                "Re-run the install. Check Settings → Network (proxy) if it keeps failing.",
+            ) from exc
+        if _sha256_file(part) != extra.sha256:
+            part.unlink(missing_ok=True)
+            raise _StepError(
+                f"{extra.path} failed its checksum; the download was corrupted or changed upstream.",
+                "Re-run the install; if it keeps failing, see the engine docs.",
+            )
+        os.replace(part, dest)
+
+
 def _step_fetch_weights(spec: SidecarSpec, job: dict) -> None:
     step = _job_step(job, "fetch_weights")
+    _ensure_extra_files(spec, job)
     if not spec.weights_repo_id:
         step["state"] = "skipped"
         step["detail"] = "engine has no bundled-weights requirement"

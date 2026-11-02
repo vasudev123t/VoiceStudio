@@ -123,7 +123,25 @@ class F5TTSEdit(EditSidecar):
     sidecar_dir = "f5tts"
 
 
-EDITORS: dict[str, type[EditSidecar]] = {"f5tts": F5TTSEdit}
+class YingMusicEdit(EditSidecar):
+    id = "audio-edit-yingmusic"
+    display_name = "YingMusic-Singer-Plus"
+    engine_key = "yingmusic"
+    sidecar_dir = "yingmusic"
+
+
+class Vevo2Edit(EditSidecar):
+    id = "audio-edit-vevo2"
+    display_name = "Vevo2"
+    engine_key = "vevo2"
+    sidecar_dir = "vevo2"
+
+
+EDITORS: dict[str, type[EditSidecar]] = {
+    "f5tts": F5TTSEdit,
+    "yingmusic": YingMusicEdit,
+    "vevo2": Vevo2Edit,
+}
 _INSTANCES: dict[str, EditSidecar] = {}
 _INSTANCES_LOCK = threading.Lock()
 

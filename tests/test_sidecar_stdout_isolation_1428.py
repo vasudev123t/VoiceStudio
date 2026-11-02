@@ -50,6 +50,8 @@ EXPECTED_SIDECARS = {
     ENGINES / "moss_tts_nano_subprocess" / "main.py",
     ENGINES / "cosyvoice_subprocess" / "main.py",
     ENGINES / "f5tts" / "main.py",
+    ENGINES / "yingmusic" / "main.py",
+    ENGINES / "vevo2" / "main.py",
     ENGINES / "supertonic3" / "sidecar.py",
 }
 
