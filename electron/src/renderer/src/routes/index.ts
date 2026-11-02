@@ -135,6 +135,12 @@ export const voiceLabRoute = createRoute({
   component: lazyRouteComponent(() => import('@/features/voice-lab/voice-lab-page'), 'VoiceLabPage'),
 });
 
+export const audioEditRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/audio-edit',
+  component: lazyRouteComponent(() => import('@/features/audio-edit/audio-edit-page'), 'AudioEditPage'),
+});
+
 export const dubRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/dub',
@@ -307,6 +313,7 @@ export const routeTree = rootRoute.addChildren([
   designRoute,
   voiceConversionRoute,
   voiceLabRoute,
+  audioEditRoute,
   transcriptionsRoute,
   settingsRoute,
   appearanceRoute,

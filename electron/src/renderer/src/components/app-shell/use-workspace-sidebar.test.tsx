@@ -74,3 +74,10 @@ it('keeps the full sidebar on a secondary workspace when auto-collapse is off', 
   rerender();
   expect(result.current.compact).toBe(true);
 });
+
+it('treats Audio Edit as a secondary workspace that collapses the library', () => {
+  state.path = '/audio-edit';
+  const { result } = renderHook(useWorkspaceSidebarState);
+  expect(result.current.secondaryWorkspace).toBe(true);
+  expect(result.current.compact).toBe(true);
+});

@@ -73,3 +73,13 @@ it('closes the compact flyout when choosing the current route again', async () =
   fireEvent.click(await screen.findByRole('link', { name: 'nav.gallery' }));
   await waitFor(() => expect(screen.queryByRole('link', { name: 'nav.gallery' })).toBeNull());
 });
+
+it('lists Audio Edit after Voice Lab in the voice group', () => {
+  route.pathname = '/audio-edit';
+  render(<WorkspaceNavigation />);
+  const link = screen.getByRole('link', { name: 'nav.audio_edit' });
+  expect(link).toHaveAttribute('href', '/audio-edit');
+  const labels = screen.getAllByRole('link').map((a) => a.getAttribute('href'));
+  expect(labels.indexOf('/audio-edit')).toBe(labels.indexOf('/voice-lab') + 1);
+  route.pathname = '/gallery';
+});

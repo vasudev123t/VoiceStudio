@@ -3,6 +3,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/popover';
 import { Link, useRouterState } from '@tanstack/react-router';
 import {
   AudioLinesIcon,
+  AudioWaveformIcon,
   FingerprintIcon,
   BookOpenIcon,
   FolderIcon,
@@ -41,7 +42,8 @@ type Destination = readonly [
     | '/calls'
     | '/integrations'
     | '/voice-conversion'
-    | '/voice-lab',
+    | '/voice-lab'
+    | '/audio-edit',
   label: string,
   icon: typeof AudioLinesIcon,
   activate?: () => void,
@@ -54,6 +56,7 @@ const voiceDestinations: Destination[] = [
   ['/design', 'designWorkspace.title', WandSparklesIcon],
   ['/voice-conversion', 'nav.voice_conversion', ArrowLeftRightIcon],
   ['/voice-lab', 'nav.voice_lab', FlaskConicalIcon],
+  ['/audio-edit', 'nav.audio_edit', AudioWaveformIcon],
   ['/personas', 'nav.saved', UsersRoundIcon, openSaved],
   ['/gallery', 'nav.gallery', LibraryIcon],
 ];
@@ -94,6 +97,7 @@ const iconMotion: Record<Destination[0], string> = {
   '/integrations': 'turn',
   '/voice-conversion': 'nudge',
   '/voice-lab': 'tilt',
+  '/audio-edit': 'pulse',
 };
 
 function NavigationLink({

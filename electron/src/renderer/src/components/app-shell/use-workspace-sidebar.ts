@@ -14,6 +14,7 @@ const SECONDARY_ROUTES = new Set([
   '/design',
   '/voice-conversion',
   '/voice-lab',
+  '/audio-edit',
   '/transcriptions',
   '/calls',
   '/settings',
