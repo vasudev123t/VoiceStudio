@@ -23,6 +23,7 @@ from typing import Any, Optional
 
 import numpy as np
 
+from services import audio_edit_dsp as dsp
 from services.audio_edit_dsp import as_2d
 
 logger = logging.getLogger("omnivoice.audio_edit")
@@ -542,3 +543,209 @@ def engines_overview() -> dict:
             "commercial_use": render_commercial_use(engine, rvc=False, demucs=mode == "song", records=records),
         })
     return {"engines": engines, "separation": separation_status(), "gpu": aee.has_gpu()}
+
+
+# ── job runner ───────────────────────────────────────────────────────────
+
+#: One Audio Edit job holds the GPU at a time; the rest wait their turn.
+_RENDER_SLOT = threading.Semaphore(1)
+
+
+class Cancelled(Exception):
+    """The user cancelled the job."""
+
+
+def _check_cancel(job: EditJob) -> None:
+    if job.cancel.is_set():
+        raise Cancelled()
+
+
+def _free_vram() -> None:
+    try:
+        from services.model_manager import free_vram
+
+        free_vram()
+    except Exception:  # noqa: BLE001 — best effort after a job
+        logger.debug("free_vram after an Audio Edit job failed", exc_info=True)
+
+
+def _release_gpu() -> None:
+    """Unload models other workspaces hold before an Audio Edit GPU stage."""
+    try:
+        from services.gpu_memory import release_gpu_holders
+
+        release_gpu_holders(reason="audio_edit")
+    except Exception:  # noqa: BLE001 — a failed release must not fail the edit
+        logger.warning("Could not free the GPU before an Audio Edit stage", exc_info=True)
+
+
+def _new_job(session_id: str, kind: str, render_id: Optional[str] = None) -> EditJob:
+    job = EditJob(id=uuid.uuid4().hex, session_id=session_id, kind=kind, render_id=render_id)
+    with _JOBS_LOCK:
+        _JOBS[job.id] = job
+    return job
+
+
+def _launch(job: EditJob, work) -> EditJob:
+    if RUN_INLINE:
+        _run(job, work)
+    else:
+        threading.Thread(target=_run, args=(job, work), daemon=True,
+                         name=f"audio-edit-{job.kind}-{job.id[:8]}").start()
+    return job
+
+
+def _run(job: EditJob, work) -> None:
+    acquired = False
+    try:
+        job.stage = "waiting"
+        while not (acquired := _RENDER_SLOT.acquire(timeout=0.25)):
+            _check_cancel(job)
+        _check_cancel(job)
+        job.status = "running"
+        if job.kind == "render":
+            update_render(job.session_id, job.render_id, status="running")
+        work(job)
+        job.status, job.progress, job.stage = "succeeded", 1.0, "done"
+    except Cancelled:
+        job.status = "cancelled"
+    except AudioEditError as exc:
+        job.status, job.error, job.message = "failed", exc.code, exc.message
+    except Exception as exc:  # noqa: BLE001 — surfaced to the UI as a failed job
+        logger.exception("Audio Edit %s job %s failed", job.kind, job.id)
+        job.status, job.error, job.message = "failed", "failed", f"{type(exc).__name__}: {exc}"[:500]
+    finally:
+        job.engine = None
+        if acquired:
+            _RENDER_SLOT.release()
+        _free_vram()
+        _finish(job)
+
+
+def _finish(job: EditJob) -> None:
+    """Persist a finished job's outcome into the session or render."""
+    try:
+        if job.kind == "render":
+            changes: dict = {"status": job.status, "progress": round(job.progress, 3),
+                             "finished_at": time.time()}
+            if job.status != "succeeded":
+                changes.update(error=job.error or job.status, message=job.message)
+            update_render(job.session_id, job.render_id, **changes)
+        elif job.status != "succeeded":
+            session = _load_raw(job.session_id)
+            back = "uploaded" if job.kind == "separate" or session["mode"] == "speech" else "separated"
+            update_session(job.session_id, stage=back, error=job.error or job.status)
+    except (AudioEditError, OSError, ValueError):
+        logger.warning("Audio Edit job %s finished after its session was removed", job.id)
+
+
+def cancel_job(job_id: str) -> EditJob:
+    job = get_job(job_id)
+    if job.status in LIVE_STATUSES:
+        job.cancel.set()
+        kill = job.engine
+        if callable(kill):
+            try:
+                kill()
+            except Exception:  # noqa: BLE001
+                logger.warning("Could not stop the engine for job %s", job_id, exc_info=True)
+    return job
+
+
+# ── separation and transcription ─────────────────────────────────────────
+
+def _start_stage_job(session_id: str, kind: str, allowed: dict, running_stage: str,
+                     message: str) -> EditJob:
+    with _STATE_LOCK:
+        session = _load_raw(session_id)
+        if _session_busy(session_id):
+            raise AudioEditError("busy", "This session is already working.", 409)
+        if session.get("stage") not in allowed[session["mode"]]:
+            raise AudioEditError("not_ready", message, 409)
+        job = _new_job(session_id, kind)
+        session.update(stage=running_stage, error=None)
+        _save_session(session)
+    return job
+
+
+def start_separation(session_id: str) -> EditJob:
+    job = _start_stage_job(session_id, "separate", {"speech": (), "song": ("uploaded",)},
+                           "separating", "Only a freshly uploaded song can be separated.")
+    return _launch(job, _separate_work)
+
+
+def start_transcription(session_id: str) -> EditJob:
+    job = _start_stage_job(session_id, "transcribe",
+                           {"speech": ("uploaded", "ready"), "song": ("separated", "ready")},
+                           "transcribing", "Separate the song before transcribing it.")
+    return _launch(job, _transcribe_work)
+
+
+def separate_stems(path: Path) -> tuple[np.ndarray, np.ndarray]:
+    """HTDemucs: mono vocals and the summed stereo accompaniment, at SAMPLE_RATE."""
+    status = separation_status()
+    if not status["available"]:
+        raise AudioEditError(
+            "separation_unavailable",
+            f"Song mode needs HTDemucs ({status['missing'] or 'model weights'}). Download it in Voice Lab first.",
+            409)
+    import torch
+    from demucs.apply import apply_model
+
+    from services.dataset_builder import load_htdemucs
+
+    _release_gpu()
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    audio, sr = read_audio(path)
+    model = load_htdemucs(Path(status["weights"]), device)
+    try:
+        model_sr = int(model.samplerate)
+        mix = dsp.resample(dsp.match_channels(audio, int(model.audio_channels)), sr, model_sr)
+        wav = torch.from_numpy(np.ascontiguousarray(mix))
+        ref = wav.mean(0)
+        mean, std = ref.mean(), ref.std() + 1e-8
+        with torch.no_grad():
+            stems = apply_model(model, ((wav - mean) / std)[None], device=device,
+                                split=True, overlap=0.25, progress=False)[0]
+        stems = (stems * std + mean).cpu().numpy().astype(np.float32)
+        v = list(model.sources).index("vocals")
+        vocals = stems[v]
+        instrumental = np.sum([stems[i] for i in range(len(model.sources)) if i != v], axis=0)
+    finally:
+        del model
+        _free_vram()
+    n = int(round(audio.shape[1] * SAMPLE_RATE / sr))
+    vocals = dsp.fit_length(dsp.match_channels(dsp.resample(vocals, model_sr, SAMPLE_RATE), 1), n)
+    instrumental = dsp.fit_length(dsp.match_channels(dsp.resample(instrumental, model_sr, SAMPLE_RATE), 2), n)
+    return vocals.astype(np.float32), instrumental.astype(np.float32)
+
+
+def _separate_work(job: EditJob) -> None:
+    d = session_dir(job.session_id)
+    job.stage, job.progress = "separate", 0.05
+    vocals, instrumental = separate_stems(d / "source.wav")
+    _check_cancel(job)
+    write_audio(d / "vocals.wav", vocals, SAMPLE_RATE)
+    write_audio(d / "instrumental.wav", instrumental, SAMPLE_RATE)
+    update_session(job.session_id, stage="separated", error=None)
+
+
+def _asr_transcribe(path: Path) -> dict:
+    from services.asr_backend import get_active_asr_backend
+
+    return get_active_asr_backend().transcribe(str(path), word_timestamps=True)
+
+
+def _transcribe_work(job: EditJob) -> None:
+    session = _load_raw(job.session_id)
+    d = session_dir(job.session_id)
+    source = d / ("vocals.wav" if session["mode"] == "song" else "source.wav")
+    job.stage, job.progress = "transcribe", 0.05
+    _release_gpu()
+    result = _asr_transcribe(source)
+    _check_cancel(job)
+    words = words_from_asr(result if isinstance(result, dict) else {})
+    transcript = {"language": result.get("language") if isinstance(result, dict) else None,
+                  "text": " ".join(w["word"] for w in words), "words": words}
+    _write_json(d / "transcript.json", transcript)
+    update_session(job.session_id, stage="ready", error=None, transcript=transcript, spans=[])

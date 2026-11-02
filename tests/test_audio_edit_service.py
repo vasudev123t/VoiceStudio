@@ -262,3 +262,108 @@ def test_engines_overview(acks, monkeypatch):
     assert by_id["ace_step"]["needs_ack"] is False and by_id["ace_step"]["acked_at"] is None
     assert all(e["commercial_use"] is False and e["available"] for e in data["engines"])
     assert data["separation"]["available"] is False and data["gpu"] is False
+
+
+# ── Task 8: runner, separation, transcription ───────────────────────────
+
+@pytest.fixture(autouse=True)
+def _no_vram_calls(monkeypatch):
+    monkeypatch.setattr(ae, "_free_vram", lambda: None)
+
+
+def test_transcribe_speech_session(store, monkeypatch):
+    calls = []
+    monkeypatch.setattr(ae, "_release_gpu", lambda: calls.append("release"))
+    monkeypatch.setattr(ae, "_asr_transcribe", lambda path: calls.append(Path(path).name) or {
+        "language": "en", "segments": [{"words": [{"word": "hi", "start": 0.1, "end": 0.4}]}]})
+    sid = ae.create_session("speech", "", _upload(store), "a.wav")["id"]
+    job = ae.start_transcription(sid)
+    assert job.status == "succeeded" and job.kind == "transcribe" and job.progress == 1.0
+    loaded = ae.load_session(sid)
+    assert loaded["stage"] == "ready" and loaded["error"] is None
+    assert loaded["transcript"] == {"language": "en", "text": "hi",
+                                    "words": [{"i": 0, "word": "hi", "start": 0.1, "end": 0.4}]}
+    assert calls == ["release", "source.wav"]
+    assert (ae.session_dir(sid) / "transcript.json").is_file()
+
+
+def test_transcribe_without_word_timings_reverts_stage(store, monkeypatch):
+    monkeypatch.setattr(ae, "_release_gpu", lambda: None)
+    monkeypatch.setattr(ae, "_asr_transcribe", lambda path: {"segments": [{"text": "hello"}]})
+    sid = ae.create_session("speech", "", _upload(store), "a.wav")["id"]
+    job = ae.start_transcription(sid)
+    assert job.status == "failed" and job.error == "no_word_timestamps"
+    loaded = ae.load_session(sid)
+    assert loaded["stage"] == "uploaded" and loaded["error"] == "no_word_timestamps"
+
+
+def test_song_separation_then_transcription(store, monkeypatch):
+    monkeypatch.setattr(ae, "_release_gpu", lambda: None)
+
+    def fake_separate(path):
+        audio, _ = ae.read_audio(path)
+        return audio.mean(axis=0, keepdims=True) * 0.5, audio * 0.5
+
+    seen = []
+    monkeypatch.setattr(ae, "separate_stems", fake_separate)
+    monkeypatch.setattr(ae, "_asr_transcribe", lambda path: seen.append(Path(path).name) or {"words": WORDS})
+    sid = ae.create_session("song", "", _upload(store, channels=2), "s.wav")["id"]
+    with pytest.raises(ae.AudioEditError) as early:
+        ae.start_transcription(sid)
+    assert early.value.code == "not_ready" and early.value.status == 409
+    assert ae.start_separation(sid).status == "succeeded"
+    assert ae.load_session(sid)["stage"] == "separated"
+    assert ae.read_audio(ae.audio_path(sid, "vocals"))[0].shape[0] == 1
+    assert ae.read_audio(ae.audio_path(sid, "instrumental"))[0].shape[0] == 2
+    assert ae.start_transcription(sid).status == "succeeded"
+    assert seen == ["vocals.wav"] and ae.load_session(sid)["stage"] == "ready"
+
+
+def test_separation_is_for_uploaded_songs_only(store):
+    sid = ae.create_session("speech", "", _upload(store), "a.wav")["id"]
+    with pytest.raises(ae.AudioEditError) as err:
+        ae.start_separation(sid)
+    assert err.value.code == "not_ready" and err.value.status == 409
+
+
+def test_separation_unavailable_fails_job(store, monkeypatch):
+    monkeypatch.setattr(ae, "separation_status", lambda: {
+        "available": False, "weights": None, "missing": "adefossez/HTDemucs (~84 MB)"})
+    sid = ae.create_session("song", "", _upload(store, channels=2), "s.wav")["id"]
+    job = ae.start_separation(sid)
+    assert job.status == "failed" and job.error == "separation_unavailable"
+    assert "HTDemucs" in job.message
+    assert ae.load_session(sid)["stage"] == "uploaded"
+
+
+def test_busy_session_refuses_a_second_job(store):
+    sid = ae.create_session("speech", "", _upload(store), "a.wav")["id"]
+    ae._new_job(sid, "transcribe").status = "running"
+    with pytest.raises(ae.AudioEditError) as err:
+        ae.start_transcription(sid)
+    assert err.value.code == "busy" and err.value.status == 409
+
+
+def test_cancel_kills_the_engine_of_live_jobs_only(store):
+    sid = ae.create_session("speech", "", _upload(store), "a.wav")["id"]
+    killed = []
+    live = ae._new_job(sid, "render", render_id="r" * 32)
+    live.status, live.engine = "running", lambda: killed.append("live")
+    assert ae.cancel_job(live.id).cancel.is_set() and killed == ["live"]
+    done = ae._new_job(sid, "transcribe")
+    done.status, done.engine = "succeeded", lambda: killed.append("done")
+    assert not ae.cancel_job(done.id).cancel.is_set() and killed == ["live"]
+
+
+def test_job_cancelled_while_waiting_for_the_gpu_slot_never_runs(store):
+    sid = ae.create_session("speech", "", _upload(store), "a.wav")["id"]
+    assert ae._RENDER_SLOT.acquire(timeout=1)
+    try:
+        job = ae._new_job(sid, "transcribe")
+        job.cancel.set()
+        ae._run(job, lambda j: pytest.fail("a cancelled job must not run"))
+    finally:
+        ae._RENDER_SLOT.release()
+    assert job.status == "cancelled"
+    loaded = ae.load_session(sid)
+    assert loaded["stage"] == "uploaded" and loaded["error"] == "cancelled"
