@@ -3,6 +3,8 @@
 DELETE /api/auth/session
 DELETE /api/mcp/bindings/{client_id}
 DELETE /api/settings/hf-token
+DELETE /audio-edit/licence/ack/{engine}
+DELETE /audio-edit/sessions/{session_id}
 DELETE /batch/jobs/{job_id}
 DELETE /calls/{call_id}
 DELETE /dub/history
@@ -57,6 +59,13 @@ GET /archetypes/previews/status
 GET /archetypes/{archetype_id}
 GET /archetypes/{archetype_id}/preview
 GET /archetypes/{archetype_id}/preview/state
+GET /audio-edit/engines
+GET /audio-edit/jobs/{job_id}
+GET /audio-edit/sessions
+GET /audio-edit/sessions/{session_id}
+GET /audio-edit/sessions/{session_id}/audio/{kind}
+GET /audio-edit/sessions/{session_id}/renders/{render_id}
+GET /audio-edit/sessions/{session_id}/renders/{render_id}/audio
 GET /audio/{audio_id}.ogg
 GET /audio/{audio_id}.opus
 GET /audio/{audio_id}/quality
@@ -216,6 +225,12 @@ POST /api/settings/llm-providers/{provider_id}/test
 POST /api/settings/storage/temp/clear
 POST /archetypes/previews/check
 POST /archetypes/{archetype_id}/use
+POST /audio-edit/jobs/{job_id}/cancel
+POST /audio-edit/licence/ack
+POST /audio-edit/sessions
+POST /audio-edit/sessions/{session_id}/render
+POST /audio-edit/sessions/{session_id}/separate
+POST /audio-edit/sessions/{session_id}/transcribe
 POST /audiobook
 POST /audiobook/cover
 POST /audiobook/import
@@ -364,6 +379,7 @@ PUT /api/settings/perf/torch-compile-disabled
 PUT /api/settings/performance-profile
 PUT /api/settings/storage/models-dir
 PUT /archetypes/previews
+PUT /audio-edit/sessions/{session_id}/spans
 PUT /calls/settings
 PUT /glossary/{project_id}/{term_id}
 PUT /history/{history_id}/starred

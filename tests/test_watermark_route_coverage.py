@@ -39,6 +39,8 @@ _SYNTH_CALL = re.compile(
     r"|\b_run_backend_inference\("
     r"|\bgenerate_with_cached_ref\("   # cached-reference OmniVoice path
     r"|\bsynthesize_chapter\("         # longform chapter assembly
+    r"|\b_engine_edit\("               # Audio Edit sidecar inpainting (F5-TTS, YingMusic, Vevo2)
+    r"|\b_ace_repaint\("               # Audio Edit ACE-Step repaint
 )
 
 #: Modules that legitimately touch synthesis primitives WITHOUT marking.
@@ -70,6 +72,7 @@ _PRODUCERS = [
     "api/routers/audiobook.py",
     "api/routers/archetypes.py",
     "services/persona_bundle.py",
+    "services/audio_edit.py",
 ]
 
 

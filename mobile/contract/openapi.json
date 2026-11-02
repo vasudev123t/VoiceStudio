@@ -1103,6 +1103,31 @@
     "title": "Body_create_profile_profiles_post",
     "type": "object"
    },
+   "Body_create_session_audio_edit_sessions_post": {
+    "properties": {
+     "file": {
+      "contentMediaType": "application/octet-stream",
+      "title": "File",
+      "type": "string"
+     },
+     "mode": {
+      "title": "Mode",
+      "type": "string"
+     },
+     "name": {
+      "default": "",
+      "maxLength": 120,
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "file",
+     "mode"
+    ],
+    "title": "Body_create_session_audio_edit_sessions_post",
+    "type": "object"
+   },
    "Body_create_transcription_v1_audio_transcriptions_post": {
     "properties": {
      "file": {
@@ -8640,6 +8665,758 @@
      }
     },
     "summary": "Use Archetype"
+   }
+  },
+  "/audio-edit/engines": {
+   "get": {
+    "operationId": "list_engines_audio_edit_engines_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response List Engines Audio Edit Engines Get",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "List Engines",
+    "tags": [
+     "audio-edit"
+    ]
+   }
+  },
+  "/audio-edit/jobs/{job_id}": {
+   "get": {
+    "operationId": "get_job_audio_edit_jobs__job_id__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "job_id",
+      "required": true,
+      "schema": {
+       "title": "Job Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response Get Job Audio Edit Jobs  Job Id  Get",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Job",
+    "tags": [
+     "audio-edit"
+    ]
+   }
+  },
+  "/audio-edit/jobs/{job_id}/cancel": {
+   "post": {
+    "operationId": "cancel_job_audio_edit_jobs__job_id__cancel_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "job_id",
+      "required": true,
+      "schema": {
+       "title": "Job Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response Cancel Job Audio Edit Jobs  Job Id  Cancel Post",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Cancel Job",
+    "tags": [
+     "audio-edit"
+    ]
+   }
+  },
+  "/audio-edit/licence/ack": {
+   "post": {
+    "operationId": "acknowledge_licence_audio_edit_licence_ack_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "additionalProperties": true,
+        "title": "Body",
+        "type": "object"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response Acknowledge Licence Audio Edit Licence Ack Post",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Acknowledge Licence",
+    "tags": [
+     "audio-edit"
+    ]
+   }
+  },
+  "/audio-edit/licence/ack/{engine}": {
+   "delete": {
+    "operationId": "revoke_licence_audio_edit_licence_ack__engine__delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "engine",
+      "required": true,
+      "schema": {
+       "title": "Engine",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response Revoke Licence Audio Edit Licence Ack  Engine  Delete",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Revoke Licence",
+    "tags": [
+     "audio-edit"
+    ]
+   }
+  },
+  "/audio-edit/sessions": {
+   "get": {
+    "operationId": "list_sessions_audio_edit_sessions_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "mode",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Mode"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "default": 50,
+       "maximum": 200,
+       "minimum": 1,
+       "title": "Limit",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "offset",
+      "required": false,
+      "schema": {
+       "default": 0,
+       "minimum": 0,
+       "title": "Offset",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response List Sessions Audio Edit Sessions Get",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "List Sessions",
+    "tags": [
+     "audio-edit"
+    ]
+   },
+   "post": {
+    "operationId": "create_session_audio_edit_sessions_post",
+    "requestBody": {
+     "content": {
+      "multipart/form-data": {
+       "schema": {
+        "$ref": "#/components/schemas/Body_create_session_audio_edit_sessions_post"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response Create Session Audio Edit Sessions Post",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Create Session",
+    "tags": [
+     "audio-edit"
+    ]
+   }
+  },
+  "/audio-edit/sessions/{session_id}": {
+   "delete": {
+    "operationId": "delete_session_audio_edit_sessions__session_id__delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "session_id",
+      "required": true,
+      "schema": {
+       "title": "Session Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response Delete Session Audio Edit Sessions  Session Id  Delete",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Delete Session",
+    "tags": [
+     "audio-edit"
+    ]
+   },
+   "get": {
+    "operationId": "get_session_audio_edit_sessions__session_id__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "session_id",
+      "required": true,
+      "schema": {
+       "title": "Session Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response Get Session Audio Edit Sessions  Session Id  Get",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Session",
+    "tags": [
+     "audio-edit"
+    ]
+   }
+  },
+  "/audio-edit/sessions/{session_id}/audio/{kind}": {
+   "get": {
+    "operationId": "session_audio_audio_edit_sessions__session_id__audio__kind__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "session_id",
+      "required": true,
+      "schema": {
+       "title": "Session Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "kind",
+      "required": true,
+      "schema": {
+       "title": "Kind",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Session Audio",
+    "tags": [
+     "audio-edit"
+    ]
+   }
+  },
+  "/audio-edit/sessions/{session_id}/render": {
+   "post": {
+    "operationId": "render_audio_edit_sessions__session_id__render_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "session_id",
+      "required": true,
+      "schema": {
+       "title": "Session Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "additionalProperties": true,
+        "title": "Body",
+        "type": "object"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response Render Audio Edit Sessions  Session Id  Render Post",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Render",
+    "tags": [
+     "audio-edit"
+    ]
+   }
+  },
+  "/audio-edit/sessions/{session_id}/renders/{render_id}": {
+   "get": {
+    "operationId": "get_render_audio_edit_sessions__session_id__renders__render_id__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "session_id",
+      "required": true,
+      "schema": {
+       "title": "Session Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "render_id",
+      "required": true,
+      "schema": {
+       "title": "Render Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response Get Render Audio Edit Sessions  Session Id  Renders  Render Id  Get",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Render",
+    "tags": [
+     "audio-edit"
+    ]
+   }
+  },
+  "/audio-edit/sessions/{session_id}/renders/{render_id}/audio": {
+   "get": {
+    "operationId": "render_audio_audio_edit_sessions__session_id__renders__render_id__audio_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "session_id",
+      "required": true,
+      "schema": {
+       "title": "Session Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "render_id",
+      "required": true,
+      "schema": {
+       "title": "Render Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Render Audio",
+    "tags": [
+     "audio-edit"
+    ]
+   }
+  },
+  "/audio-edit/sessions/{session_id}/separate": {
+   "post": {
+    "operationId": "separate_audio_edit_sessions__session_id__separate_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "session_id",
+      "required": true,
+      "schema": {
+       "title": "Session Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response Separate Audio Edit Sessions  Session Id  Separate Post",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Separate",
+    "tags": [
+     "audio-edit"
+    ]
+   }
+  },
+  "/audio-edit/sessions/{session_id}/spans": {
+   "put": {
+    "operationId": "put_spans_audio_edit_sessions__session_id__spans_put",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "session_id",
+      "required": true,
+      "schema": {
+       "title": "Session Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "additionalProperties": true,
+        "title": "Body",
+        "type": "object"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response Put Spans Audio Edit Sessions  Session Id  Spans Put",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Put Spans",
+    "tags": [
+     "audio-edit"
+    ]
+   }
+  },
+  "/audio-edit/sessions/{session_id}/transcribe": {
+   "post": {
+    "operationId": "transcribe_audio_edit_sessions__session_id__transcribe_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "session_id",
+      "required": true,
+      "schema": {
+       "title": "Session Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response Transcribe Audio Edit Sessions  Session Id  Transcribe Post",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Transcribe",
+    "tags": [
+     "audio-edit"
+    ]
    }
   },
   "/audio/{audio_id}.ogg": {
