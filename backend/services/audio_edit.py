@@ -110,12 +110,13 @@ def decode_to_wav(src: Path, dst: Path, channels: int) -> float:
     """Decode any local audio/video file to 44.1 kHz float WAV; returns seconds."""
     import soundfile as sf
     from services.dataset_builder import _ffmpeg
+    from services.ffmpeg_utils import local_inputs_only
 
-    cmd = [
+    cmd = local_inputs_only([
         _ffmpeg(), "-nostdin", "-hide_banner", "-loglevel", "error",
         "-protocol_whitelist", "file", "-y", "-i", str(src),
         "-vn", "-ac", str(channels), "-ar", str(SAMPLE_RATE), "-c:a", "pcm_f32le", str(dst),
-    ]
+    ])
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
     except (OSError, subprocess.TimeoutExpired) as exc:

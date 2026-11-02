@@ -54,6 +54,7 @@ _ALLOWED_FILES = {
     "docs/voice-design.md",                       # EN/CJK attribute mapping table
     "docs/engines/omnivoice.md",                  # pinyin pronunciation-control example (functional CJK)
     "docs/superpowers/specs/2026-05-31-voice-gallery-design.md",  # Chinese-dialect taxonomy reference table
+    "docs/superpowers/plans/2026-11-02-audio-edit.md",  # Audio Edit sidebar label per locale table
     "examples/README.md",                         # multilingual example payloads
     # Text-processing (CJK punctuation inside sentence/clause-splitting regexes)
     "backend/services/segmentation.py",
