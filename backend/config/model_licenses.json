@@ -2986,6 +2986,253 @@
         ],
         "identified_components": []
       }
+    },
+    {
+      "id": "SWivid/F5-TTS",
+      "license": "CC-BY-NC-4.0",
+      "commercial_use": false,
+      "review_status": "noncommercial",
+      "credit": "F5-TTS — Yushen Chen and coauthors (SWivid)",
+      "source_url": "https://huggingface.co/SWivid/F5-TTS",
+      "evidence_url": "https://huggingface.co/SWivid/F5-TTS/blob/84e5a410d9cead4de2f847e7c9369a6440bdfaca/README.md",
+      "revision": "84e5a410d9cead4de2f847e7c9369a6440bdfaca",
+      "engines": ["f5tts"],
+      "configured_at": "backend/engines/f5tts/main.py; backend/services/audio_edit_engines.py",
+      "notes": "Audio Edit speech engine. The f5-tts code is MIT; the F5TTS_v1_Base checkpoint is CC-BY-NC-4.0, so renders are non-commercial and need an in-app acknowledgement.",
+      "runtime_revision": "84e5a410d9cead4de2f847e7c9369a6440bdfaca",
+      "runtime_pin_scope": "external",
+      "runtime_pin_source": "backend/engines/f5tts/main.py",
+      "component_closure": "incomplete",
+      "commercial_inference": "restricted",
+      "commercial_outputs": "unknown",
+      "documents": [],
+      "artifacts": [],
+      "required_components": [],
+      "upstream_access": "unknown",
+      "audit_observations": {
+        "commercial_inference": {
+          "status": "noncommercial",
+          "scope": "Selected weight/component; all required components and intended use must be assessed.",
+          "summary": "Pinned card licenses the checkpoints CC-BY-NC-4.0; the pip package code is MIT."
+        },
+        "output_terms": {
+          "status": "not_specifically_granted_in_reviewed_material",
+          "summary": "No output ownership grant identified; non-commercial weights cannot authorize commercial generation.",
+          "ownership_or_all_rights_cleared": false
+        },
+        "sources": [
+          {
+            "url": "https://huggingface.co/SWivid/F5-TTS/blob/84e5a410d9cead4de2f847e7c9369a6440bdfaca/README.md",
+            "checked_at": "2026-11-02",
+            "method": "read_primary_source"
+          }
+        ],
+        "open_questions": [
+          "Emilia training-data terms and attribution duties",
+          "Reference voice and input rights, consent"
+        ],
+        "identified_components": [
+          "F5TTS_v1_Base/model_1250000.safetensors",
+          "charactr/vocos-mel-24khz vocoder",
+          "f5-tts==1.1.22 pip package"
+        ]
+      }
+    },
+    {
+      "id": "charactr/vocos-mel-24khz",
+      "license": "MIT",
+      "commercial_use": false,
+      "review_status": "unreviewed",
+      "credit": "Vocos — Hubert Siuzdak (charactr)",
+      "source_url": "https://huggingface.co/charactr/vocos-mel-24khz",
+      "evidence_url": "https://huggingface.co/charactr/vocos-mel-24khz/blob/0feb3fdd929bcd6649e0e7c5a688cf7dd012ef21/README.md",
+      "revision": "0feb3fdd929bcd6649e0e7c5a688cf7dd012ef21",
+      "engines": ["f5tts"],
+      "configured_at": "backend/engines/f5tts/main.py",
+      "notes": "Vocoder for the F5-TTS Audio Edit sidecar, pinned and loaded from a local snapshot.",
+      "runtime_revision": "0feb3fdd929bcd6649e0e7c5a688cf7dd012ef21",
+      "runtime_pin_scope": "external",
+      "runtime_pin_source": "backend/engines/f5tts/main.py",
+      "component_closure": "incomplete",
+      "commercial_inference": "unknown",
+      "commercial_outputs": "unknown",
+      "documents": [],
+      "artifacts": [],
+      "required_components": [],
+      "upstream_access": "unknown",
+      "audit_observations": {
+        "commercial_inference": {
+          "status": "permissive_metadata_only",
+          "scope": "Selected weight/component; all required components and intended use must be assessed.",
+          "summary": "Card metadata states MIT; no separate weight terms reviewed."
+        },
+        "output_terms": {
+          "status": "not_specifically_granted_in_reviewed_material",
+          "summary": "No output terms identified.",
+          "ownership_or_all_rights_cleared": false
+        },
+        "sources": [
+          {
+            "url": "https://huggingface.co/charactr/vocos-mel-24khz/blob/0feb3fdd929bcd6649e0e7c5a688cf7dd012ef21/README.md",
+            "checked_at": "2026-11-02",
+            "method": "read_primary_source"
+          }
+        ],
+        "open_questions": ["Training-data provenance"],
+        "identified_components": ["Vocos mel 24 kHz vocoder weights"]
+      }
+    },
+    {
+      "id": "ACE-Step/Ace-Step1.5",
+      "license": "MIT",
+      "commercial_use": false,
+      "review_status": "unreviewed",
+      "credit": "ACE-Step 1.5 — ACE Studio and StepFun",
+      "source_url": "https://huggingface.co/ACE-Step/Ace-Step1.5",
+      "evidence_url": "https://huggingface.co/ACE-Step/Ace-Step1.5/blob/19671f406d603126926c1b7e2adc169acbcade22/README.md",
+      "revision": "19671f406d603126926c1b7e2adc169acbcade22",
+      "engines": ["ace-step"],
+      "configured_at": "backend/services/sidecar_install.py; backend/services/acestep_client.py",
+      "notes": "Audio Edit song repaint engine, served by the upstream acestep-api on loopback. The design spec said Apache-2.0; the pinned card says MIT. Commercial use stays false until a human review clears it.",
+      "runtime_revision": "19671f406d603126926c1b7e2adc169acbcade22",
+      "runtime_pin_scope": "external",
+      "runtime_pin_source": "backend/services/sidecar_install.py",
+      "component_closure": "incomplete",
+      "commercial_inference": "unknown",
+      "commercial_outputs": "unknown",
+      "documents": [],
+      "artifacts": [],
+      "required_components": [],
+      "upstream_access": "unknown",
+      "audit_observations": {
+        "commercial_inference": {
+          "status": "permissive_metadata_only",
+          "scope": "Selected weight/component; all required components and intended use must be assessed.",
+          "summary": "Card metadata states MIT for the 1.5 release; bundled LM and text encoder terms not separately reviewed."
+        },
+        "output_terms": {
+          "status": "not_specifically_granted_in_reviewed_material",
+          "summary": "No output ownership grant identified.",
+          "ownership_or_all_rights_cleared": false
+        },
+        "sources": [
+          {
+            "url": "https://huggingface.co/ACE-Step/Ace-Step1.5/blob/19671f406d603126926c1b7e2adc169acbcade22/README.md",
+            "checked_at": "2026-11-02",
+            "method": "read_primary_source"
+          }
+        ],
+        "open_questions": [
+          "Terms of the bundled language model and text encoder",
+          "Training-data provenance for music generation"
+        ],
+        "identified_components": ["ACE-Step 1.5 DiT", "ACE-Step 1.5 LM", "music DCAE / vocoder"]
+      }
+    },
+    {
+      "id": "ASLP-lab/YingMusic-Singer-Plus",
+      "license": "CC-BY-4.0; Stability AI Community License (Stable Audio VAE)",
+      "commercial_use": false,
+      "review_status": "noncommercial",
+      "credit": "YingMusic-Singer-Plus — ASLP@NPU; VAE by Stability AI",
+      "source_url": "https://huggingface.co/ASLP-lab/YingMusic-Singer-Plus",
+      "evidence_url": "https://huggingface.co/ASLP-lab/YingMusic-Singer-Plus/blob/9b3f444f2bccd77fbc03e32eb7c334fc96040b8d/README.md",
+      "revision": "9b3f444f2bccd77fbc03e32eb7c334fc96040b8d",
+      "engines": ["yingmusic"],
+      "configured_at": "backend/services/sidecar_install.py; backend/services/audio_edit_engines.py",
+      "notes": "Audio Edit lyric-edit engine. The card is CC-BY-4.0 but the bundled Stable Audio VAE is under the Stability AI Community License (LICENSE-STABILITY in the code repo), which caps commercial use, so it is gated as non-commercial.",
+      "runtime_revision": "9b3f444f2bccd77fbc03e32eb7c334fc96040b8d",
+      "runtime_pin_scope": "external",
+      "runtime_pin_source": "backend/services/sidecar_install.py",
+      "component_closure": "incomplete",
+      "commercial_inference": "restricted",
+      "commercial_outputs": "unknown",
+      "documents": [],
+      "artifacts": [],
+      "required_components": [],
+      "upstream_access": "unknown",
+      "audit_observations": {
+        "commercial_inference": {
+          "status": "noncommercial",
+          "scope": "Selected weight/component; all required components and intended use must be assessed.",
+          "summary": "CC-BY-4.0 card plus Stability AI Community License for the VAE component."
+        },
+        "output_terms": {
+          "status": "not_specifically_granted_in_reviewed_material",
+          "summary": "No output ownership grant identified.",
+          "ownership_or_all_rights_cleared": false
+        },
+        "sources": [
+          {
+            "url": "https://huggingface.co/ASLP-lab/YingMusic-Singer-Plus/blob/9b3f444f2bccd77fbc03e32eb7c334fc96040b8d/README.md",
+            "checked_at": "2026-11-02",
+            "method": "read_primary_source"
+          },
+          {
+            "url": "https://github.com/ASLP-lab/YingMusic-Singer-Plus/blob/baa409c2e7e5e775f09b4e92a220808f4827d2cc/LICENSE-STABILITY",
+            "checked_at": "2026-11-02",
+            "method": "read_primary_source"
+          }
+        ],
+        "open_questions": [
+          "Stability AI Community License revenue threshold applicability",
+          "Attribution duties for CC-BY-4.0 outputs"
+        ],
+        "identified_components": ["YingMusic-Singer-Plus weights", "Stable Audio VAE", "lyric aligner"]
+      }
+    },
+    {
+      "id": "RMSnow/Vevo2",
+      "license": "CC-BY-NC-ND-4.0",
+      "commercial_use": false,
+      "review_status": "noncommercial",
+      "credit": "Vevo2 — Xueyao Zhang and coauthors (Amphion)",
+      "source_url": "https://huggingface.co/RMSnow/Vevo2",
+      "evidence_url": "https://huggingface.co/RMSnow/Vevo2/blob/2674843cbaa50aa89ee7ccaf5bb15d6ccf46c6c8/README.md",
+      "revision": "2674843cbaa50aa89ee7ccaf5bb15d6ccf46c6c8",
+      "engines": ["vevo2"],
+      "configured_at": "backend/services/sidecar_install.py; backend/services/audio_edit_engines.py",
+      "notes": "Audio Edit lyric-edit engine via Amphion. Weights are CC-BY-NC-ND-4.0: non-commercial, and weights are used unmodified.",
+      "runtime_revision": "2674843cbaa50aa89ee7ccaf5bb15d6ccf46c6c8",
+      "runtime_pin_scope": "external",
+      "runtime_pin_source": "backend/services/sidecar_install.py",
+      "component_closure": "incomplete",
+      "commercial_inference": "restricted",
+      "commercial_outputs": "unknown",
+      "documents": [],
+      "artifacts": [],
+      "required_components": [],
+      "upstream_access": "unknown",
+      "audit_observations": {
+        "commercial_inference": {
+          "status": "noncommercial",
+          "scope": "Selected weight/component; all required components and intended use must be assessed.",
+          "summary": "Pinned card licenses the weights CC-BY-NC-ND-4.0."
+        },
+        "output_terms": {
+          "status": "not_specifically_granted_in_reviewed_material",
+          "summary": "No output ownership grant identified; non-commercial weights cannot authorize commercial generation.",
+          "ownership_or_all_rights_cleared": false
+        },
+        "sources": [
+          {
+            "url": "https://huggingface.co/RMSnow/Vevo2/blob/2674843cbaa50aa89ee7ccaf5bb15d6ccf46c6c8/README.md",
+            "checked_at": "2026-11-02",
+            "method": "read_primary_source"
+          }
+        ],
+        "open_questions": [
+          "Whether edited outputs count as adaptations under ND terms",
+          "Reference voice and input rights, consent"
+        ],
+        "identified_components": [
+          "prosody and content-style tokenizers",
+          "content-style AR model",
+          "flow-matching acoustic model",
+          "OpenAI Whisper medium encoder (MIT, fetched by the installer)",
+          "vocoder"
+        ]
+      }
     }
   ],
   "dynamic_assets": [
@@ -3019,7 +3266,7 @@
       "credit": "Unresolved: record the author and required notice for each selected asset.",
       "source_url": "https://github.com/facebookresearch/demucs",
       "evidence_url": "https://github.com/facebookresearch/demucs",
-      "configured_at": "backend/services/dub_pipeline.py:1537; backend/api/routers/system.py:1364",
+      "configured_at": "backend/services/dub_pipeline.py:1537; backend/api/routers/system.py:1364; backend/services/audio_edit.py",
       "notes": "Demucs resolves actual checkpoint; record bundled/runtime weight revision and terms."
     },
     {
@@ -3063,7 +3310,7 @@
       "credit": "Unresolved: record the author and required notice for each selected asset.",
       "source_url": "https://github.com/debpalash/VoiceStudio/blob/main/docs/engine-acceptance.md",
       "evidence_url": "https://github.com/debpalash/VoiceStudio/blob/main/docs/engine-acceptance.md",
-      "configured_at": "backend/services/tts_backend.py; backend/services/rvc.py; backend/services/asr_backend.py",
+      "configured_at": "backend/services/tts_backend.py; backend/services/rvc.py; backend/services/asr_backend.py; backend/services/audio_edit.py",
       "notes": "Cannot enumerate every user asset from repository; represent unknown/unreviewed state explicitly, with user provenance inputs."
     }
   ],
