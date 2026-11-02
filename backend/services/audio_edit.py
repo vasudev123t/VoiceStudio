@@ -422,3 +422,123 @@ def span_window(span: dict, words: list[dict], duration_s: float, context_s: flo
     raw = " ".join(t for t in (b_text, span["original_text"], a_text) if t)
     target = " ".join(t for t in (b_text, span["replacement_text"], a_text) if t)
     return Window(round(w_start, 3), round(w_end, 3), raw, target)
+
+
+# ── licences and commercial use ──────────────────────────────────────────
+
+_ACK_PREF = "audio_edit.licence_acks"
+#: Licence-registry ids a render depends on beyond the engine's own models.
+HTDEMUCS_RECORD = "htdemucs"
+RVC_RECORD = ("User-provided Sherpa ONNX / RVC voice models / GPT-SoVITS server / "
+              "custom MLX and env-overridden repos")
+
+
+def _read_acks() -> dict:
+    from core import prefs
+
+    value = prefs.get(_ACK_PREF, {})
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def _write_acks(acks: dict) -> None:
+    from core import prefs
+
+    prefs.set_(_ACK_PREF, dict(acks))
+
+
+def _check_engine(engine: object) -> str:
+    if engine not in ENGINES:
+        raise AudioEditError("invalid_engine", f"Engine must be one of: {', '.join(ENGINES)}.", 422)
+    return str(engine)
+
+
+def licence_acks() -> dict[str, float]:
+    """Accepted non-commercial licences: ``{engine: accepted_at}``."""
+    return {k: float(v) for k, v in _read_acks().items()
+            if k in ACK_ENGINES and isinstance(v, (int, float)) and not isinstance(v, bool)}
+
+
+def acknowledge_licence(engine: str) -> dict:
+    _check_engine(engine)
+    if engine not in ACK_ENGINES:
+        return {"engine": engine, "required": False, "accepted_at": None}
+    with _STATE_LOCK:
+        acks = licence_acks()
+        acks[engine] = time.time()
+        _write_acks(acks)
+    return {"engine": engine, "required": True, "accepted_at": acks[engine]}
+
+
+def revoke_licence(engine: str) -> dict:
+    _check_engine(engine)
+    with _STATE_LOCK:
+        acks = licence_acks()
+        acks.pop(engine, None)
+        _write_acks(acks)
+    return {"engine": engine, "required": engine in ACK_ENGINES, "accepted_at": None}
+
+
+def require_licence(engine: str) -> None:
+    if engine in ACK_ENGINES and engine not in licence_acks():
+        from services.audio_edit_engines import DISPLAY_NAMES
+
+        raise AudioEditError("licence_ack_required",
+                             f"Acknowledge the {DISPLAY_NAMES[engine]} licence before rendering with it.", 403)
+
+
+def _registry_records() -> dict[str, dict]:
+    from services.model_licenses import load_registry
+
+    registry = load_registry()
+    records: dict[str, dict] = {}
+    for section in ("models", "dynamic_assets"):
+        for record in registry.get(section) or []:
+            if isinstance(record, dict) and isinstance(record.get("id"), str):
+                records[record["id"]] = record
+    return records
+
+
+def _cleared(record: Optional[dict]) -> bool:
+    return bool(record) and record.get("commercial_use") is True and record.get("review_status") == "cleared"
+
+
+def render_commercial_use(engine: str, *, rvc: bool, demucs: bool,
+                          records: Optional[dict] = None) -> bool:
+    """True only if every licence record behind the output allows commercial use."""
+    from services.audio_edit_engines import ENGINE_MODELS
+
+    records = _registry_records() if records is None else records
+    ids = list(ENGINE_MODELS[engine])
+    if demucs:
+        ids.append(HTDEMUCS_RECORD)
+    if rvc:
+        ids.append(RVC_RECORD)
+    return all(_cleared(records.get(i)) for i in ids)
+
+
+def separation_status() -> dict:
+    """HTDemucs readiness, shared with Voice Lab's dataset builder."""
+    from services import dataset_builder
+
+    sep = dataset_builder.capabilities()["separation"]
+    return {"available": bool(sep.get("available")), "weights": sep.get("weights"),
+            "missing": sep.get("missing")}
+
+
+def engines_overview() -> dict:
+    from services import audio_edit_engines as aee
+
+    records = _registry_records()
+    acks = licence_acks()
+    engines = []
+    for engine in ENGINES:
+        mode = "speech" if engine in MODE_ENGINES["speech"] else "song"
+        licence = " / ".join(dict.fromkeys(
+            str((records.get(i) or {}).get("license") or "unknown") for i in aee.ENGINE_MODELS[engine]))
+        engines.append({
+            "id": engine, "mode": mode, "display_name": aee.DISPLAY_NAMES[engine],
+            **aee.engine_status(engine),
+            "licence": licence, "needs_ack": engine in ACK_ENGINES, "acked_at": acks.get(engine),
+            "commercial_use": render_commercial_use(engine, rvc=False, demucs=mode == "song", records=records),
+        })
+    return {"engines": engines, "separation": separation_status(), "gpu": aee.has_gpu()}

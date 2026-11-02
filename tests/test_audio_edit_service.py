@@ -193,3 +193,72 @@ def test_get_job_unknown_is_404(store):
     with pytest.raises(ae.AudioEditError) as err:
         ae.get_job("0" * 32)
     assert err.value.status == 404
+
+
+# ── Task 7: licences and commercial use ─────────────────────────────────
+
+@pytest.fixture
+def acks(monkeypatch):
+    saved: dict = {}
+    monkeypatch.setattr(ae, "_read_acks", lambda: dict(saved))
+    monkeypatch.setattr(ae, "_write_acks", lambda value: (saved.clear(), saved.update(value)))
+    return saved
+
+
+def test_ack_and_revoke(acks):
+    assert ae.licence_acks() == {}
+    with pytest.raises(ae.AudioEditError) as missing:
+        ae.require_licence("f5tts")
+    assert missing.value.code == "licence_ack_required" and missing.value.status == 403
+    out = ae.acknowledge_licence("f5tts")
+    assert out["required"] is True and acks["f5tts"] == out["accepted_at"]
+    ae.require_licence("f5tts")
+    assert ae.revoke_licence("f5tts")["accepted_at"] is None and "f5tts" not in acks
+    assert ae.acknowledge_licence("ace_step") == {"engine": "ace_step", "required": False, "accepted_at": None}
+    ae.require_licence("ace_step")
+    with pytest.raises(ae.AudioEditError) as bad:
+        ae.acknowledge_licence("nope")
+    assert bad.value.code == "invalid_engine" and bad.value.status == 422
+
+
+def test_licence_acks_ignore_junk(acks):
+    acks.update({"f5tts": 5, "ace_step": 3, "vevo2": "yes", "other": 1, "yingmusic": True})
+    assert ae.licence_acks() == {"f5tts": 5.0}
+
+
+def test_commercial_use_is_the_and_of_every_record():
+    cleared = {"commercial_use": True, "review_status": "cleared"}
+    records = {"ACE-Step/Ace-Step1.5": dict(cleared), ae.HTDEMUCS_RECORD: dict(cleared),
+               ae.RVC_RECORD: {"commercial_use": False, "review_status": "unreviewed"}}
+    assert ae.render_commercial_use("ace_step", rvc=False, demucs=True, records=records) is True
+    assert ae.render_commercial_use("ace_step", rvc=True, demucs=True, records=records) is False
+    records["ACE-Step/Ace-Step1.5"]["review_status"] = "unreviewed"
+    assert ae.render_commercial_use("ace_step", rvc=False, demucs=True, records=records) is False
+    assert ae.render_commercial_use("f5tts", rvc=False, demucs=False, records={}) is False
+
+
+def test_real_registry_badges_every_engine_non_commercial():
+    records = ae._registry_records()
+    assert ae.HTDEMUCS_RECORD in records and ae.RVC_RECORD in records
+    for engine in ae.ENGINES:
+        assert ae.render_commercial_use(engine, rvc=False, demucs=False, records=records) is False
+
+
+def test_engines_overview(acks, monkeypatch):
+    from services import audio_edit_engines as aee
+
+    monkeypatch.setattr(aee, "engine_status", lambda e: {
+        "installed": True, "install_id": e, "needs_gpu": False, "available": True, "reason": None})
+    monkeypatch.setattr(aee, "has_gpu", lambda: False)
+    monkeypatch.setattr(ae, "separation_status", lambda: {
+        "available": False, "weights": None, "missing": "adefossez/HTDemucs (~84 MB)"})
+    acks["vevo2"] = 9.0
+    data = ae.engines_overview()
+    by_id = {e["id"]: e for e in data["engines"]}
+    assert list(by_id) == list(ae.ENGINES)
+    assert by_id["f5tts"]["mode"] == "speech" and by_id["vevo2"]["mode"] == "song"
+    assert by_id["f5tts"]["display_name"] == "F5-TTS" and by_id["f5tts"]["licence"]
+    assert by_id["vevo2"]["acked_at"] == 9.0 and by_id["vevo2"]["needs_ack"] is True
+    assert by_id["ace_step"]["needs_ack"] is False and by_id["ace_step"]["acked_at"] is None
+    assert all(e["commercial_use"] is False and e["available"] for e in data["engines"])
+    assert data["separation"]["available"] is False and data["gpu"] is False
