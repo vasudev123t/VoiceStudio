@@ -1030,5 +1030,157 @@ def _render_speech(job: EditJob, session: dict, render: dict) -> np.ndarray:
     return dsp.apply_splices(source, sr, edits, params["crossfade_ms"])
 
 
+# ── song renders ─────────────────────────────────────────────────────────
+
+def song_mix(source, vocals, new_vocals, instrumental, vocal_gain_db: float) -> np.ndarray:
+    """The edited song. At 0 dB the edit is added as a residual so every
+    sample outside the edits is the upload's own; otherwise a stem remix."""
+    if float(vocal_gain_db) == 0.0:
+        delta = dsp.match_channels(new_vocals, 2) - dsp.match_channels(vocals, 2)
+        return np.clip(dsp.match_channels(source, 2) + delta, -1.0, 1.0).astype(np.float32)
+    return dsp.remix(new_vocals, instrumental, vocal_gain_db)
+
+
+def _ace_client(work_dir: Path):
+    from services.acestep_client import AceStepClient
+
+    return AceStepClient(work_dir)
+
+
+def _ace_repaint(client, job: EditJob, **kwargs) -> Path:
+    """The one place Audio Edit asks ACE-Step for synthetic audio."""
+    import httpx
+
+    from services import acestep_client as ac
+
+    try:
+        out = client.repaint(**kwargs)
+    except ac.AceStepCancelled:
+        raise Cancelled() from None
+    except ac.AceStepUnavailable as exc:
+        raise AudioEditError("ace_step_unavailable", str(exc)[:500], 503) from None
+    except (ac.AceStepError, httpx.HTTPError, OSError) as exc:
+        if job.cancel.is_set():
+            raise Cancelled() from None
+        raise AudioEditError("engine_failed", f"ACE-Step failed: {exc}"[:500], 500) from None
+    _check_cancel(job)
+    return Path(out)
+
+
+def _singer_inserts(job: EditJob, spans: list[dict], todo: list[int], words: list[dict],
+                    vocals: np.ndarray, sr: int, rdir: Path, params: dict,
+                    states: list[dict]) -> dict[int, np.ndarray]:
+    inserts: dict[int, np.ndarray] = {}
+    if not todo:
+        return inserts
+    x = dsp.ms_to_samples(params["crossfade_ms"], sr)
+    duration = vocals.shape[1] / sr
+    job.stage = "regenerate"
+    _release_gpu()
+    engine = _edit_engine(params["engine"])
+    job.engine = engine.kill
+    try:
+        for n, idx in enumerate(todo):
+            _check_cancel(job)
+            span = spans[idx]
+            lo, hi = window_bounds(spans, idx, duration)
+            win = span_window(span, words, duration, SONG_CONTEXT_S, lo, hi)
+            ws, we = int(round(win.start_s * sr)), int(round(win.end_s * sr))
+            window_path = rdir / f"span-{idx}.window.wav"
+            write_audio(window_path, vocals[:, ws:we], sr)
+            _set_span(job, states, idx, "running")
+            reply = _engine_edit(engine, {
+                "audio_path": str(window_path), "out_path": str(rdir / f"span-{idx}.wav"),
+                "raw_text": win.raw_text, "target_text": win.target_text, "seed": params["seed"],
+            }, job, _progress(job, n, len(todo)))
+            out, out_sr = read_audio(Path(reply["path"]))
+            out = dsp.fit_length(dsp.resample(dsp.match_channels(out, 1), out_sr, sr), we - ws)
+            a, b = int(round(span["start_s"] * sr)), int(round(span["end_s"] * sr))
+            inserts[idx] = _with_margins(out, a - ws, b - ws, x)
+            _set_span(job, states, idx, "generated", f"renders/{job.render_id}/span-{idx}.wav")
+    finally:
+        job.engine = None
+        engine.shutdown()
+    return inserts
+
+
+def _ace_step_inserts(job: EditJob, spans: list[dict], todo: list[int], words: list[dict],
+                      source: np.ndarray, sr: int, rdir: Path, params: dict,
+                      states: list[dict], language: str) -> dict[int, np.ndarray]:
+    inserts: dict[int, np.ndarray] = {}
+    if not todo:
+        return inserts
+    x = dsp.ms_to_samples(params["crossfade_ms"], sr)
+    duration = source.shape[1] / sr
+    ace = params["ace_step"]
+    job.stage = "regenerate"
+    _release_gpu()
+    client = _ace_client(rdir)
+    job.engine = client.cancel
+    repainted: dict[int, tuple[Path, int, int]] = {}
+    try:
+        for n, idx in enumerate(todo):
+            _check_cancel(job)
+            span = spans[idx]
+            lo, hi = window_bounds(spans, idx, duration)
+            win = span_window(span, words, duration, SONG_CONTEXT_S, lo, hi)
+            seg_start = max(0.0, win.start_s - ace["padding_s"])
+            seg_end = min(duration, win.end_s + ace["padding_s"])
+            s0, s1 = int(round(seg_start * sr)), int(round(seg_end * sr))
+            segment_path = rdir / f"span-{idx}.segment.wav"
+            write_audio(segment_path, source[:, s0:s1], sr)
+            _set_span(job, states, idx, "running")
+            out = _ace_repaint(
+                client, job, src_path=segment_path,
+                start_s=round(win.start_s - seg_start, 3), end_s=round(win.end_s - seg_start, 3),
+                lyrics=win.target_text, caption=ace["caption"], strength=ace["strength"],
+                seed=params["seed"], out_path=rdir / f"span-{idx}.wav", language=language)
+            repainted[idx] = (out, s0, s1)
+            job.progress = round(0.05 + 0.5 * (n + 1) / len(todo), 3)
+    finally:
+        job.engine = None
+        client.stop()
+    job.stage = "separate"
+    for idx, (path, s0, s1) in repainted.items():
+        _check_cancel(job)
+        vocal, _accompaniment = separate_stems(path)
+        vocal = dsp.fit_length(vocal, s1 - s0)
+        span = spans[idx]
+        a, b = int(round(span["start_s"] * sr)), int(round(span["end_s"] * sr))
+        inserts[idx] = _with_margins(vocal, a - s0, b - s0, x)
+        _set_span(job, states, idx, "generated", f"renders/{job.render_id}/span-{idx}.wav")
+    return inserts
+
+
 def _render_song(job: EditJob, session: dict, render: dict) -> np.ndarray:
-    raise AudioEditError("not_ready", "Song renders arrive in the next task.", 409)
+    sid, rid = job.session_id, job.render_id
+    d, rdir = session_dir(sid), render_dir(sid, rid)
+    params, spans = render["params"], render["span_snapshot"]
+    words = session["transcript"]["words"]
+    source, sr = read_audio(d / "source.wav")
+    vocals, _ = read_audio(d / "vocals.wav")
+    instrumental, _ = read_audio(d / "instrumental.wav")
+    x = dsp.ms_to_samples(params["crossfade_ms"], sr)
+    states = [dict(item) for item in render["spans"]]
+    todo = [i for i, s in enumerate(spans) if s["replacement_text"]]
+    if params["engine"] == "ace_step":
+        language = session["transcript"].get("language") or "en"
+        inserts = _ace_step_inserts(job, spans, todo, words, source, sr, rdir, params, states, language)
+    else:
+        inserts = _singer_inserts(job, spans, todo, words, vocals, sr, rdir, params, states)
+    inserts = _apply_rvc(job, inserts, rdir, params)
+    job.stage, job.progress = "remix", 0.9
+    edits = []
+    for idx, span in enumerate(spans):
+        a, b = int(round(span["start_s"] * sr)), int(round(span["end_s"] * sr))
+        if idx in inserts:
+            context = dsp.context_around(vocals, sr, span["start_s"], span["end_s"])
+            insert = _mark(dsp.match_loudness(inserts[idx], context, sr), sr)
+        else:
+            insert = np.zeros((1, (b - a) + 2 * x), np.float32)   # a deletion keeps the length
+        edits.append((span["start_s"], span["end_s"], insert))
+        states[idx]["status"] = "done"
+    update_render(sid, rid, spans=states)
+    new_vocals = dsp.apply_splices(vocals, sr, edits, params["crossfade_ms"])
+    write_audio(rdir / "vocals.edited.wav", new_vocals, sr)
+    return song_mix(source, vocals, new_vocals, instrumental, params["vocal_gain_db"])
