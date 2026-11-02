@@ -1185,6 +1185,10 @@ def test_verify_probe_runs_in_the_engines_venv_and_compiles(monkeypatch, engine_
 # ── host gates: no Install button that can only fail ─────────────────────
 
 
+#: Audio Edit engines: offered everywhere PyTorch still publishes builds.
+AUDIO_EDIT_SPEC_IDS = {"f5tts"}
+
+
 @pytest.mark.parametrize(
     ("family", "platform", "machine", "expected"),
     [
@@ -1204,6 +1208,8 @@ def test_installable_engine_ids_follow_the_host(monkeypatch, family, platform, m
     monkeypatch.setattr(platform_mod, "machine", lambda: machine)
     # Offered on every host: IndexTTS 2.5, Confucius4, Supertonic-3.
     expected = set(expected) | {"indextts2", "confucius4-tts", "supertonic3"}
+    if (platform, machine) != ("darwin", "x86_64"):
+        expected |= AUDIO_EDIT_SPEC_IDS
     assert si.installable_engine_ids() == frozenset(expected)
 
 

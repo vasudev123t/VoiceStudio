@@ -388,6 +388,13 @@ _COSYVOICE_REQUIREMENTS = str(
 )
 
 
+def _venv_installed(env_var: str) -> Callable[[], bool]:
+    """Install probe for the Audio Edit engines: venv plus completion marker."""
+    def probe() -> bool:
+        return engine_venv_python(env_var) is not None
+    return probe
+
+
 SPECS: dict[str, SidecarSpec] = {
     "indextts2": SidecarSpec(
         engine_id="indextts2",
@@ -583,6 +590,26 @@ SPECS: dict[str, SidecarSpec] = {
         host_supported=_no_intel_mac(
             "VoxCPM2 needs a PyTorch version that has no Intel Mac build."
         ),
+    ),
+    # Audio Edit speech engine (services/audio_edit_engines.py), not a TTS
+    # engine. A PyPI package; the CC-BY-NC weights download on first render.
+    "f5tts": SidecarSpec(
+        engine_id="f5tts",
+        display_name="F5-TTS (Audio Edit)",
+        repo_url="",
+        tarball_url="",
+        checkout_dirname="f5tts",
+        env_var="OMNIVOICE_F5TTS_DIR",
+        probe_module="f5_tts",
+        has_source=False,
+        venv_args=("--python", "3.11"),
+        install_args=("f5-tts==1.1.22", "torchcodec==0.5"),
+        torch_pins=("torch==2.7.1", "torchaudio==2.7.1"),
+        docs_path="docs/engines/f5tts.md",
+        # CUDA torch (~5 GB) + f5-tts; ~1.4 GB of weights on first render.
+        required_bytes=8 * _GIB,
+        installed_probe=_venv_installed("OMNIVOICE_F5TTS_DIR"),
+        host_supported=_no_intel_mac("F5-TTS needs a PyTorch version that has no Intel Mac build."),
     ),
     # Upstream is unpinned and its entry point has moved before (#1287), so the
     # install pins a reviewed commit (2026-09-06) and the sidecar drives the
