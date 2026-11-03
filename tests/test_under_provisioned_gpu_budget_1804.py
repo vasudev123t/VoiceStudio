@@ -46,11 +46,8 @@ def floor(engine):
 
 
 @pytest.fixture
-def model_manager(monkeypatch):
-    for mod_name in ("core.config", "services.model_manager"):
-        if getattr(sys.modules.get(mod_name), "__file__", None) is None:
-            sys.modules.pop(mod_name, None)
-    return importlib.import_module("services.model_manager")
+def model_manager(fresh_model_manager):
+    return fresh_model_manager()
 
 
 def _gpu(vram_gb: float, *, family: str = "cuda",

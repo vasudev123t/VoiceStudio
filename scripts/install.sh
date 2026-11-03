@@ -219,9 +219,15 @@ else
     fi
     PACKAGE_DIR="$WORK"
 fi
+# Releases up to v0.5.7-beta.3 named their packages VoiceStudio-Electron-*;
+# keep pinned installs of those versions working.
+case "$VS_VERSION" in
+    0.[0-4].*|0.5.[0-6]|0.5.[0-6]-*|0.5.7-beta.[1-3]) ASSET_PREFIX=VoiceStudio-Electron ;;
+    *) ASSET_PREFIX=VoiceStudio ;;
+esac
 case "$OS" in
-    mac) ASSET="VoiceStudio-Electron-$VS_VERSION-mac-$ARCH.dmg" ;;
-    linux) ASSET="VoiceStudio-Electron-$VS_VERSION-linux-x64.AppImage" ;;
+    mac) ASSET="$ASSET_PREFIX-$VS_VERSION-mac-$ARCH.dmg" ;;
+    linux) ASSET="$ASSET_PREFIX-$VS_VERSION-linux-x64.AppImage" ;;
 esac
 PACKAGE="$PACKAGE_DIR/$ASSET"
 if [ "$MODE" = binary ]; then

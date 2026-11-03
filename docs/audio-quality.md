@@ -45,10 +45,15 @@ only for adapters that forward this setting:
 | Supertonic-3 | 5–12 steps, matching its adapter limits | 16/24/32-bit WAV |
 | Other TTS engines | Engine manages sampling; no ineffective slider | 16/24/32-bit WAV |
 
-**Even out volume** adds the existing processing chain. Turning it off skips
-the app's added EQ, compression and normalization; engine postprocessing and
-the existing provenance watermark setting remain in effect. An engine that
-performs its own mastering continues to skip the app's mastering pre-stage.
+**Even out volume** adds the app's processing chain: the gentle mastering
+pre-stage, then a slow leveler that brings quiet and loud passages closer
+together, a light EQ and a look-ahead peak limiter that only touches samples
+above -1 dBFS. The leveler follows whole phrases, not syllables, so peaks keep
+their shape and pauses and room tails are not pulled up toward speech level.
+Turning it off skips the app's added EQ, leveling and normalization; engine
+postprocessing and the existing provenance watermark setting remain in effect.
+An engine that performs its own mastering continues to skip the app's mastering
+pre-stage.
 
 The final playback response uses the saved WAV itself. Streaming previews still
 use PCM16; their completed take uses the selected precision. Engines that only

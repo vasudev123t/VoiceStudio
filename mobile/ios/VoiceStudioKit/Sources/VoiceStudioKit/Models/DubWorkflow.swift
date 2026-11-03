@@ -92,7 +92,9 @@ public struct DubCheckpoint: Codable, Sendable {
                     let byID = Dictionary(translated.translated.map { ($0.id, $0.text) }, uniquingKeysWith: { _, new in new })
                     let segments = try cp.segments.map { segment -> Segment in
                         guard let text = byID[segment.id], !text.isEmpty else { throw ClientError("mobile.errors.invalid_response") }
-                        return Segment(id: segment.id, start: segment.start, end: segment.end, text: text, profile: cp.profileID, language: language.code)
+                        var cue = segment
+                        cue.text = text; cue.profile_id = cp.profileID; cue.target_lang = language.code; cue.cue_source_id = segment.id
+                        return cue
                     }
                     let task = try await api.render(cp.jobID, segments: segments, language: language.code, languageName: language.name)
                     try validate(revision)

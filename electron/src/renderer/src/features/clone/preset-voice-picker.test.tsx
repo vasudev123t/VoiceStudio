@@ -9,16 +9,26 @@ const engine = vi.hoisted(() => ({
 vi.mock('@/hooks/use-engines', () => ({ useEngines: () => ({ activeTts: engine.active }) }));
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 
-beforeEach(() => cloneSettingsStore.setState(() => ({ ...DEFAULT_CLONE_SETTINGS })));
+beforeEach(() => {
+  cloneSettingsStore.setState(() => ({ ...DEFAULT_CLONE_SETTINGS }));
+  // jsdom has no scrollIntoView; SearchableSelect scrolls the highlighted row.
+  window.HTMLElement.prototype.scrollIntoView = vi.fn();
+});
 afterEach(cleanup);
 
 it('lists the engine presets and stores the pick (#2938)', () => {
   engine.active = { preset_voices: ['M1', 'F3'], default_voice: 'M1' };
   render(<PresetVoicePicker />);
-  const select = screen.getByRole('combobox', { name: 'presetVoice.label' }) as HTMLSelectElement;
-  expect(select.value).toBe('M1');
-  expect([...select.options].map((o) => o.value)).toEqual(['M1', 'F3']);
-  fireEvent.change(select, { target: { value: 'F3' } });
+  // AGENTS.md: shared select control, not a native <select>.
+  expect(document.querySelector('select')).toBeNull();
+  const trigger = screen.getByRole('button', { name: 'presetVoice.label' });
+  expect(trigger).toBeInTheDocument();
+  expect(trigger).toHaveTextContent('M1');
+  fireEvent.click(trigger);
+  expect(screen.getByRole('listbox')).toBeInTheDocument();
+  const options = screen.getAllByRole('option');
+  expect(options.map((o) => o.textContent?.trim())).toEqual(['M1', 'F3']);
+  fireEvent.mouseDown(options[1]);
   expect(cloneSettingsStore.state.presetVoice).toBe('F3');
 });
 

@@ -16,7 +16,7 @@
      "repo_id": {
       "maxLength": 200,
       "minLength": 3,
-      "pattern": "^[A-Za-z0-9][\\w.-]*/[\\w.-]+$",
+      "pattern": "^[A-Za-z0-9][\\w.-]*/[\\w.-]+(?::[\\w.-]+)?$",
       "title": "Repo Id",
       "type": "string"
      }
@@ -199,6 +199,23 @@
      "target_langs"
     ],
     "title": "ArgosPackRequest",
+    "type": "object"
+   },
+   "AttestationBody": {
+    "properties": {
+     "basis": {
+      "enum": [
+       "own_voice",
+       "speaker_permission"
+      ],
+      "title": "Basis",
+      "type": "string"
+     }
+    },
+    "required": [
+     "basis"
+    ],
+    "title": "AttestationBody",
     "type": "object"
    },
    "AudiobookPlanRequest": {
@@ -896,6 +913,16 @@
       "title": "Audio",
       "type": "string"
      },
+     "keep_delivery": {
+      "default": false,
+      "title": "Keep Delivery",
+      "type": "boolean"
+     },
+     "language": {
+      "default": "",
+      "title": "Language",
+      "type": "string"
+     },
      "match_duration": {
       "default": true,
       "title": "Match Duration",
@@ -1021,6 +1048,28 @@
    },
    "Body_create_profile_profiles_post": {
     "properties": {
+     "design_recipe": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Design Recipe"
+     },
+     "engine": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Engine"
+     },
      "image": {
       "anyOf": [
        {
@@ -1449,6 +1498,42 @@
       "default": "broadcast",
       "title": "Effect Preset",
       "type": "string"
+     },
+     "emo_alpha": {
+      "anyOf": [
+       {
+        "maximum": 1.0,
+        "minimum": 0.0,
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Emo Alpha"
+     },
+     "emo_text": {
+      "anyOf": [
+       {
+        "maxLength": 500,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Emo Text"
+     },
+     "emo_vector": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Emo Vector"
      },
      "engine": {
       "anyOf": [
@@ -2081,6 +2166,17 @@
       "title": "Audio",
       "type": "string"
      },
+     "diarize": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Diarize"
+     },
      "dictation": {
       "anyOf": [
        {
@@ -2124,6 +2220,17 @@
        }
       ],
       "title": "Model"
+     },
+     "num_speakers": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Num Speakers"
      },
      "refine": {
       "anyOf": [
@@ -2191,8 +2298,69 @@
     "title": "Body_upload_voice_clip_gallery_upload_post",
     "type": "object"
    },
+   "BundleExport": {
+    "properties": {
+     "kind": {
+      "title": "Kind",
+      "type": "string"
+     },
+     "project": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Project"
+     },
+     "project_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Project Id"
+     }
+    },
+    "required": [
+     "kind"
+    ],
+    "title": "BundleExport",
+    "type": "object"
+   },
+   "ChoicesBody": {
+    "properties": {
+     "choices": {
+      "additionalProperties": {
+       "type": "boolean"
+      },
+      "title": "Choices",
+      "type": "object"
+     },
+     "new_device": {
+      "default": false,
+      "title": "New Device",
+      "type": "boolean"
+     },
+     "remove_from_cloud": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Remove From Cloud",
+      "type": "array"
+     }
+    },
+    "title": "ChoicesBody",
+    "type": "object"
+   },
    "CleanupSegmentsRequest": {
-    "description": "The editor's current segments; without them the job's stored copy is\ncleaned, which misses every edit made since transcription.",
+    "description": "The editor's current segments; without them the stored copy is cleaned.",
     "properties": {
      "segments": {
       "items": {
@@ -2827,6 +2995,7 @@
      "audio_rate_cap": {
       "anyOf": [
        {
+        "minimum": 1.0,
         "type": "number"
        },
        {
@@ -2838,6 +3007,7 @@
      "gap_guard_s": {
       "anyOf": [
        {
+        "minimum": 0.0,
         "type": "number"
        },
        {
@@ -2849,6 +3019,7 @@
      "max_audio_only_rate": {
       "anyOf": [
        {
+        "minimum": 1.0,
         "type": "number"
        },
        {
@@ -2873,6 +3044,7 @@
      "video_slow_cap": {
       "anyOf": [
        {
+        "minimum": 1.0,
         "type": "number"
        },
        {
@@ -2883,6 +3055,38 @@
      }
     },
     "title": "FitOptions",
+    "type": "object"
+   },
+   "GGUFGpuOfferAnswer": {
+    "properties": {
+     "accept": {
+      "title": "Accept",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "accept"
+    ],
+    "title": "GGUFGpuOfferAnswer",
+    "type": "object"
+   },
+   "GGUFQuantRequest": {
+    "properties": {
+     "quant": {
+      "anyOf": [
+       {
+        "maxLength": 128,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "\"auto\", a quant tag (Q4_K_M, Q8_0, BF16, F32) or its base filename; omitted on download means the selected quant.",
+      "title": "Quant"
+     }
+    },
+    "title": "GGUFQuantRequest",
     "type": "object"
    },
    "GlossaryTerm": {
@@ -3123,6 +3327,33 @@
      "dataset_id"
     ],
     "title": "LibraryFromDataset",
+    "type": "object"
+   },
+   "LocalValue": {
+    "properties": {
+     "key": {
+      "title": "Key",
+      "type": "string"
+     },
+     "seen_seq": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Seen Seq"
+     },
+     "value": {
+      "title": "Value"
+     }
+    },
+    "required": [
+     "key"
+    ],
+    "title": "LocalValue",
     "type": "object"
    },
    "LongformChapter": {
@@ -3960,7 +4191,6 @@
     "type": "object"
    },
    "ProsodyMirrorRequest": {
-    "description": "Segments as the editor currently holds them: splits, merges and timing\nedits are client-side until generation, so the job's stored copy is stale.",
     "properties": {
      "segments": {
       "items": {
@@ -3979,6 +4209,7 @@
     "type": "object"
    },
    "ProsodyMirrorSegment": {
+    "description": "One timed source line to measure for the prosody mirror.",
     "properties": {
      "end": {
       "minimum": 0.0,
@@ -4070,7 +4301,7 @@
      "repo_id": {
       "maxLength": 200,
       "minLength": 3,
-      "pattern": "^[A-Za-z0-9][\\w.-]*/[\\w.-]+$",
+      "pattern": "^[A-Za-z0-9][\\w.-]*/[\\w.-]+(?::[\\w.-]+)?$",
       "title": "Repo Id",
       "type": "string"
      }
@@ -4558,7 +4789,7 @@
         "type": "null"
        }
       ],
-      "description": "OmniVoice GGUF extension: long-form internal chunk duration.",
+      "description": "Seconds of speech per internal chunk for long texts; read by the OmniVoice GGUF engine only. Outside the OpenAI spec.",
       "title": "Chunk Duration"
      },
      "chunk_threshold": {
@@ -4571,12 +4802,12 @@
         "type": "null"
        }
       ],
-      "description": "OmniVoice GGUF extension: long-form internal chunk threshold.",
+      "description": "Length above which the OmniVoice GGUF engine starts splitting long texts into chunks. Outside the OpenAI spec.",
       "title": "Chunk Threshold"
      },
      "denoise": {
       "default": true,
-      "description": "VoiceStudio extension: prepend denoise control when supported.",
+      "description": "Set false to skip the denoise step on engines that offer one. Outside the OpenAI spec; VoiceStudio only.",
       "title": "Denoise",
       "type": "boolean"
      },
@@ -4602,7 +4833,7 @@
         "type": "null"
        }
       ],
-      "description": "VoiceStudio extension: target output duration in seconds.",
+      "description": "Aim for this many seconds of audio (seconds, must be positive). Outside the OpenAI spec; used by VoiceStudio engines that can honour it.",
       "title": "Duration"
      },
      "guidance_scale": {
@@ -4684,7 +4915,7 @@
      },
      "preprocess_prompt": {
       "default": true,
-      "description": "VoiceStudio extension: trim/preprocess reference prompt when supported.",
+      "description": "Set false to use the reference clip untouched instead of preprocessing it, where the engine supports that. Outside the OpenAI spec; VoiceStudio only.",
       "title": "Preprocess Prompt",
       "type": "boolean"
      },
@@ -4711,7 +4942,7 @@
         "type": "null"
        }
       ],
-      "description": "VoiceStudio extension: deterministic sampling seed.",
+      "description": "Fixes the random seed so the same request can be reproduced. Outside the OpenAI spec; VoiceStudio only.",
       "title": "Seed"
      },
      "speed": {
@@ -4935,6 +5166,11 @@
       "title": "Backend Port",
       "type": "integer"
      },
+     "build_commit": {
+      "default": "unknown",
+      "title": "Build Commit",
+      "type": "string"
+     },
      "code_fingerprint": {
       "default": "",
       "title": "Code Fingerprint",
@@ -5133,6 +5369,87 @@
      "idle_timeout_seconds"
     ],
     "title": "SystemInfoResponse",
+    "type": "object"
+   },
+   "TranscriptSegment": {
+    "properties": {
+     "cue_source_id": {
+      "anyOf": [
+       {
+        "maxLength": 200,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Cue Source Id"
+     },
+     "end": {
+      "minimum": 0.0,
+      "title": "End",
+      "type": "number"
+     },
+     "id": {
+      "anyOf": [
+       {
+        "maxLength": 200,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Id"
+     },
+     "start": {
+      "minimum": 0.0,
+      "title": "Start",
+      "type": "number"
+     },
+     "text": {
+      "maxLength": 20000,
+      "title": "Text",
+      "type": "string"
+     },
+     "text_original": {
+      "anyOf": [
+       {
+        "maxLength": 20000,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Text Original"
+     }
+    },
+    "required": [
+     "start",
+     "end",
+     "text"
+    ],
+    "title": "TranscriptSegment",
+    "type": "object"
+   },
+   "TranscriptSyncRequest": {
+    "description": "The editor's transcript, stored before any dub exists so exports of\nthe original audio with subtitles use the edited lines (#3393).",
+    "properties": {
+     "segments": {
+      "items": {
+       "$ref": "#/components/schemas/TranscriptSegment"
+      },
+      "maxItems": 20000,
+      "minItems": 1,
+      "title": "Segments",
+      "type": "array"
+     }
+    },
+    "required": [
+     "segments"
+    ],
+    "title": "TranscriptSyncRequest",
     "type": "object"
    },
    "TranslateRequest": {
@@ -6019,6 +6336,24 @@
     "title": "_OffloadAfterGenerationBody",
     "type": "object"
    },
+   "_PauseFillBody": {
+    "properties": {
+     "mode": {
+      "description": "silence: exact zeros (default); room_tone: the take's own noise floor",
+      "enum": [
+       "silence",
+       "room_tone"
+      ],
+      "title": "Mode",
+      "type": "string"
+     }
+    },
+    "required": [
+     "mode"
+    ],
+    "title": "_PauseFillBody",
+    "type": "object"
+   },
    "_PerformanceProfileBody": {
     "properties": {
      "family": {
@@ -6144,6 +6479,17 @@
        }
       ],
       "title": "Smart Cleanup"
+     },
+     "spoken_punctuation": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Spoken Punctuation"
      }
     },
     "title": "_RefinementBody",
@@ -6165,6 +6511,17 @@
    },
    "_SettingsBody": {
     "properties": {
+     "allow_remote_control": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Allow Remote Control"
+     },
      "disclosure_template": {
       "anyOf": [
        {
@@ -6282,7 +6639,7 @@
    "_TorchCompileBody": {
     "properties": {
      "enabled": {
-      "description": "True to disable torch.compile (eager mode) for the engine",
+      "description": "True disables torch.compile and selects eager execution",
       "title": "Enabled",
       "type": "boolean"
      }
@@ -6615,6 +6972,456 @@
     "summary": "Create Ws Ticket",
     "tags": [
      "auth"
+    ]
+   }
+  },
+  "/api/cloud-sync/choices": {
+   "put": {
+    "operationId": "set_choices_api_cloud_sync_choices_put",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ChoicesBody"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response Set Choices Api Cloud Sync Choices Put",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Set Choices",
+    "tags": [
+     "cloud-sync"
+    ]
+   }
+  },
+  "/api/cloud-sync/confirm-deletes": {
+   "post": {
+    "operationId": "confirm_deletes_api_cloud_sync_confirm_deletes_post",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response Confirm Deletes Api Cloud Sync Confirm Deletes Post",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Confirm Deletes",
+    "tags": [
+     "cloud-sync"
+    ]
+   }
+  },
+  "/api/cloud-sync/devices": {
+   "get": {
+    "operationId": "devices_api_cloud_sync_devices_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response Devices Api Cloud Sync Devices Get",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Devices",
+    "tags": [
+     "cloud-sync"
+    ]
+   }
+  },
+  "/api/cloud-sync/devices/{device_id}/revoke": {
+   "post": {
+    "operationId": "revoke_api_cloud_sync_devices__device_id__revoke_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "device_id",
+      "required": true,
+      "schema": {
+       "pattern": "^[A-Za-z0-9]{16}$",
+       "title": "Device Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response Revoke Api Cloud Sync Devices  Device Id  Revoke Post",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Revoke",
+    "tags": [
+     "cloud-sync"
+    ]
+   }
+  },
+  "/api/cloud-sync/local": {
+   "get": {
+    "operationId": "pulled_local_api_cloud_sync_local_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "since",
+      "required": false,
+      "schema": {
+       "default": 0,
+       "minimum": 0,
+       "title": "Since",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response Pulled Local Api Cloud Sync Local Get",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Pulled Local",
+    "tags": [
+     "cloud-sync"
+    ]
+   },
+   "put": {
+    "operationId": "put_local_api_cloud_sync_local_put",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/LocalValue"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response Put Local Api Cloud Sync Local Put",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Put Local",
+    "tags": [
+     "cloud-sync"
+    ]
+   }
+  },
+  "/api/cloud-sync/local/keys": {
+   "get": {
+    "operationId": "local_keys_api_cloud_sync_local_keys_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response Local Keys Api Cloud Sync Local Keys Get",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Local Keys",
+    "tags": [
+     "cloud-sync"
+    ]
+   }
+  },
+  "/api/cloud-sync/off": {
+   "post": {
+    "operationId": "turn_off_api_cloud_sync_off_post",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response Turn Off Api Cloud Sync Off Post",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Turn Off",
+    "tags": [
+     "cloud-sync"
+    ]
+   }
+  },
+  "/api/cloud-sync/on": {
+   "post": {
+    "operationId": "turn_on_api_cloud_sync_on_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ChoicesBody"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response Turn On Api Cloud Sync On Post",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Turn On",
+    "tags": [
+     "cloud-sync"
+    ]
+   }
+  },
+  "/api/cloud-sync/run": {
+   "post": {
+    "description": "Window focus or \"Sync now\": also starts sync if it could not start earlier.",
+    "operationId": "run_now_api_cloud_sync_run_post",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response Run Now Api Cloud Sync Run Post",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Run Now",
+    "tags": [
+     "cloud-sync"
+    ]
+   }
+  },
+  "/api/cloud-sync/start": {
+   "post": {
+    "description": "Main: sync was switched on (or the app started signed in).",
+    "operationId": "start_api_cloud_sync_start_post",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response Start Api Cloud Sync Start Post",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Start",
+    "tags": [
+     "cloud-sync"
+    ]
+   }
+  },
+  "/api/cloud-sync/status": {
+   "get": {
+    "operationId": "status_api_cloud_sync_status_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response Status Api Cloud Sync Status Get",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Status",
+    "tags": [
+     "cloud-sync"
+    ]
+   }
+  },
+  "/api/cloud-sync/stop": {
+   "post": {
+    "description": "Main: sync or account features were switched off. Stops everything now.",
+    "operationId": "stop_api_cloud_sync_stop_post",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response Stop Api Cloud Sync Stop Post",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Stop",
+    "tags": [
+     "cloud-sync"
+    ]
+   }
+  },
+  "/api/cloud-sync/use-choices-of/{device_id}": {
+   "post": {
+    "operationId": "use_choices_of_api_cloud_sync_use_choices_of__device_id__post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "device_id",
+      "required": true,
+      "schema": {
+       "pattern": "^[A-Za-z0-9]{16}$",
+       "title": "Device Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response Use Choices Of Api Cloud Sync Use Choices Of  Device Id  Post",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Use Choices Of",
+    "tags": [
+     "cloud-sync"
     ]
    }
   },
@@ -7910,6 +8717,64 @@
     ]
    }
   },
+  "/api/settings/pause-fill": {
+   "get": {
+    "description": "How [pause] markers and audiobook gaps are filled.",
+    "operationId": "get_pause_fill_api_settings_pause_fill_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Get Pause Fill",
+    "tags": [
+     "settings"
+    ]
+   },
+   "put": {
+    "description": "Persist the choice. Applies from the next generation, no restart.",
+    "operationId": "set_pause_fill_api_settings_pause_fill_put",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/_PauseFillBody"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Set Pause Fill",
+    "tags": [
+     "settings"
+    ]
+   }
+  },
   "/api/settings/perf/offload-after-generation": {
    "get": {
     "description": "Whether the in-process TTS model moves to system RAM after generation.",
@@ -7970,7 +8835,7 @@
   },
   "/api/settings/perf/torch-compile-disabled": {
    "get": {
-    "description": "Return the current torch.compile-disabled toggle + the runtime platform.\n\n`platform` is still reported (clients may show it), but since #2135 the\ntoggle is live on every host: it used to be rendered disabled off Windows\non the assumption that only #65's Windows OOM needed it, which left the\nLinux/CUDA reporter of #2135 with no way to switch off the compile that\nwas killing their backend.",
+    "description": "Return the cross-platform compile-disable toggle and runtime platform.",
     "operationId": "get_torch_compile_disabled_api_settings_perf_torch_compile_disabled_get",
     "responses": {
      "200": {
@@ -7988,7 +8853,7 @@
     ]
    },
    "put": {
-    "description": "Persist the toggle. Honoured by `services.engine_env.build_engine_env()`\n(subprocess engines) and `services.engine_env.should_torch_compile()`\n(in-process), on every platform since #2135.",
+    "description": "Persist the toggle used by subprocess environments and in-process compile gates on every host.",
     "operationId": "set_torch_compile_disabled_api_settings_perf_torch_compile_disabled_put",
     "requestBody": {
      "content": {
@@ -10162,6 +11027,25 @@
     ]
    }
   },
+  "/calls/options": {
+   "get": {
+    "operationId": "get_options_calls_options_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Get Options",
+    "tags": [
+     "calls"
+    ]
+   }
+  },
   "/calls/readiness": {
    "get": {
     "description": "The guided-setup checklist: ``[{id, ok, detail}]`` for credentials,\ntunnel, number, llm, asr and voice, in that order.",
@@ -10660,6 +11544,22 @@
      },
      {
       "in": "query",
+      "name": "pack",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Pack"
+      }
+     },
+     {
+      "in": "query",
       "name": "limit",
       "required": false,
       "schema": {
@@ -10931,7 +11831,7 @@
   },
   "/convert": {
    "post": {
-    "description": "Convert a spoken clip into an existing voice profile's voice.\n\nMultipart form: ``audio`` (the source clip), ``profile_id`` (an existing\nvoice profile), optional ``match_duration`` (default on \u2014 atempo the take\ntoward the source clip's length, clamped to 0.5\u20132.0\u00d7).\n\nReturns JSON ``{audio_url, text, duration_s, id}`` \u2014 the take is saved to\nOUTPUTS_DIR and served from the ``/audio`` mount like every other take.",
+    "description": "Convert a spoken clip into an existing voice profile's voice.\n\nMultipart form: ``audio`` (the source clip), ``profile_id`` (an existing\nvoice profile), optional ``match_duration`` (default on \u2014 atempo the take\ntoward the source clip's length, clamped to 0.5\u20132.0\u00d7), optional\n``keep_delivery`` (default off \u2014 convert the recording itself so the\nspeaker's timing, rhythm and intonation are kept, #3421; no transcript).\n\nReturns JSON ``{audio_url, text, duration_s, id}`` \u2014 the take is saved to\nOUTPUTS_DIR and served from the ``/audio`` mount like every other take.",
     "operationId": "convert_speech_convert_post",
     "requestBody": {
      "content": {
@@ -11040,7 +11940,7 @@
     "summary": "Get Dictation Prefs"
    },
    "post": {
-    "description": "Persist any subset of the dictation prefs. Validates ``mode``,\n``model_id`` and ``prompt`` so a bad value can't wedge the capture engine.\nAn empty ``prompt`` clears it.",
+    "description": "Persist any subset of the dictation prefs. Validates the values so a\nbad one can't wedge the capture engine.",
     "operationId": "set_dictation_prefs_dictation_prefs_post",
     "requestBody": {
      "content": {
@@ -11350,7 +12250,7 @@
   },
   "/dub/cleanup-segments/{job_id}": {
    "post": {
-    "description": "Re-run merge/stitch passes to drop fragments.\n\nCleans the editor's segments when sent, so unsaved text, timing and\ndirection edits survive; otherwise the job's stored segments. The\neditor's result is returned without being stored: it is an undoable edit\nlike any other, and the job keeps the segments its existing audio and\nsubtitle exports were generated from until the next generation.",
+    "description": "Merge fragments and stitch split sentences in a job's segments.\n\nWith a body, the editor's own segments are cleaned and handed back\nuntouched on the server, so the client can apply the result as an edit\nthe user can undo. Without one, the stored segments are cleaned and saved.",
     "operationId": "dub_cleanup_segments_dub_cleanup_segments__job_id__post",
     "parameters": [
      {
@@ -11436,6 +12336,20 @@
       }
      },
      {
+      "description": "Background level when preserve_bg=1: 1.0 keeps the original level, 0 mutes it, up to 4.0.",
+      "in": "query",
+      "name": "bed_level",
+      "required": false,
+      "schema": {
+       "default": 1.0,
+       "description": "Background level when preserve_bg=1: 1.0 keeps the original level, 0 mutes it, up to 4.0.",
+       "maximum": 4.0,
+       "minimum": 0.0,
+       "title": "Bed Level",
+       "type": "number"
+      }
+     },
+     {
       "in": "header",
       "name": "X-VoiceStudio-Path-Authorization",
       "required": false,
@@ -11502,6 +12416,20 @@
       }
      },
      {
+      "description": "Background level when preserve_bg=1: 1.0 keeps the original level, 0 mutes it, up to 4.0.",
+      "in": "query",
+      "name": "bed_level",
+      "required": false,
+      "schema": {
+       "default": 1.0,
+       "description": "Background level when preserve_bg=1: 1.0 keeps the original level, 0 mutes it, up to 4.0.",
+       "maximum": 4.0,
+       "minimum": 0.0,
+       "title": "Bed Level",
+       "type": "number"
+      }
+     },
+     {
       "in": "header",
       "name": "X-VoiceStudio-Path-Authorization",
       "required": false,
@@ -11565,6 +12493,20 @@
        "default": true,
        "title": "Preserve Bg",
        "type": "boolean"
+      }
+     },
+     {
+      "description": "Background level when preserve_bg=1: 1.0 keeps the original level, 0 mutes it, up to 4.0.",
+      "in": "query",
+      "name": "bed_level",
+      "required": false,
+      "schema": {
+       "default": 1.0,
+       "description": "Background level when preserve_bg=1: 1.0 keeps the original level, 0 mutes it, up to 4.0.",
+       "maximum": 4.0,
+       "minimum": 0.0,
+       "title": "Bed Level",
+       "type": "number"
       }
      },
      {
@@ -11644,6 +12586,20 @@
       }
      },
      {
+      "description": "Background level when preserve_bg=1: 1.0 keeps the original level, 0 mutes it, up to 4.0.",
+      "in": "query",
+      "name": "bed_level",
+      "required": false,
+      "schema": {
+       "default": 1.0,
+       "description": "Background level when preserve_bg=1: 1.0 keeps the original level, 0 mutes it, up to 4.0.",
+       "maximum": 4.0,
+       "minimum": 0.0,
+       "title": "Bed Level",
+       "type": "number"
+      }
+     },
+     {
       "in": "query",
       "name": "bitrate",
       "required": false,
@@ -11710,6 +12666,20 @@
        "description": "Mix background noise into dubbed tracks",
        "title": "Preserve Bg",
        "type": "boolean"
+      }
+     },
+     {
+      "description": "Background level when preserve_bg=1: 1.0 keeps the original level, 0 mutes it, up to 4.0.",
+      "in": "query",
+      "name": "bed_level",
+      "required": false,
+      "schema": {
+       "default": 1.0,
+       "description": "Background level when preserve_bg=1: 1.0 keeps the original level, 0 mutes it, up to 4.0.",
+       "maximum": 4.0,
+       "minimum": 0.0,
+       "title": "Bed Level",
+       "type": "number"
       }
      },
      {
@@ -11841,6 +12811,20 @@
        "description": "Mix background noise into dubbed tracks",
        "title": "Preserve Bg",
        "type": "boolean"
+      }
+     },
+     {
+      "description": "Background level when preserve_bg=1: 1.0 keeps the original level, 0 mutes it, up to 4.0.",
+      "in": "query",
+      "name": "bed_level",
+      "required": false,
+      "schema": {
+       "default": 1.0,
+       "description": "Background level when preserve_bg=1: 1.0 keeps the original level, 0 mutes it, up to 4.0.",
+       "maximum": 4.0,
+       "minimum": 0.0,
+       "title": "Bed Level",
+       "type": "number"
       }
      },
      {
@@ -12471,6 +13455,20 @@
        "title": "Preserve Bg",
        "type": "boolean"
       }
+     },
+     {
+      "description": "Background level when preserve_bg=1: 1.0 keeps the original level, 0 mutes it, up to 4.0.",
+      "in": "query",
+      "name": "bed_level",
+      "required": false,
+      "schema": {
+       "default": 1.0,
+       "description": "Background level when preserve_bg=1: 1.0 keeps the original level, 0 mutes it, up to 4.0.",
+       "maximum": 4.0,
+       "minimum": 0.0,
+       "title": "Bed Level",
+       "type": "number"
+      }
      }
     ],
     "responses": {
@@ -12527,6 +13525,20 @@
        "default": true,
        "title": "Preserve Bg",
        "type": "boolean"
+      }
+     },
+     {
+      "description": "Background level when preserve_bg=1: 1.0 keeps the original level, 0 mutes it, up to 4.0.",
+      "in": "query",
+      "name": "bed_level",
+      "required": false,
+      "schema": {
+       "default": 1.0,
+       "description": "Background level when preserve_bg=1: 1.0 keeps the original level, 0 mutes it, up to 4.0.",
+       "maximum": 4.0,
+       "minimum": 0.0,
+       "title": "Bed Level",
+       "type": "number"
       }
      }
     ],
@@ -12610,7 +13622,7 @@
   },
   "/dub/prosody-mirror/{job_id}": {
    "post": {
-    "description": "Suggest per-segment directions that mirror the source delivery.\n\nMeasures each line on the Demucs vocals track (the mix when separation\ndid not run) against its speaker's baseline and returns taxonomy\ndirections the editor can apply to lines without one. Read-only: nothing\nabout the job changes.",
+    "description": "Suggest delivery directions from how the source actor spoke each line.\n\nRead-only: nothing on the job changes.",
     "operationId": "dub_prosody_mirror_dub_prosody_mirror__job_id__post",
     "parameters": [
      {
@@ -12876,6 +13888,54 @@
     "summary": "Dub Export Srt"
    }
   },
+  "/dub/sync-transcript/{job_id}": {
+   "post": {
+    "description": "Store the editor's transcript while the job has no dub yet (#3393).\n\nExporting the original video or audio with subtitles needs no generated\ntrack, but the subtitle writers read ``job[\"segments\"]``, which still\nholds the raw transcription. Once a dub exists its exports must keep the\nsegments that dub was rendered from, so this refuses to overwrite them.\nPer-row metadata (speaker, word timings, cue sources) is carried over by\nstable id; text and timing come from the editor.",
+    "operationId": "dub_sync_transcript_dub_sync_transcript__job_id__post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "job_id",
+      "required": true,
+      "schema": {
+       "title": "Job Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/TranscriptSyncRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Dub Sync Transcript"
+   }
+  },
   "/dub/thumb/{job_id}": {
    "get": {
     "description": "Serve the extracted dub video thumbnail (jpg). 404 if not generated.",
@@ -12953,7 +14013,7 @@
   },
   "/dub/transcribe-stream/{job_id}": {
    "get": {
-    "description": "Stream per-chunk segments via SSE, then emit diarized final pass.\n\nPre-flight checks (missing job, missing audio, ASR not loaded) are emitted\nas in-stream `error` events rather than HTTP errors, because EventSource\non the client can't read non-2xx response bodies \u2014 a 503 there surfaces\nas an opaque \"network error\" instead of the actionable message we want.\n\n`num_speakers` is an optional hint passed straight to pyannote. Left unset,\npyannote auto-detects the count \u2014 but its auto-detect can collapse a\nmulti-speaker clip to a single speaker (issue #274). When the user knows\nthe exact count, supplying it forces pyannote to return that many speakers.\nOn paths that can't honor the hint exactly (inline ASR turns, the\nsilence-gap heuristic) it is never silently dropped: the heuristic cycles\nthe requested count and a `warning` SSE event tells the user how far the\nlabels can be trusted.",
+    "description": "Stream per-chunk segments via SSE, then emit diarized final pass.\n\nPre-flight checks (missing job, missing audio, ASR not loaded) are emitted\nas in-stream `error` events rather than HTTP errors, because EventSource\non the client can't read non-2xx response bodies \u2014 a 503 there surfaces\nas an opaque \"network error\" instead of the actionable message we want.\n\n`reanalyze_speakers` explicitly refreshes acoustic labels and source voices\non existing cues without rerunning ASR or replacing edited text/timings.\nOrdinary reconnects continue to replay completed transcription results.\n\n`num_speakers` is an optional hint passed straight to pyannote. Left unset,\npyannote auto-detects the count \u2014 but its auto-detect can collapse a\nmulti-speaker clip to a single speaker (issue #274). When the user knows\nthe exact count, supplying it forces pyannote to return that many speakers.\nOn paths that can't honor the hint exactly (inline ASR turns, the\nsilence-gap heuristic) it is never silently dropped: the heuristic cycles\nthe requested count and a `warning` SSE event tells the user how far the\nlabels can be trusted.",
     "operationId": "dub_transcribe_stream_dub_transcribe_stream__job_id__get",
     "parameters": [
      {
@@ -12988,6 +14048,16 @@
       "schema": {
        "default": true,
        "title": "Per Segment Refs",
+       "type": "boolean"
+      }
+     },
+     {
+      "in": "query",
+      "name": "reanalyze_speakers",
+      "required": false,
+      "schema": {
+       "default": false,
+       "title": "Reanalyze Speakers",
        "type": "boolean"
       }
      }
@@ -13447,6 +14517,146 @@
      }
     },
     "summary": "List Llm Backends"
+   }
+  },
+  "/engines/omnivoice-gguf/gpu-offer": {
+   "get": {
+    "description": "The one-time \"use your GPU?\" offer: eligibility, GPU, quant, download size.",
+    "operationId": "omnivoice_gguf_gpu_offer_engines_omnivoice_gguf_gpu_offer_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Omnivoice Gguf Gpu Offer"
+   },
+   "post": {
+    "description": "Accept (switch to GGUF on Vulkan and fetch the weights) or decline the\noffer. An unaccepted model licence answers 403 so the app shows its\nlicence dialog first.",
+    "operationId": "answer_omnivoice_gguf_gpu_offer_engines_omnivoice_gguf_gpu_offer_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/GGUFGpuOfferAnswer"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Answer Omnivoice Gguf Gpu Offer"
+   }
+  },
+  "/engines/omnivoice-gguf/quants": {
+   "get": {
+    "operationId": "omnivoice_gguf_quants_engines_omnivoice_gguf_quants_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Omnivoice Gguf Quants"
+   }
+  },
+  "/engines/omnivoice-gguf/quants/download": {
+   "post": {
+    "operationId": "download_omnivoice_gguf_quant_engines_omnivoice_gguf_quants_download_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/GGUFQuantRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Download Omnivoice Gguf Quant"
+   }
+  },
+  "/engines/omnivoice-gguf/quants/select": {
+   "post": {
+    "operationId": "select_omnivoice_gguf_quant_engines_omnivoice_gguf_quants_select_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/GGUFQuantRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Select Omnivoice Gguf Quant"
    }
   },
   "/engines/select": {
@@ -14798,6 +16008,7 @@
   },
   "/generate": {
    "post": {
+    "description": "Generate a voice take through the selected TTS engine.\n\nValidate engine-specific emotion conditioning before loading models,\nresolve saved voice references, and send the same controls through\nclassic WAV and streaming generation.",
     "operationId": "generate_speech_generate_post",
     "requestBody": {
      "content": {
@@ -15638,6 +16849,16 @@
        "title": "Profile Id",
        "type": "string"
       }
+     },
+     {
+      "in": "query",
+      "name": "stored",
+      "required": false,
+      "schema": {
+       "default": false,
+       "title": "Stored",
+       "type": "boolean"
+      }
      }
     ],
     "responses": {
@@ -16198,7 +17419,7 @@
   },
   "/models/install/cancel": {
    "post": {
-    "description": "Request cancellation of an in-flight install (FDL-11).\n\nBest-effort: stops further retry attempts and marks the row cancelled. A\nsingle in-flight snapshot_download/Xet fetch isn't interruptible mid-file\nin hf_hub 1.7.2, so an already-streaming file finishes; the cancel takes\neffect at the next retry boundary. Clears the cooldown so the user can\nimmediately restart.",
+    "description": "Request cancellation of an in-flight install (FDL-11).\n\nReturns at once; the worker stops the transfer at its next chunk (or the\nnext boundary before any byte flows), removes the partial data it wrote\nand reports ``install_cancelled``. ``/models/install/status`` shows the\njob as ``cancelling`` until then. Clears the cooldown so the user can\nrestart immediately.",
     "operationId": "cancel_install_models_install_cancel_post",
     "requestBody": {
      "content": {
@@ -16622,7 +17843,7 @@
   },
   "/models/{repo_id}": {
    "delete": {
-    "description": "Remove every cached revision of a repo from the HF cache.",
+    "description": "Remove an installed model from the HF cache.\n\nA whole-repo entry removes every cached revision of its repo. An entry that\nshares its Hub repository with other catalogue entries removes only the\nfiles it selected, so uninstalling one package never deletes another's.",
     "operationId": "delete_model_models__repo_id__delete",
     "parameters": [
      {
@@ -16945,7 +18166,7 @@
     "summary": "List Profiles"
    },
    "post": {
-    "description": "Create a voice profile (spec: docs/specs/voice-studio-unification.md \u00a75).\n\nkind='clone'  \u2014 requires `ref_audio` (the user's reference recording).\nkind='design' \u2014 requires `vd_states` (JSON of category picks); the server\n                renders a deterministic sample WAV (seed 42, same path as\n                archetype materialization) and stores it as the profile's\n                reference so the voice identity is stable across runs.",
+    "description": "Create a voice profile (spec: docs/specs/voice-studio-unification.md \u00a75).\n\nkind='clone'  \u2014 requires `ref_audio` (the user's reference recording).\nkind='design' \u2014 requires `vd_states` (JSON of category picks); the server\n                renders a deterministic sample WAV with the submitted seed\n                (42 when none, same path as archetype materialization) and\n                stores it as the profile's reference so the voice identity\n                is stable across runs.",
     "operationId": "create_profile_profiles_post",
     "requestBody": {
      "content": {
@@ -17099,8 +18320,92 @@
     "summary": "Update Profile"
    }
   },
+  "/profiles/{profile_id}/attestation": {
+   "delete": {
+    "operationId": "clear_attestation_profiles__profile_id__attestation_delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "profile_id",
+      "required": true,
+      "schema": {
+       "title": "Profile Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Clear Attestation"
+   },
+   "post": {
+    "description": "Record \"This is my voice\" / \"I have the speaker's permission\" (sync consent, S2).",
+    "operationId": "attest_consent_profiles__profile_id__attestation_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "profile_id",
+      "required": true,
+      "schema": {
+       "title": "Profile Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/AttestationBody"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Attest Consent"
+   }
+  },
   "/profiles/{profile_id}/audio": {
    "get": {
+    "description": "Serve a saved voice sample or lazily render a pending designed voice.\n\nProfile IDs and stored filenames are confined to VOICES_DIR; concurrent\nsample requests share a single synthesis job and never expose partial WAVs.",
     "operationId": "get_profile_audio_profiles__profile_id__audio_get",
     "parameters": [
      {
@@ -17466,6 +18771,185 @@
      }
     },
     "summary": "Get Profile Usage"
+   }
+  },
+  "/project-bundles": {
+   "get": {
+    "operationId": "list_project_bundles_project_bundles_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "List Project Bundles",
+    "tags": [
+     "Project handoff"
+    ]
+   }
+  },
+  "/project-bundles/export": {
+   "post": {
+    "operationId": "export_project_bundle_project_bundles_export_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/BundleExport"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Export Project Bundle",
+    "tags": [
+     "Project handoff"
+    ]
+   }
+  },
+  "/project-bundles/import": {
+   "post": {
+    "operationId": "import_project_bundle_project_bundles_import_post",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "allow_voices",
+      "required": false,
+      "schema": {
+       "default": false,
+       "title": "Allow Voices",
+       "type": "boolean"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Import Project Bundle",
+    "tags": [
+     "Project handoff"
+    ]
+   }
+  },
+  "/project-bundles/{identifier}": {
+   "get": {
+    "operationId": "download_project_bundle_project_bundles__identifier__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "identifier",
+      "required": true,
+      "schema": {
+       "title": "Identifier",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Download Project Bundle",
+    "tags": [
+     "Project handoff"
+    ]
+   }
+  },
+  "/project-bundles/{identifier}/document": {
+   "get": {
+    "operationId": "project_bundle_document_project_bundles__identifier__document_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "identifier",
+      "required": true,
+      "schema": {
+       "title": "Identifier",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Project Bundle Document",
+    "tags": [
+     "Project handoff"
+    ]
    }
   },
   "/projects": {
@@ -18593,6 +20077,23 @@
     "summary": "Clear Tauri Logs"
    }
   },
+  "/system/network/check": {
+   "get": {
+    "description": "Self-check for LAN sharing: bind address, port and per-address listener probe.",
+    "operationId": "network_check_system_network_check_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Network Check"
+   }
+  },
   "/system/network/disable": {
    "post": {
     "operationId": "network_disable_system_network_disable_post",
@@ -18677,7 +20178,7 @@
   },
   "/system/set-env": {
    "post": {
-    "description": "Set an environment variable at runtime, persisted across restarts.\n\nPersistent keys (proxy, FFMPEG_PATH, translation provider keys, \u2026) are\nsaved to ``prefs.json`` so they survive backend restarts (restored at\nstartup in ``main.py``). HF_TOKEN is persisted via\n``token_resolver.persist_hub_token()`` (and cleared with the shared token-file helper). Other keys\nare set on ``os.environ`` for the running process.\n\nThe loopback-origin gate that previously lived inline here is now applied\nat the router level via `dependencies=[Depends(require_admin)]` on\n`router` \u2014 see the top of this file. Every route on this router is\ngated, including this one. The 403 body and behavior are unchanged.",
+    "description": "Set an environment variable for the running backend.\n\nKeys in ``PERSISTENT_KEYS`` are saved in prefs.json and restored during\nstartup in main.py. HF_TOKEN is saved by\n``token_resolver.persist_hub_token()`` and cleared through the shared\ntoken-file helper. Other accepted keys affect only this process.\n\nThe loopback-origin gate that previously lived inline here is now applied at the router level via `dependencies=[Depends(require_admin)]` on `router` \u2014 see the top of this file. Every route on this router is gated, including this one. The 403 body and behavior are unchanged.",
     "operationId": "set_env_var_system_set_env_post",
     "requestBody": {
      "content": {
@@ -19103,7 +20604,7 @@
   },
   "/transcribe": {
    "post": {
-    "description": "Transcribe an audio file to text.\n\nArgs:\n    audio: The audio file to transcribe.\n    language: Optional language hint (not currently used; auto-detected).\n    model: Whisper model size (legacy; ignored in dual-mode architecture).\n    mode: 'fast' (default) uses MLX Turbo for speed; 'accurate' uses\n          the selected ASR engine with word-level timing. 'reference' uses\n          the selected ASR engine without word-level timing.\n    refine: Opt-in local-LLM cleanup of the final text (disfluencies,\n          self-corrections, punctuation) \u2014 same pipeline the live\n          dictation socket uses. Off by default so MCP/CLI callers don't\n          pay LLM latency unless they ask; honours the user's\n          Settings \u2192 Dictation-refinement config and silently passes\n          through when no LLM backend is configured. The raw ``text``\n          is always returned; ``refined_text`` is added only when the\n          LLM actually changed something.\n    dictation: Opt-in flag for hotkey-dictation callers: applies the\n          saved dictation vocabulary hint (``dictation.prompt``) to\n          engines that accept a prompt. Off by default so file\n          transcription and MCP/CLI callers are never biased by it;\n          ignored in 'reference' mode.\n\nReturns:\n    {\n        \"text\": \"full transcription\",\n        \"refined_text\": \"cleaned text\",   # only when refine=true changed it\n        \"segments\": [ {\"start\": 0.0, \"end\": 1.5, \"text\": \"...\"}, ... ],\n        \"language\": \"en\",\n        \"duration_s\": 4.2,\n        \"transcription_time_s\": 0.8,\n        \"engine\": \"mlx-whisper\"\n    }",
+    "description": "Transcribe an audio file to text.\n\nArgs:\n    audio: The audio file to transcribe.\n    language: Optional language hint (not currently used; auto-detected).\n    model: Whisper model size (legacy; ignored in dual-mode architecture).\n    mode: 'fast' (default) uses MLX Turbo for speed; 'accurate' uses\n          the selected ASR engine with word-level timing. 'reference' uses\n          the selected ASR engine without word-level timing.\n    refine: Opt-in local-LLM cleanup of the final text (disfluencies,\n          self-corrections, punctuation) \u2014 same pipeline the live\n          dictation socket uses. Off by default so MCP/CLI callers don't\n          pay LLM latency unless they ask; honours the user's\n          Settings \u2192 Dictation-refinement config and silently passes\n          through when no LLM backend is configured. The raw ``text``\n          is always returned; ``refined_text`` is added only when the\n          LLM actually changed something.\n    dictation: Opt-in flag for hotkey-dictation callers. When true, the\n          saved vocabulary hint is passed to engines that accept a\n          prompt. Off by default (file transcription, MCP/CLI stay\n          unbiased) and ignored in 'reference' mode.\n\n    diarize: Opt-in speaker identification ('accurate' mode only, which\n          is the mode with segment timings). Each segment gains a\n          ``speaker`` label and the response a ``speakers`` list. If the\n          diarization model is missing or fails, the transcript is still\n          returned with a ``diarization_error`` code and no labels.\n    num_speakers: Optional exact speaker count hint for diarization.\n\nReturns:\n    {\n        \"text\": \"full transcription\",\n        \"refined_text\": \"cleaned text\",   # only when refine=true changed it\n        \"segments\": [ {\"start\": 0.0, \"end\": 1.5, \"text\": \"...\"}, ... ],\n        \"language\": \"en\",\n        \"duration_s\": 4.2,\n        \"transcription_time_s\": 0.8,\n        \"engine\": \"mlx-whisper\"\n    }",
     "operationId": "transcribe_audio_transcribe_post",
     "requestBody": {
      "content": {

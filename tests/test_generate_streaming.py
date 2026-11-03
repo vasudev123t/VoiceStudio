@@ -495,3 +495,28 @@ def test_classic_generate_unaffected_by_stream_default(client, monkeypatch,
     assert res.status_code == 200, res.text
     assert res.headers.get("content-type") == "audio/wav"
     assert res.headers.get("x-audio-id")
+
+
+def test_stream_sends_blank_keepalives_during_slow_render(
+    client, monkeypatch, no_omnivoice_model,
+):
+    from core import stream_keepalive
+
+    fake = _make_deterministic_engine(delay_s=0.08)
+    monkeypatch.setitem(_tts_mod()._REGISTRY, "stream-fake", fake)
+    monkeypatch.setattr(stream_keepalive, "SILENCE_INTERVAL_SECONDS", 0.01)
+
+    with client.stream(
+        "POST",
+        "/generate",
+        data={"text": "A short sentence.", "engine": "stream-fake", "stream": "true"},
+    ) as response:
+        assert response.status_code == 200, response.read()
+        body = response.read()
+
+    assert response.headers["x-accel-buffering"] == "no"
+    assert "no-transform" in response.headers["cache-control"]
+    lines = body.split(b"\n")
+    assert b"" in lines[:-1]
+    events = [json.loads(line) for line in lines if line.strip()]
+    assert [event["type"] for event in events] == ["start", "chunk", "done"]

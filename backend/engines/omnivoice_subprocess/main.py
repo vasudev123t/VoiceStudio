@@ -157,7 +157,16 @@ def _skip_unused_heavy_imports():
     (image utils) whenever they are installed. Speech synthesis uses neither,
     and together they cost ~2 s of every cold start. They are blocked only for
     the omnivoice import, then unblocked, so later code can still import them.
+
+    transformers decides once per process whether each optional package is
+    installed and caches the answer. If it is already imported (the reference
+    ASR probe imports it before a clone without reference text), it may have
+    cached "installed" and would then import a blocked stub and fail every
+    later synthesis, so nothing is blocked in that case (#3551).
     """
+    if "transformers" in sys.modules:
+        yield
+        return
     blocked = [m for m in ("sklearn", "torchvision") if m not in sys.modules]
     for module in blocked:
         sys.modules[module] = None
@@ -280,21 +289,31 @@ def _handle_synthesize(msg: dict, stdout) -> None:
 
     ref_audio = msg.get("ref_audio") or None
     ref_text = msg.get("ref_text") or None
+    # Outcome of the transcription below when it ran and found nothing, so the
+    # cached-prompt path does not run the same recognizers a second time.
+    reference_asr = None
     if isinstance(ref_audio, str) and not (ref_text or "").strip():
         # Keep native ASR inside the same killable process and synthesize
         # deadline as TTS, rather than holding the API's GPU worker forever.
         _ensure_backend_on_path()
         from omnivoice.utils.audio import CLONE_REF_TEXT_MAX_SECONDS
-        from services.tts_backend import reference_duration_s
+        from services.tts_backend import (
+            has_unresolved_clone_prompt,
+            reference_duration_s,
+        )
 
         duration = reference_duration_s(ref_audio)
-        if duration is None or duration <= CLONE_REF_TEXT_MAX_SECONDS:
+        if (duration is None or duration <= CLONE_REF_TEXT_MAX_SECONDS) and not (
+            has_unresolved_clone_prompt(ref_audio, msg.get("preprocess_prompt", True))
+        ):
             from services.asr_backend import transcribe_reference
 
             ref_text = None
             try:
                 ref_text = transcribe_reference(ref_audio, release_after=True)
+                reference_asr = None if ref_text else "empty"
             except Exception:  # noqa: BLE001 — preserve installed-only model fallback
+                reference_asr = "failed"
                 logging.getLogger(__name__).warning("reference transcript resolution failed")
 
     model = _load_model(stdout)
@@ -306,9 +325,25 @@ def _handle_synthesize(msg: dict, stdout) -> None:
 
         torch.manual_seed(int(seed))
 
-    audios = model.generate(
-        text=text, ref_audio=ref_audio, ref_text=ref_text, **gen_kw
-    )
+    # One reference encode per sidecar lifetime, not per request: a long
+    # reference otherwise reloads the passage-selection Whisper on every
+    # line, and on 8 GB Macs that phase alone can outlast the recv deadline.
+    # Any reference still without a transcript takes this path, whatever its
+    # length: when resolution found no words, plain generate() would load the
+    # model's own ASR and (now) release it again on every line.
+    untranscribed = isinstance(ref_audio, str) and not (ref_text or "").strip()
+    if untranscribed:
+        _ensure_backend_on_path()
+        from services.tts_backend import generate_with_cached_ref  # noqa: PLC0415
+
+        audios = generate_with_cached_ref(
+            model, text=text, ref_audio=ref_audio, ref_text=None,
+            release_reference_asr=True, reference_asr=reference_asr, **gen_kw,
+        )
+    else:
+        audios = model.generate(
+            text=text, ref_audio=ref_audio, ref_text=ref_text, **gen_kw
+        )
     audio = audios[0] if isinstance(audios, (list, tuple)) else audios
     sample_rate = int(getattr(model, "sampling_rate", OMNIVOICE_SAMPLE_RATE))
 

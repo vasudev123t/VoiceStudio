@@ -22,12 +22,11 @@ import time
 
 import pytest
 
-sys.path.insert(
-    0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "backend")
-)
+_BACKEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "backend")
+sys.path.insert(0, os.path.normpath(_BACKEND_DIR))
 
 
-@pytest.fixture()
+@pytest.fixture
 def main(monkeypatch, tmp_path):
     monkeypatch.setenv("OMNIVOICE_DATA_DIR", str(tmp_path))
     module = importlib.import_module("main")

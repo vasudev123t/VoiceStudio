@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import uuid
@@ -31,12 +32,16 @@ from services.model_manager import (
 from services.generation_audio import save_generation_wav
 # Compatibility export used by archetype previews and the gallery renderer.
 from services.audio_io import _safe_torchaudio_save
+from services.reference_transcript import (
+    is_legacy_cut_transcript,
+    strip_script_markup,
+    take_reference_transcript,
+)
 from services.binary_preflight import InvalidBinaryError
 from services.model_acceptance import ModelLicenceNotAccepted
 from core import event_bus
 from core.render_trace import call as trace_call
 from core.logging_utils import log_safe
-from omnivoice.utils.voice_design import heal_design_instruct
 from core.browser_guard import reject_cross_site_get
 
 router = APIRouter()
@@ -224,69 +229,63 @@ async def _run_with_reference_lease(lease, factory):
             release()
 
 
-_DESIGN_DESCRIPTION_MAX = 2000  # the Voice Design description field's maxLength
+_DESIGN_DESCRIPTION_MAX = 2000  # mirrors maxLength of the description box in the UI
 _DESIGN_DETAIL_MAX = 64
+_DESIGN_RAW_MAX = 4 * _DESIGN_DESCRIPTION_MAX  # JSON overhead allowance for the whole field
 
 
-def _design_recipe_json(raw: Optional[str]) -> Optional[str]:
-    """Validated Voice Design draft to store with a take, or None (#2389).
+def _design_picks_ok(picks: object) -> bool:
+    """True when ``picks`` maps known detail categories to short strings."""
+    from core.describe_voice import CATEGORY_ORDER
 
-    ``design_recipe`` is display metadata from the Design page: the description
-    as written and the user's explicit picks. It never affects synthesis, so a
-    malformed or oversized value is dropped instead of failing the take. Only
-    known categories and bounded strings survive, and the stored JSON is
-    re-serialized from the parsed value — the raw form field is never
-    persisted. The details the description maps to are derived here with the
-    same mapper as ``/design/describe``, so they always match the description
-    this take was rendered from, even when the page's own mapping had not
-    landed yet.
-    """
-    if not raw or len(raw) > 4 * _DESIGN_DESCRIPTION_MAX:
-        return None
-    import json
-
-    from core.describe_voice import CATEGORY_ORDER, parse_description
-
-    try:
-        value = json.loads(raw)
-    except ValueError:
-        return None
-    if not isinstance(value, dict):
-        return None
-    description = value.get("description")
-    if not isinstance(description, str) or len(description) > _DESIGN_DESCRIPTION_MAX:
-        return None
-
-    picks = value.get("picks")
     if not isinstance(picks, dict):
-        return None
-    for category, detail in picks.items():
-        if (
-            category not in CATEGORY_ORDER
-            or not isinstance(detail, str)
-            or len(detail) > _DESIGN_DETAIL_MAX
-        ):
-            return None
-    mapped = parse_description(description)["attrs"]
-    return json.dumps(
-        {"description": description, "picks": picks, "mapped": mapped},
-        ensure_ascii=False,
+        return False
+    return all(
+        key in CATEGORY_ORDER and isinstance(val, str) and len(val) <= _DESIGN_DETAIL_MAX
+        for key, val in picks.items()
     )
 
 
-def _profile_instruct(row):
-    """Validator-safe instruct for a stored profile row.
+def _design_recipe_json(raw: Optional[str]) -> Optional[str]:
+    """Turn the untrusted ``design_recipe`` form value into the text kept in history.
 
-    Sanitizes the persisted instruct (dropping the ``"[object Object]"``
-    sentinel / freeform prose that older builds saved) and, for a design row,
-    rebuilds the tags from ``vd_states`` when the stored value is unusable — so
-    a poisoned/legacy profile never 400-s generation (#550 #571 #594 #596).
+    Only the description and the picks are taken from the client, after strict
+    checks. The ``mapped`` section is always recomputed here with the mapper
+    behind ``POST /design/describe``, and the result is serialised afresh, so
+    nothing but validated values is stored. Any problem yields None; this
+    function does not raise, because a bad recipe must never fail a take.
     """
+    if not raw or len(raw) > _DESIGN_RAW_MAX:
+        return None
     try:
-        vd = row["vd_states"]
-    except (KeyError, IndexError):
-        vd = None
-    return heal_design_instruct(row["instruct"], vd)
+        doc = json.loads(raw)
+        if not isinstance(doc, dict):
+            return None
+        description, picks = doc.get("description"), doc.get("picks")
+        if not isinstance(description, str) or len(description) > _DESIGN_DESCRIPTION_MAX:
+            return None
+        if not _design_picks_ok(picks):
+            return None
+        from core.describe_voice import parse_description
+
+        record = {
+            "description": description,
+            "picks": dict(picks),
+            "mapped": parse_description(description)["attrs"],
+        }
+        return json.dumps(record, ensure_ascii=False)
+    except Exception:  # noqa: BLE001 - metadata only; never block the take
+        return None
+
+
+def _profile_instruct(row, engine_id=None):
+    """Engine-appropriate stored instruction (legacy tags or native recipe).
+
+    Legacy records retain the OmniVoice sanitizer. Only profiles that
+    explicitly saved a validated recipe may supply free-form descriptions.
+    """
+    from services.voice_design_profiles import profile_instruct
+    return profile_instruct(row, engine_id)
 
 
 def _design_instruct_key(value):
@@ -303,7 +302,7 @@ def _design_instruct_key(value):
     )
 
 
-def _design_request_diverges(row, *, instruct=None, seed=None):
+def _design_request_diverges(row, *, instruct=None, seed=None, engine_id=None):
     """True when a request edits a design profile instead of re-rendering it.
 
     A design profile's rendered sample *is* the voice it was saved with. A
@@ -319,6 +318,7 @@ def _design_request_diverges(row, *, instruct=None, seed=None):
         stored = {
             _design_instruct_key(row["instruct"]),
             _design_instruct_key(_profile_instruct(row)),
+            _design_instruct_key(_profile_instruct(row, engine_id)),
         }
         if requested not in stored:
             return True
@@ -363,7 +363,10 @@ def _conditioning_refusal(backend_cls, *, profile_id=None, has_ref_audio=False,
                 "SELECT * FROM voice_profiles WHERE id=?", (profile_id,)
             ).fetchone()
         if row is not None:
-            cond = _resolve_profile_conditioning(row, instruct=instruct, seed=seed)
+            cond = _resolve_profile_conditioning(
+                row, instruct=instruct, seed=seed,
+                engine_id=getattr(backend_cls, "id", None),
+            )
             reference = bool(cond["ref_audio_path"])
             designing = designing or cond["kind"] == "design"
     name = getattr(backend_cls, "display_name", None) or getattr(backend_cls, "id", "This engine")
@@ -386,7 +389,7 @@ def _conditioning_refusal(backend_cls, *, profile_id=None, has_ref_audio=False,
 
 
 def _resolve_profile_conditioning(row, *, ref_text=None, instruct=None,
-                                  seed=None, language=None):
+                                  seed=None, language=None, engine_id=None):
     """Resolve a ``voice_profiles`` row into generation conditioning.
 
     Extracted verbatim from /generate's inline profile-resolution block so
@@ -403,7 +406,9 @@ def _resolve_profile_conditioning(row, *, ref_text=None, instruct=None,
     out = {
         "ref_audio_path": None, "ref_text": ref_text, "instruct": instruct,
         "seed": seed, "language": language, "kind": None,
-        "persist_ref_text": False, "language_from_profile": False,
+        "persist_ref_text": False,
+        # True only when `language` was taken from the profile row, not the request.
+        "language_from_profile": False,
         # True when the request edits a design profile rather than
         # re-rendering it: its saved sample no longer describes the voice.
         "diverged": False,
@@ -420,14 +425,20 @@ def _resolve_profile_conditioning(row, *, ref_text=None, instruct=None,
             row["instruct"] and not row["is_locked"] and not row["ref_audio_path"]
         ) else "clone"
     out["kind"] = profile_kind
+    # A locked design voice is pinned to its take, and the lock keeps the
+    # design's own seed (#3265): only a new instruct moves it off the take.
+    # Judging the seed too would treat a request repeating the take's seed
+    # as an edit and silently skip the locked take.
+    locked_take = bool(row["is_locked"] and row["locked_audio_path"])
     if profile_kind == "design" and _design_request_diverges(
-        row, instruct=instruct, seed=seed,
+        row, instruct=instruct, seed=None if locked_take else seed,
+        engine_id=engine_id,
     ):
         # Design from the request's attributes and seed; only the gaps it
         # left (an omitted instruct or seed) come from the profile.
         out["diverged"] = True
         if not out["instruct"]:
-            out["instruct"] = _profile_instruct(row)
+            out["instruct"] = _profile_instruct(row, engine_id)
         if out["seed"] is None and row["seed"] is not None:
             out["seed"] = row["seed"]
     elif row["is_locked"] and row["locked_audio_path"]:
@@ -435,7 +446,7 @@ def _resolve_profile_conditioning(row, *, ref_text=None, instruct=None,
         if not out["ref_text"]:
             out["ref_text"] = row["ref_text"]
         if not out["instruct"]:
-            out["instruct"] = _profile_instruct(row)
+            out["instruct"] = _profile_instruct(row, engine_id)
         if out["seed"] is None and row["seed"] is not None:
             out["seed"] = row["seed"]
     elif profile_kind == "design":
@@ -445,14 +456,14 @@ def _resolve_profile_conditioning(row, *, ref_text=None, instruct=None,
         if out["ref_audio_path"] and not out["ref_text"] and row["ref_text"]:
             out["ref_text"] = row["ref_text"]
         if not out["instruct"]:
-            out["instruct"] = _profile_instruct(row)
+            out["instruct"] = _profile_instruct(row, engine_id)
         if out["seed"] is None and row["seed"] is not None:
             out["seed"] = row["seed"]
     elif row["instruct"] and not row["is_locked"] and not row["ref_audio_path"]:
         # Legacy design-shaped row (pre-0004 archetype materialization failure
         # path): instruct-only conditioning.
         if not out["instruct"]:
-            out["instruct"] = _profile_instruct(row)
+            out["instruct"] = _profile_instruct(row, engine_id)
         if out["seed"] is None and row["seed"] is not None:
             out["seed"] = row["seed"]
     else:
@@ -464,6 +475,7 @@ def _resolve_profile_conditioning(row, *, ref_text=None, instruct=None,
             # cache its result onto the profile so it runs ONCE, not on every
             # generate (#1032 perf regression).
             out["persist_ref_text"] = True
+            out["ref_audio_file"] = row["ref_audio_path"]
         if not out["instruct"] and row["instruct"]:
             out["instruct"] = row["instruct"]
         if out["seed"] is None and row["seed"] is not None:
@@ -484,12 +496,22 @@ def _resolve_profile_conditioning(row, *, ref_text=None, instruct=None,
             prof_lang = None
         if prof_lang and prof_lang != "Auto":
             out["language"] = prof_lang
-            # #2156: record that the caller never asked for this language. The
-            # Older clients omit `language` while their picker reads "Auto", so a
-            # profile-filled language must not be reported back as if the user
-            # had picked it — an engine that can't speak it would otherwise
-            # tell them to "leave language as Auto", which is what they did.
             out["language_from_profile"] = True
+    stored_ref_text = row["ref_text"]
+    if out["ref_text"] and out["ref_text"] == stored_ref_text and is_legacy_cut_transcript(row):
+        # #3062: a voice saved or locked from a take before the fix carries a
+        # cut prefix of the take's text; transcribe the clip instead. The
+        # request may echo the stored value, so both are checked.
+        out["ref_text"] = None
+        if out["ref_audio_path"] and not locked_take and profile_kind != "design":
+            # Replace the cut prefix with the transcript once (#1032). Locked
+            # transcripts are never persisted (unlock must not keep them).
+            out["persist_ref_text"] = True
+            out["replace_ref_text"] = stored_ref_text
+            out["ref_audio_file"] = row["ref_audio_path"]
+    elif out["ref_text"]:
+        # A stored transcript may hold script markup the take never spoke (#3062).
+        out["ref_text"] = strip_script_markup(out["ref_text"]) or None
     return out
 
 
@@ -523,23 +545,85 @@ def _nonverbal_plan(text):
         return None
 
 
-def _render_with_pauses(gen_span, segments, sample_rate):
+def _trim_output_edges(audio_out, sample_rate):
+    """Strip the engine's own lead-in/tail silence from a finished take.
+
+    Engines pad every render with near-silence at both ends, so a plain
+    Generate used to start and end with an audible blank. Same helper and
+    floor as the dub path (50 ms of context kept; internal pauses and dead
+    renders untouched). Non-tensor output passes through unchanged.
+    """
+    import torch
+    from services.audio_dsp import trim_speech_padding
+
+    if not torch.is_tensor(audio_out):
+        return audio_out
+    return trim_speech_padding(audio_out, sample_rate)
+
+
+def _wants_edge_trim(effect_preset, duration=None):
+    """Edge trim applies unless the user asked for raw model output or an
+    explicit target duration (trimming would shorten what they asked for)."""
+    return (effect_preset or "broadcast") != "raw" and not duration
+
+
+def _render_with_pauses(gen_span, segments, sample_rate, *, trim_spans=False,
+                        max_chunk_chars=0, crossfade_ms=0, dropped_sink=None,
+                        pause_fill=None):
     """Synthesize ``[(text, pause_ms), ...]`` spans and stitch silence between
     them (issue #276).
+
+    ``trim_spans`` strips each span's engine padding first, so a requested
+    pause is the pause the user hears, not pause + the engine's own silence.
 
     ``gen_span(text) -> torch.Tensor`` synthesizes one text span (raw model
     output). A silence buffer of ``pause_ms`` is inserted after a span when
     requested, matching the audio tensor's channel dims / dtype / device.
     Returns the concatenated waveform. Kept model-free (``gen_span`` is injected)
     so the stitching is unit-testable without loading the TTS model.
+
+    A span longer than ``max_chunk_chars`` is split with the same sentence
+    splitter as marker-free text and its chunks crossfaded, exactly like the
+    no-pause path: a pause marker does not make the text around it short, and
+    a 1,000+ char span sent in one shot degrades the same way unchunked text
+    does. Each chunk of a split span is rendered with
+    ``gen_span(chunk, chunk_index=k)`` where ``k`` counts engine calls across
+    the whole input, so callers can derive a per-chunk seed. A span that fits
+    keeps the plain ``gen_span(text)`` call. ``max_chunk_chars <= 0`` disables
+    splitting.
+
+    ``pause_fill`` is ``"silence"`` or ``"room_tone"`` (#3611); None uses the
+    Settings choice (``services.audio_dsp.pause_fill_mode``).
     """
     import torch
 
+    from services.chunked_tts import concatenate_audio_chunks, split_text_into_chunks
+
     items = []  # ('a', tensor) for audio, ('s', n_samples) for silence
+    calls = 0  # engine calls so far — the chunk index handed to gen_span
     for span_text, pause_ms in segments:
         if span_text and span_text.strip():
-            items.append(("a", gen_span(span_text)))
-            _note_generate_progress()
+            chunks = split_text_into_chunks(span_text, max_chunk_chars) if max_chunk_chars > 0 else [span_text]
+            if len(chunks) > 1:
+                parts = []
+                for chunk_text in chunks:
+                    parts.append(gen_span(chunk_text, chunk_index=calls))
+                    calls += 1
+                    _note_generate_progress()
+                audio = concatenate_audio_chunks(
+                    parts, sample_rate, crossfade_ms, texts=chunks, sink=dropped_sink)
+                if all(part is None or part.shape[-1] == 0 for part in parts):
+                    # Every chunk came back empty (already reported above): leave
+                    # the span out so its 1-D fallback cannot break the final join.
+                    audio = None
+            else:
+                audio = gen_span(span_text)
+                calls += 1
+                _note_generate_progress()
+            if audio is not None:
+                if trim_spans:
+                    audio = _trim_output_edges(audio, sample_rate)
+                items.append(("a", audio))
         if pause_ms > 0:
             n = int(round(sample_rate * pause_ms / 1000.0))
             if n > 0:
@@ -552,15 +636,10 @@ def _render_with_pauses(gen_span, segments, sample_rate):
         total = sum(n for kind, n in items if kind == "s") or 1
         return torch.zeros(total, dtype=torch.float32)
 
-    parts = []
-    for kind, val in items:
-        if kind == "a":
-            parts.append(val)
-        else:
-            shape = list(ref.shape)
-            shape[-1] = val
-            parts.append(torch.zeros(*shape, dtype=ref.dtype, device=ref.device))
-    return torch.cat(parts, dim=-1)
+    from services.audio_dsp import fill_gaps
+
+    # Digital silence or room tone, per Settings (#3611).
+    return torch.cat(fill_gaps(items, sample_rate, pause_fill), dim=-1)
 
 
 def _sanitize_audio(audio_out):
@@ -584,9 +663,13 @@ def _sanitize_audio(audio_out):
 
 
 @_render_timed('effects')
-def _apply_effect_chain(audio_out, sample_rate, effect_preset, *, skip_mastering=False):
-    """Shared post-DSP for /generate: preset validation → mastering →
-    effect chain → loudness normalization.
+def _apply_effect_chain(audio_out, sample_rate, effect_preset, *, skip_mastering=False,
+                        trim_edges=False):
+    """Shared post-DSP for /generate: preset validation → edge trim →
+    mastering → effect chain → loudness normalization.
+
+    ``trim_edges`` is for a finished whole take only: streamed preview chunks
+    leave it off so they keep the same timing as the assembled take.
 
     ``skip_mastering`` honors a backend's ``applies_own_mastering`` flag
     (issue #312): studio engines (e.g. VoxCPM2's native 48 kHz output)
@@ -617,6 +700,9 @@ def _apply_effect_chain(audio_out, sample_rate, effect_preset, *, skip_mastering
     if preset == "raw":
         # Raw: skip all DSP — return raw model output
         return audio_out
+
+    if trim_edges:
+        audio_out = _trim_output_edges(audio_out, sample_rate)
 
     if not skip_mastering:
         audio_out = apply_mastering(audio_out, sample_rate=sample_rate)
@@ -742,6 +828,7 @@ _OOM_MSG_SIGNATURES = (
     "cublas_status_alloc_failed",  # cuBLAS workspace allocation
     "cuda_error_out_of_memory",    # raw CUDA driver error name
     "paging file is too small",    # Windows [WinError 1455] mapping DLLs
+    "out_of_device_memory",        # Intel XPU: UR_RESULT_ERROR_OUT_OF_DEVICE_MEMORY
 )
 
 
@@ -1098,6 +1185,11 @@ def _oom_friendly_reraise(e):
             + f" Underlying error: {_safe_exc_text(e)}"
         ) from e
     if _is_oom_failure(e):
+        # The flush at the top ran while this traceback still pinned the
+        # failed generation's activations; release them so the NEXT request
+        # has room instead of failing the same way until a restart.
+        from services.model_manager import release_after_oom
+        release_after_oom(e)
         raise RuntimeError(
             f"TTS engine stopped mid-generation. This usually means it ran out of memory. "
             f"Try the Flush button to reload the model, then regenerate. Underlying error: {e}"
@@ -1181,33 +1273,41 @@ def _run_inference(
         has_pause = len(segments) > 1 or (segments and segments[0][1] > 0)
         nv_pieces = _nonverbal_plan(text)
 
+        from services.chunked_tts import (
+            DEFAULT_CROSSFADE_MS, DEFAULT_MAX_CHUNK_CHARS,
+            concatenate_audio_chunks, split_text_into_chunks,
+        )
+        _max_chars = DEFAULT_MAX_CHUNK_CHARS if max_chunk_chars is None else max_chunk_chars
+        _xfade_ms = DEFAULT_CROSSFADE_MS if crossfade_ms is None else crossfade_ms
+
         if nv_pieces:
             # Review item 7: real laughs/breaths from the active nonverbal
             # library are spliced at their tags; text between them renders
-            # through the normal [pause]-aware path.
+            # through the normal [pause]-aware (and long-text chunked) path.
             from services import nonverbal_library as _nvl
 
             def _gen_piece(piece):
-                return _render_with_pauses(lambda s: _gen(s, None)[0],
-                                           parse_pause_markers(piece), sr)
+                return _render_with_pauses(
+                    lambda s: _gen(s, None)[0], parse_pause_markers(piece), sr,
+                    trim_spans=_wants_edge_trim(effect_preset),
+                    max_chunk_chars=_max_chars, crossfade_ms=_xfade_ms, dropped_sink=dropped_sink)
             audio_out = _nvl.render(_gen_piece, nv_pieces, sr, key=text)
         elif has_pause:
-            def _gen_span(span_text):
+            def _gen_span(span_text, chunk_index=None):
                 # Per-span duration is left to the model; an explicit overall
-                # `duration` can't be meaningfully split across spans.
+                # `duration` can't be meaningfully split across spans. Chunks
+                # of a long span get the no-pause path's per-chunk seed.
+                if chunk_index is not None and used_seed is not None:
+                    torch.manual_seed(used_seed + chunk_index)
                 return _gen(span_text, None)[0]
-            audio_out = _render_with_pauses(_gen_span, segments, sr)
+            audio_out = _render_with_pauses(
+                _gen_span, segments, sr, trim_spans=_wants_edge_trim(effect_preset),
+                max_chunk_chars=_max_chars, crossfade_ms=_xfade_ms, dropped_sink=dropped_sink)
         else:
             # Wave 1.2: long text is split at sentence boundaries and the
             # per-chunk audio crossfaded — removes the length ceiling. Short
             # text takes the single-shot path below unchanged. [pause] inputs
-            # keep the dedicated stitcher above (spans are already short).
-            from services.chunked_tts import (
-                DEFAULT_CROSSFADE_MS, DEFAULT_MAX_CHUNK_CHARS,
-                concatenate_audio_chunks, split_text_into_chunks,
-            )
-            _max_chars = DEFAULT_MAX_CHUNK_CHARS if max_chunk_chars is None else max_chunk_chars
-            _xfade_ms = DEFAULT_CROSSFADE_MS if crossfade_ms is None else crossfade_ms
+            # use the stitcher above, which chunks each long span the same way.
             text_chunks = split_text_into_chunks(text, _max_chars)
             if len(text_chunks) > 1:
                 parts = []
@@ -1226,13 +1326,26 @@ def _run_inference(
 
         # Apply DSP effect preset. The VoiceStudio model never masters its own
         # output, so mastering always runs here (unchanged behavior).
-        return _apply_effect_chain(audio_out, sr, effect_preset)
+        # Pause renders were trimmed per span above; trimming the whole take
+        # would also eat a deliberate leading/trailing [pause].
+        return _apply_effect_chain(
+            audio_out, sr, effect_preset,
+            trim_edges=not has_pause and _wants_edge_trim(effect_preset, duration),
+        )
 
     except ValueError as e:
         # Don't wrap validation errors in OOM message
         raise e
     except Exception as e:
         _oom_friendly_reraise(e)
+
+
+def _backend_supports_seed(backend) -> bool:
+    """Whether this adapter accepts per-request seed controls."""
+    return bool(
+        getattr(backend, "supports_native_omnivoice_controls", False)
+        or getattr(backend, "supports_generation_seed", False)
+    )
 
 
 def _run_backend_inference(
@@ -1242,6 +1355,7 @@ def _run_backend_inference(
     max_chunk_chars=None, crossfade_ms=None, *, t_shift=None,
     layer_penalty_factor=None, position_temperature=None,
     class_temperature=None, dropped_sink=None, preset_voice=None,
+    emotion_kwargs=None,
 ):
     """Engine-aware twin of :func:`_run_inference` (issue #312).
 
@@ -1266,10 +1380,12 @@ def _run_backend_inference(
         )
         if preset_voice:
             gen_kwargs["voice"] = preset_voice
+        if emotion_kwargs and getattr(backend, "supports_emotion", False):
+            gen_kwargs.update(emotion_kwargs)
         native_proxy = bool(
             getattr(backend, "supports_native_omnivoice_controls", False)
         )
-        forwards_seed = native_proxy or getattr(backend, "supports_generation_seed", False)
+        forwards_seed = _backend_supports_seed(backend)
         if native_proxy:
             gen_kwargs.update({
                 key: value for key, value in {
@@ -1288,35 +1404,45 @@ def _run_backend_inference(
         has_pause = len(segments) > 1 or (segments and segments[0][1] > 0)
         nv_pieces = _nonverbal_plan(text)
 
+        from services.chunked_tts import (
+            DEFAULT_CROSSFADE_MS, DEFAULT_MAX_CHUNK_CHARS,
+            concatenate_audio_chunks, split_text_into_chunks,
+        )
+        _max_chars = DEFAULT_MAX_CHUNK_CHARS if max_chunk_chars is None else max_chunk_chars
+        _xfade_ms = DEFAULT_CROSSFADE_MS if crossfade_ms is None else crossfade_ms
+
         if has_pause or nv_pieces:
             first_span = True
 
-            def _gen_span(span_text):
+            def _gen_span(span_text, chunk_index=None):
                 nonlocal first_span
                 # Per-span duration is left to the engine; an explicit overall
-                # `duration` can't be meaningfully split across spans.
+                # `duration` can't be meaningfully split across spans. Chunks
+                # of a long span get the no-pause path's per-chunk seed.
                 span_kwargs = dict(gen_kwargs)
-                if forwards_seed and first_span and used_seed is not None:
+                if chunk_index is not None and used_seed is not None:
+                    torch.manual_seed(used_seed + chunk_index)
+                    if forwards_seed:
+                        span_kwargs["seed"] = used_seed + chunk_index
+                elif forwards_seed and first_span and used_seed is not None:
                     span_kwargs["seed"] = used_seed
                 first_span = False
                 return trace_call("synthesis", backend.generate, span_text, duration=None, **span_kwargs)
+            _span_render_kw = dict(
+                trim_spans=_wants_edge_trim(effect_preset),
+                max_chunk_chars=_max_chars, crossfade_ms=_xfade_ms, dropped_sink=dropped_sink)
             if nv_pieces:
                 from services import nonverbal_library as _nvl
 
                 audio_out = _nvl.render(
-                    lambda piece: _render_with_pauses(_gen_span, parse_pause_markers(piece), sr),
+                    lambda piece: _render_with_pauses(
+                        _gen_span, parse_pause_markers(piece), sr, **_span_render_kw),
                     nv_pieces, sr, key=text)
             else:
-                audio_out = _render_with_pauses(_gen_span, segments, sr)
+                audio_out = _render_with_pauses(_gen_span, segments, sr, **_span_render_kw)
         else:
             # Wave 1.2: sentence-boundary chunking for long text (see
             # _run_inference for the rationale; behavior is identical here).
-            from services.chunked_tts import (
-                DEFAULT_CROSSFADE_MS, DEFAULT_MAX_CHUNK_CHARS,
-                concatenate_audio_chunks, split_text_into_chunks,
-            )
-            _max_chars = DEFAULT_MAX_CHUNK_CHARS if max_chunk_chars is None else max_chunk_chars
-            _xfade_ms = DEFAULT_CROSSFADE_MS if crossfade_ms is None else crossfade_ms
             text_chunks = split_text_into_chunks(text, _max_chars)
             if len(text_chunks) > 1:
                 parts = []
@@ -1341,6 +1467,7 @@ def _run_backend_inference(
         return _apply_effect_chain(
             audio_out, sr, effect_preset,
             skip_mastering=getattr(backend, "applies_own_mastering", False),
+            trim_edges=not has_pause and _wants_edge_trim(effect_preset, duration),
         )
 
     except ValueError as e:
@@ -1370,14 +1497,9 @@ _LANGUAGE_REJECTION_SIGNATURES = (
     "unsupported language code",
 )
 
-# Engine-specific rejections that ALREADY name the engine and what it supports,
-# so #1257's generic rewrite deliberately leaves them alone — re-wrapping them
-# only nests "Engine's own message:" twice. They still have to be recognised as
-# language rejections for #2156's provenance check, which cares about the
-# *cause* of the language, not the quality of the wording.
+# Messages that already name the engine and list what it does support; wrapping
+# them with generic advice would only repeat the same thing twice.
 _SELF_DESCRIBING_LANGUAGE_REJECTIONS = (
-    # services/tts_backend.py: "…doesn't support language='Persian'. Kokoro
-    # supports: …" — mlx-audio's Kokoro, the engine reported in #2156.
     "doesn't support language",
     "does not support language",
 )
@@ -1391,40 +1513,37 @@ _LANGUAGE_REJECTION_RE = re.compile(
 )
 
 
-def _is_language_rejection(text: str) -> bool:
-    """True when an engine failure is about the LANGUAGE it was handed.
+def _classify_language_failure(message: str) -> str:
+    """Sort an engine failure message: "self_describing", "generic" or "other"."""
+    folded = message.casefold()
+    for needle in _SELF_DESCRIBING_LANGUAGE_REJECTIONS:
+        if needle in folded:
+            return "self_describing"
+    for needle in _LANGUAGE_REJECTION_SIGNATURES:
+        if needle in folded:
+            return "generic"
+    return "generic" if _LANGUAGE_REJECTION_RE.search(message) else "other"
 
-    Matched on the message, not the type: the engines multiplex third-party
-    libraries that each raise their own class. Covers the self-describing
-    wordings too — #1257's rewrite skips those, but #2156 still needs to know a
-    language was refused so it can say where that language came from.
-    """
-    low = text.lower()
-    return (
-        any(sig in low for sig in _LANGUAGE_REJECTION_SIGNATURES)
-        or any(sig in low for sig in _SELF_DESCRIBING_LANGUAGE_REJECTIONS)
-        or bool(_LANGUAGE_REJECTION_RE.search(text))
-    )
+
+def _is_language_rejection(text: str) -> bool:
+    """True when an engine failure message is about the language it was handed."""
+    return _classify_language_failure(text) != "other"
 
 
 def _profile_language_rejection_detail(exc: BaseException, language) -> str:
-    """The 400 body for a language the *voice profile* supplied, not the user.
-
-    #2156: the UI omits `language` while its picker reads "Auto", and #533
-    fills that gap from the selected profile. When the active engine can't
-    speak the profile's language the engine's own message tells the user to
-    "leave language as 'Auto'" — which is exactly what they did, so the advice
-    cannot be acted on. Name the real source and the remedies that exist.
-    """
-    return (
-        f"This voice profile is saved with the language '{language}', and the "
-        f"active engine can't speak it. The language picker being on \"Auto\" "
-        f"does not override that — Auto fills the language in from the "
-        f"profile. Set this voice profile's language to one the engine "
-        f"supports, pick a supported language explicitly for this render, or "
-        f"switch engine in Model Catalogue (the VoiceStudio engine has the "
-        f"widest coverage). Engine's own message: {exc}"
-    )
+    """Message for a refusal of a language that came from the voice profile."""
+    parts = [
+        f"This voice profile is saved with the language '{language}', which "
+        "the active engine refuses.",
+        "Leaving the picker on Auto does not override that, because Auto "
+        "falls back to the language stored on the profile.",
+        "Either edit the profile and give it a language the engine supports, "
+        "select a supported language yourself for this render, or "
+        "switch engine in Model Catalogue (the VoiceStudio engine has the "
+        "widest language coverage).",
+        f"Engine's own message: {exc}",
+    ]
+    return " ".join(parts)
 
 
 def _language_rejection_payload(exc, language, *, from_profile):
@@ -1440,63 +1559,48 @@ def _language_rejection_payload(exc, language, *, from_profile):
     return failure
 
 
-def _language_rejection_http_error(exc: BaseException, language, *, from_profile):
-    """The 400 a refused language deserves, wherever the refusal was raised.
-
-    A language an engine cannot speak is never retryable. This keeps the
-    profile-aware error construction in one place for classic and streaming
-    responses.
-    """
+def _language_rejection_http_error(exc, language, *, from_profile) -> HTTPException:
+    """Build (not raise) the 400 for a language refusal."""
     root = _root_language_error(exc)
-    detail = (
-        _profile_language_rejection_detail(root, language)
-        if from_profile else str(exc)
-    )
-    if from_profile:
-        detail = {"code": "profile_language_rejected", "language": language, "message": detail}
-    return HTTPException(status_code=400, detail=detail)
+    if not from_profile:
+        return HTTPException(status_code=400, detail=str(exc))
+    return HTTPException(status_code=400, detail={
+        "code": "profile_language_rejected",
+        "language": language,
+        "message": _profile_language_rejection_detail(root, language),
+    })
 
 
 def _language_rejection_or(e: BaseException, backend, language):
-    """``e`` rewritten with engine context when it's a language rejection.
-
-    Returns ``e`` unchanged otherwise, so this is safe to wrap any failure in.
-    Deliberately narrower than :func:`_is_language_rejection`: a message that
-    already names its engine and the languages it supports is left alone rather
-    than nested inside a second "Engine's own message:".
-    """
-    text = str(e)
-    low = text.lower()
-    if any(sig in low for sig in _SELF_DESCRIBING_LANGUAGE_REJECTIONS):
+    """Return `e`, or a ValueError carrying engine-aware advice (#1257)."""
+    if _classify_language_failure(str(e)) != "generic":
         return e
-    if not any(sig in low for sig in _LANGUAGE_REJECTION_SIGNATURES) and not (
-        _LANGUAGE_REJECTION_RE.search(text)
-    ):
-        return e
-    engine = getattr(backend, "display_name", None) or getattr(
-        type(backend), "id", type(backend).__name__
+    engine_name = next(
+        (n for n in (getattr(backend, "display_name", None),
+                     getattr(type(backend), "id", None)) if n),
+        type(backend).__name__,
     )
-    requested = f" '{language}'" if language else ""
-    rewritten = ValueError(
-        f"The {engine} engine can't speak{requested}. VoiceStudio offers every "
-        f"language its default engine supports, but each engine covers a "
-        f"different set — pick one this engine supports, or switch engine in "
-        f"Model Catalogue (the VoiceStudio engine has the widest coverage) "
-        f"and generate again. Engine's own message: {e}"
+    quoted = f" '{language}'" if language else ""
+    friendly = ValueError(
+        f"{engine_name} rejected the requested language{quoted}. Engines "
+        "each cover their own set of languages: choose one this engine "
+        "supports, or switch engine in Model Catalogue (the VoiceStudio "
+        "engine has the widest coverage), then regenerate. "
+        f"Engine's own message: {e}"
     )
-    # Keep the engine's own text reachable. #2156's profile message quotes the
-    # engine once; without this it would quote THIS wrapper, repeating both the
-    # engine-switch remedy and "Engine's own message:" twice.
-    rewritten.engine_language_error = e
-    return rewritten
+    friendly.engine_language_error = e
+    return friendly
 
 
 def _root_language_error(exc: BaseException) -> BaseException:
-    """The engine's own rejection, unwrapping :func:`_language_rejection_or`."""
+    """The engine's original error, unwrapping `_language_rejection_or`."""
     return getattr(exc, "engine_language_error", exc)
 
 
-def _persist_profile_ref_text(profile_id: str, ref_text: str) -> None:
+def _persist_profile_ref_text(
+    profile_id: str, ref_text: str, replace: Optional[str] = None,
+    ref_audio_file: Optional[str] = None,
+) -> None:
     """Cache an auto-transcribed reference transcript onto its profile row.
 
     #1032 perf regression: profiles saved without a transcript re-ran a FULL
@@ -1505,13 +1609,23 @@ def _persist_profile_ref_text(profile_id: str, ref_text: str) -> None:
     from the row like a user-entered one. The guarded UPDATE only ever fills
     an empty column — it can never overwrite a transcript the user typed or a
     lock wrote — and a failure is logged, never raised (best-effort, same
-    contract as the transcribe itself)."""
+    contract as the transcribe itself).
+
+    ``replace`` is a cut legacy transcript (#3062) the new one may overwrite;
+    it only matches while the row still holds exactly that value.
+
+    The transcript belongs to the clip that was transcribed, so the row must
+    still be unlocked and, given ``ref_audio_file``, still point at that clip:
+    a lock or an audio replace that lands mid-transcribe (a lock may leave the
+    transcript empty, #3062) must not receive the old clip's words."""
     try:
         with db_conn() as conn:
             updated = conn.execute(
                 "UPDATE voice_profiles SET ref_text=? "
-                "WHERE id=? AND (ref_text IS NULL OR ref_text='')",
-                (ref_text, profile_id),
+                "WHERE id=? AND (ref_text IS NULL OR ref_text='' OR ref_text=?) "
+                "AND COALESCE(is_locked, 0)=0 "
+                "AND (? IS NULL OR ref_audio_path=?)",
+                (ref_text, profile_id, replace or "", ref_audio_file, ref_audio_file),
             ).rowcount
         if updated:
             event_bus.emit("profiles", {"action": "updated", "id": profile_id})
@@ -1614,11 +1728,14 @@ async def _finalize_generation(
     if take_mode != "design":
         design_recipe = None
 
+    # The whole text, not a prefix: a take can become a voice whose reference
+    # transcript is this text, and a cut one ends in words the take never
+    # finishes, which OmniVoice then speaks at every chunk seam (#3062).
     def _write_history():
         with db_conn() as conn:
             conn.execute(
                 "INSERT INTO generation_history (id, text, mode, language, instruct, profile_id, audio_path, duration_seconds, generation_time, seed, design_recipe, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-                (audio_id, text[:200], take_mode,
+                (audio_id, text, take_mode,
                  language or "Auto", instruct or "", resolved_profile_id,
                  audio_filename, audio_dur, gen_time, used_seed, design_recipe, time.time())
             )
@@ -1675,12 +1792,9 @@ def _pcm16_b64(wav_tensor) -> str:
     wire format (same conversion as /ws/tts). N-D tensors take channel 0."""
     import base64
 
-    import torch
+    from services.audio_io import pcm16_mono
 
-    pcm = (wav_tensor * 32767).clamp(-32768, 32767).to(torch.int16)
-    while pcm.ndim > 1:
-        pcm = pcm[0]
-    return base64.b64encode(pcm.cpu().numpy().tobytes()).decode("ascii")
+    return base64.b64encode(pcm16_mono(wav_tensor).numpy().tobytes()).decode("ascii")
 
 
 def _apply_routing_headers(headers, engine_notice):
@@ -1742,6 +1856,44 @@ async def _apply_rvc_post_step(audio_tensor, sample_rate, post):
     return tensor, sr
 
 
+def _parse_emotion_vector(raw: Optional[str]) -> Optional[list[float]]:
+    """Validate IndexTTS2's eight-dimensional emotion vector at the API boundary.
+
+    The engine expects [happy, angry, sad, afraid, disgusted, melancholic,
+    surprised, calm], each 0..1. Validate before loading any models so a
+    malformed request does not occupy GPU memory.
+    """
+    if raw is None or not raw.strip():
+        return None
+    import json
+    import math
+
+    try:
+        value = json.loads(raw)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=422, detail="Emotion vector must be a JSON array of eight numbers."
+        ) from exc
+    if not isinstance(value, list) or len(value) != 8:
+        raise HTTPException(
+            status_code=422, detail="Emotion vector must contain exactly eight values."
+        )
+    if any(
+        isinstance(item, bool)
+        or not isinstance(item, (int, float))
+        # Compare integer bounds *before* converting to a float: a valid
+        # 400-digit JSON integer exceeds float's range and math.isfinite()
+        # would otherwise raise OverflowError (500 instead of HTTP 422).
+        or not 0 <= item <= 1
+        or not math.isfinite(item)
+        for item in value
+    ):
+        raise HTTPException(
+            status_code=422, detail="Each emotion vector value must be a number from 0 to 1."
+        )
+    return [float(item) for item in value]
+
+
 @router.post("/generate")
 async def generate_speech(
     text: str = Form(...),
@@ -1749,8 +1901,8 @@ async def generate_speech(
     ref_audio: Optional[UploadFile] = File(None),
     ref_text: Optional[str] = Form(None),
     instruct: Optional[str] = Form(None),
-    # #2389: the Voice Design draft behind this take (description, picks,
-    # mapped details) so reopening it rebuilds the same draft. Metadata only.
+    # Voice Design draft (JSON: description + picks) kept with a design take for
+    # reopening it later. Validated and re-derived server-side; never used to synthesise.
     design_recipe: Optional[str] = Form(None),
     duration: Optional[float] = Form(None),
     num_step: Optional[int] = Form(None),
@@ -1762,6 +1914,11 @@ async def generate_speech(
     layer_penalty_factor: Optional[float] = Form(None),
     position_temperature: Optional[float] = Form(None),
     class_temperature: Optional[float] = Form(None),
+    # IndexTTS2 cloning: emotion timbre is independent of the speaker reference.
+    # Optional; existing engines and requests retain their previous behavior.
+    emo_text: Optional[str] = Form(None, max_length=500),
+    emo_alpha: Optional[float] = Form(None, ge=0.0, le=1.0),
+    emo_vector: Optional[str] = Form(None),
     profile_id: Optional[str] = Form(None),
     seed: Optional[int] = Form(None),
     effect_preset: str = Form("broadcast"),
@@ -1796,6 +1953,12 @@ async def generate_speech(
     rvc_index_rate: float = Form(0.75, ge=0.0, le=1.0),
     rvc_protect: float = Form(0.33, ge=0.0, le=0.5),
 ):
+    """Generate a voice take through the selected TTS engine.
+
+    Validate engine-specific emotion conditioning before loading models,
+    resolve saved voice references, and send the same controls through
+    classic WAV and streaming generation.
+    """
     # #502: NFC-normalize the input text so decomposed (NFD) diacritics — common
     # in pasted Vietnamese and other Latin-with-marks text — are composed to the
     # single codepoints the tokenizer/model expect, instead of base-letter +
@@ -1837,6 +2000,38 @@ async def generate_speech(
                 "See GET /engines/tts for the list of valid engine ids."
             ),
         )
+    # Validate expressive controls before model loads or GPU routing. A
+    # request must not silently lose emotion when switching to an engine
+    # without this capability, or send conflicting emotion sources.
+    import math
+
+    emotion_vector = _parse_emotion_vector(emo_vector)
+    emotion_text = (emo_text or "").strip() or None
+    if emo_alpha is not None and not math.isfinite(emo_alpha):
+        raise HTTPException(status_code=422, detail="Emotion strength must be finite.")
+    if emotion_text and emotion_vector is not None:
+        raise HTTPException(
+            status_code=422, detail="Choose an emotion description OR an emotion vector."
+        )
+    if emo_alpha is not None and not emotion_text:
+        raise HTTPException(
+            status_code=422, detail="Emotion strength requires an emotion description."
+        )
+    if (emotion_text or emotion_vector is not None) and not getattr(
+        backend_cls, "supports_emotion", False
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail=f"{engine_id} does not support emotion controls. Choose IndexTTS2.",
+        )
+    emotion_kwargs = {}
+    if emotion_vector is not None:
+        emotion_kwargs["emo_vector"] = emotion_vector
+    elif emotion_text:
+        emotion_kwargs["emo_text"] = emotion_text
+        if emo_alpha is not None:
+            emotion_kwargs["emo_alpha"] = emo_alpha
+
     # Before any routing, eviction or load, and for remote renders too: the
     # licence is accepted by the user asking for the audio. Raises the 403.
     from services.tts_backend import ensure_engine_licence
@@ -1997,10 +2192,10 @@ async def generate_speech(
     ref_lease = None
     used_seed = seed
     resolved_profile_id = None
-    # #2156: True once a profile's stored language fills a language the caller
-    # never sent, so a rejection can name the profile instead of the picker.
+    # True when `language` was filled from the selected profile (not the request).
     language_from_profile = False
     history_mode = None  # profile.kind when a profile drives; else inferred at insert
+    # Malformed or absent recipes become NULL; they never fail the take.
     stored_design_recipe = _design_recipe_json(design_recipe)
     # #1032: profile id to persist an auto-transcribed reference transcript to.
     # Set only for a plain (unlocked) clone profile whose stored ref_text is
@@ -2010,10 +2205,12 @@ async def generate_speech(
     # transcript paired with the original reference); design profiles are
     # excluded (a re-render replaces the sample, stranding a stale transcript).
     persist_ref_text_profile_id = None
+    persist_replace_ref_text = None
+    persist_ref_audio_file = None
     # A transcript the caller sent, before a profile fills in its stored one:
     # an explicit transcript on an over-long clip gets the actionable 400
     # below instead of being silently dropped at the engine boundary (#2281).
-    request_ref_text = (ref_text or "").strip()
+    request_ref_text = strip_script_markup(ref_text)
 
     if profile_id:
         with db_conn() as conn:
@@ -2024,7 +2221,7 @@ async def generate_speech(
             # language fill, #1032 transcript-cache signal).
             _cond = _resolve_profile_conditioning(
                 row, ref_text=ref_text, instruct=instruct, seed=used_seed,
-                language=language,
+                language=language, engine_id=engine_id,
             )
             # An edited design is a new voice, not a take of this profile.
             resolved_profile_id = None if _cond["diverged"] else profile_id
@@ -2037,6 +2234,8 @@ async def generate_speech(
             language_from_profile = _cond["language_from_profile"]
             if _cond["persist_ref_text"]:
                 persist_ref_text_profile_id = profile_id
+                persist_replace_ref_text = _cond.get("replace_ref_text")
+                persist_ref_audio_file = _cond.get("ref_audio_file")
     elif ref_audio is not None:
         try:
             suffix = _ref_upload_suffix(ref_audio.filename)
@@ -2047,6 +2246,8 @@ async def generate_speech(
                 ref_lease = _TempReferenceLease(ref_audio_path)
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
+    # Script markup is never spoken, so it is never part of a transcript (#3062).
+    ref_text = strip_script_markup(ref_text) or None
 
     # #2281: an engine that picks the best passage of a long clip itself
     # (OmniVoice) cannot align a whole-clip transcript. A transcript typed on
@@ -2108,7 +2309,10 @@ async def generate_speech(
         # load + transcribe above happens once per profile, not per generate.
         # Only fills an empty column — a user-entered transcript always wins.
         if ref_text and persist_ref_text_profile_id:
-            _persist_profile_ref_text(persist_ref_text_profile_id, ref_text)
+            _persist_profile_ref_text(
+                persist_ref_text_profile_id, ref_text, replace=persist_replace_ref_text,
+                ref_audio_file=persist_ref_audio_file,
+            )
 
     # #2764: choosing the best 15 s window of a long reference runs the
     # installed recognizer over several windows — minutes on a CPU. Inside the
@@ -2193,7 +2397,8 @@ async def generate_speech(
     # the SAME concat → effect-chain → watermark → save → history pipeline as
     # the classic path, so the on-disk take is identical to a non-streamed
     # one. [pause]-marker inputs and single-chunk (short) texts keep their
-    # unchanged single-shot pipeline and stream as one chunk. All prep above
+    # unchanged single-shot pipeline and stream as one chunk (that pipeline
+    # still splits each long [pause] span into sentence chunks). All prep above
     # (engine warm under the #1039 model-load budget, routing gate, profile /
     # seed / normalization) already ran, so per-chunk jobs spend the generate
     # budget on generation only — and each chunk gets its own budget, so a
@@ -2234,6 +2439,7 @@ async def generate_speech(
                         instruct=instruct, num_step=num_step,
                         guidance_scale=guidance_scale, speed=speed,
                         denoise=denoise, postprocess_output=postprocess_output,
+                        **(emotion_kwargs if getattr(_backend, "supports_emotion", False) else {}),
                         **({
                             key: value for key, value in {
                                 "t_shift": t_shift,
@@ -2244,10 +2450,7 @@ async def generate_speech(
                         } if getattr(
                             _backend, "supports_native_omnivoice_controls", False
                         ) else {}),
-                        **({"seed": used_seed + i} if used_seed is not None and (
-                            getattr(_backend, "supports_native_omnivoice_controls", False)
-                            or getattr(_backend, "supports_generation_seed", False)
-                        ) else {}),
+                        **({"seed": used_seed + i} if used_seed is not None and _backend_supports_seed(_backend) else {}),
                     )
                     sr = _backend.sample_rate
                     skip = getattr(_backend, "applies_own_mastering", False)
@@ -2295,16 +2498,19 @@ async def generate_speech(
                                                      sink=_dropped_sink)
                 skip = (getattr(_backend, "applies_own_mastering", False)
                         if _backend is not None else False)
-                return _apply_effect_chain(audio_out, sr, effect_preset, skip_mastering=skip)
+                return _apply_effect_chain(audio_out, sr, effect_preset, skip_mastering=skip,
+                                           trim_edges=_wants_edge_trim(effect_preset))
             except ValueError:
                 raise
             except Exception as e:
                 _oom_friendly_reraise(e)
 
         async def _stream_events():
+            """Yield progress, marked audio chunks, and final generation metadata."""
             import json
 
             def _line(obj) -> bytes:
+                """Encode one streaming synthesis event as a compact NDJSON line."""
                 return (json.dumps(obj, separators=(",", ":")) + "\n").encode("utf-8")
 
             try:
@@ -2325,6 +2531,7 @@ async def generate_speech(
                                     class_temperature=class_temperature,
                                     dropped_sink=_dropped_sink,
                                     preset_voice=preset_voice,
+                                    emotion_kwargs=emotion_kwargs,
                                 ),
                                 what="TTS generate",
                                 min_vram_gb=_engine_min_vram_gb,
@@ -2525,13 +2732,17 @@ async def generate_speech(
                 if cleanup_ref and ref_lease is not None:
                     ref_lease.finish_request()
 
+        from core.stream_keepalive import NDJSON_KEEPALIVE, NO_BUFFER_HEADERS, with_keepalive
+
         # Routing notice (#21): known before the stream starts.
         _stream_headers = _apply_routing_headers({
             "X-Seed": str(used_seed) if used_seed is not None else "",
-            "Cache-Control": "no-cache",
+            **NO_BUFFER_HEADERS,
         }, _routing_notice)
         return StreamingResponse(
-            _stream_events(),
+            # A chunk can render for minutes without a byte; blank lines keep
+            # proxies (Cloudflare 524) from cutting the stream meanwhile.
+            with_keepalive(_stream_events(), NDJSON_KEEPALIVE),
             media_type="application/x-ndjson",
             headers=_stream_headers,
         )
@@ -2559,6 +2770,7 @@ async def generate_speech(
                 class_temperature=class_temperature,
                 dropped_sink=_dropped_text,
                 preset_voice=preset_voice,
+                emotion_kwargs=emotion_kwargs,
             )
         else:
             _local_render = functools.partial(
@@ -2671,33 +2883,20 @@ async def generate_speech(
         raise HTTPException(status_code=503, detail=str(e)) from e
     except ValueError as e:
         logger.error("Validation failed: %s", e)
-        # #2156: the language the engine refused was never chosen by the user —
-        # it came from the selected voice profile because the picker was on
-        # "Auto". The engine's own remedy ("leave language as 'Auto'") is then
-        # unfollowable, so say where the language actually came from. Only this
-        # scope knows that; the engine adapters never see the provenance.
         if language_from_profile and _is_language_rejection(str(e)):
             raise _language_rejection_http_error(
-                e, language, from_profile=True
-            ) from e
+                e, language, from_profile=True) from e
         # Most ValueErrors here are VoiceStudio's own validation messages and
         # are exactly what the user should read. A few are raw library text
         # naming parameters and files the user cannot act on — those get the
         # owned remedy for their class instead (#1879). Unclassified ones keep
         # passing through, so this cannot swallow a good message.
-        from core.failure import classify, public_hint_for_topic
+        from core.public_errors import classified_request_detail
 
-        _topic = classify(str(e))
-        _owned = public_hint_for_topic(_topic) if _topic else ""
-        if _topic == "REFERENCE_STT_MISSING" and _owned:
-            # Structured so the client can show its localized copy (#2929/#2678)
-            # instead of the English sentence, and so the topic reaches the
-            # bug report.
-            raise HTTPException(
-                status_code=400,
-                detail={"docs_topic": _topic, "message": _owned, "hint": _owned},
-            ) from e
-        raise HTTPException(status_code=400, detail=_owned or str(e)) from e
+        _classified = classified_request_detail(str(e))
+        if _classified:
+            raise HTTPException(status_code=400, detail=_classified) from e
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         tb = traceback.format_exc()
         logger.error("Inference failed: %s\n%s", e, tb)
@@ -2858,7 +3057,11 @@ def list_history():
             if r["audio_path"] and (not p or not os.path.exists(p)):
                 stale_ids.append(r["id"])
             else:
-                alive.append(dict(r))
+                item = dict(r)
+                # What "save as voice" may use as the take's transcript; ""
+                # asks for the take's audio to be transcribed (#3062).
+                item["transcript"] = take_reference_transcript(item.get("text"))
+                alive.append(item)
         if stale_ids:
             conn.executemany(
                 "DELETE FROM generation_history WHERE id=?",

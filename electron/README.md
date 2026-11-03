@@ -1,5 +1,7 @@
 # VoiceStudio — Electron desktop app
 
+![VoiceStudio in its default dark theme, using the demo workspace.](../docs/media/electron/overview.png)
+
 Electron is the only maintained desktop app for voice cloning, stories, dubbing,
 transcription, voice design, and workflows. Tauri is archived at v0.5.3. For
 existing installations, see [migration notes](../docs/electron-migration.md).
@@ -26,12 +28,13 @@ for network connectivity before resuming queued operations.
 
 ```sh
 # From the repository root
-bun install
-bun run setup:api  # prepare Python dependencies before starting Electron
-bun run dev        # electron-vite: main + preload + renderer with HMR
+bun run dev  # install dependencies, then start main + preload + renderer with HMR
 ```
 
-The development launcher resolves Electron's binary before starting Vite.
+The root `predev` script prepares JavaScript and supported local Python
+dependencies before the development launcher resolves Electron's binary and
+starts Vite. It skips local API setup when an external backend is configured or
+on an Intel Mac, where local PyTorch wheels are unavailable.
 Electron 42+ downloads it on the first launch, so that launch needs network
 access; subsequent launches reuse the installed binary.
 

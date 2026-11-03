@@ -22,6 +22,7 @@ DELETE /marketplace/{filename}
 DELETE /models/licenses/receipts/{plan_digest}
 DELETE /models/{repo_id:path}
 DELETE /profiles/{profile_id}
+DELETE /profiles/{profile_id}/attestation
 DELETE /profiles/{profile_id}/consent
 DELETE /projects/{project_id}
 DELETE /pronunciation/{entry_id}
@@ -30,6 +31,10 @@ DELETE /voice-conversion/history/{entry_id}
 DELETE /voice-conversion/voices/{voice_id}
 DELETE /voice-lab/nonverbal/{library_id}/clips/{file}
 GET /.well-known/voicestudio-speech
+GET /api/cloud-sync/devices
+GET /api/cloud-sync/local
+GET /api/cloud-sync/local/keys
+GET /api/cloud-sync/status
 GET /api/integrations/twilio/state
 GET /api/mcp/bindings
 GET /api/settings/analytics
@@ -48,6 +53,7 @@ GET /api/settings/llm-endpoint
 GET /api/settings/llm-providers
 GET /api/settings/llm-providers/{provider_id}/models
 GET /api/settings/llm-skills
+GET /api/settings/pause-fill
 GET /api/settings/perf/offload-after-generation
 GET /api/settings/perf/torch-compile-disabled
 GET /api/settings/performance-profile
@@ -74,6 +80,7 @@ GET /batch/download/{job_id}/{lang}
 GET /batch/jobs
 GET /batch/jobs/{job_id}
 GET /calls
+GET /calls/options
 GET /calls/readiness
 GET /calls/settings
 GET /calls/{call_id}
@@ -118,6 +125,8 @@ GET /engines/audiocpp/runtime/install/status
 GET /engines/diarisation
 GET /engines/effects/presets
 GET /engines/llm
+GET /engines/omnivoice-gguf/gpu-offer
+GET /engines/omnivoice-gguf/quants
 GET /engines/sidecar/{engine_id}/install/status
 GET /engines/sonitranslate/status
 GET /engines/translation
@@ -156,6 +165,9 @@ GET /profiles/{profile_id}
 GET /profiles/{profile_id}/audio
 GET /profiles/{profile_id}/image
 GET /profiles/{profile_id}/usage
+GET /project-bundles
+GET /project-bundles/{identifier}
+GET /project-bundles/{identifier}/document
 GET /projects
 GET /projects/{project_id}
 GET /pronunciation
@@ -177,6 +189,7 @@ GET /system/last-run-crash
 GET /system/logs
 GET /system/logs/stream
 GET /system/logs/tauri
+GET /system/network/check
 GET /system/network/state
 GET /system/notifications
 GET /system/quarantine-status
@@ -214,6 +227,14 @@ PATCH /projects/{project_id}
 PATCH /voice-conversion/voices/{voice_id}
 POST /api/auth/session
 POST /api/auth/ws-ticket
+POST /api/cloud-sync/confirm-deletes
+POST /api/cloud-sync/devices/{device_id}/revoke
+POST /api/cloud-sync/off
+POST /api/cloud-sync/on
+POST /api/cloud-sync/run
+POST /api/cloud-sync/start
+POST /api/cloud-sync/stop
+POST /api/cloud-sync/use-choices-of/{device_id}
 POST /api/integrations/twilio/test
 POST /api/settings/asr-openai-compat/test
 POST /api/settings/hf-mirror/test
@@ -259,12 +280,16 @@ POST /dub/parse-subtitle-text
 POST /dub/preview-segment/{job_id}
 POST /dub/prosody-mirror/{job_id}
 POST /dub/qc/{job_id}
+POST /dub/sync-transcript/{job_id}
 POST /dub/transcribe/{job_id}
 POST /dub/translate
 POST /dub/upload
 POST /dub/use-downloaded-captions/{job_id}
 POST /engines/audiocpp/runtime/install
 POST /engines/diarisation/select
+POST /engines/omnivoice-gguf/gpu-offer
+POST /engines/omnivoice-gguf/quants/download
+POST /engines/omnivoice-gguf/quants/select
 POST /engines/select
 POST /engines/sidecar/{engine_id}/install
 POST /engines/sonitranslate/dub
@@ -312,9 +337,12 @@ POST /personas/import
 POST /personas/inspect
 POST /preview/upload
 POST /profiles
+POST /profiles/{profile_id}/attestation
 POST /profiles/{profile_id}/consent
 POST /profiles/{profile_id}/lock
 POST /profiles/{profile_id}/unlock
+POST /project-bundles/export
+POST /project-bundles/import
 POST /projects
 POST /pronunciation
 POST /pronunciation/import
@@ -362,6 +390,8 @@ POST /voice-lab/nonverbal/{library_id}/clips
 POST /voice-lab/score
 POST /watermark/detect
 POST /watermark/settings
+PUT /api/cloud-sync/choices
+PUT /api/cloud-sync/local
 PUT /api/integrations/twilio/config
 PUT /api/mcp/bindings
 PUT /api/settings/analytics
@@ -374,6 +404,7 @@ PUT /api/settings/history-retention
 PUT /api/settings/llm-endpoint
 PUT /api/settings/llm-providers/{provider_id}
 PUT /api/settings/llm-skills/{skill_id}
+PUT /api/settings/pause-fill
 PUT /api/settings/perf/offload-after-generation
 PUT /api/settings/perf/torch-compile-disabled
 PUT /api/settings/performance-profile

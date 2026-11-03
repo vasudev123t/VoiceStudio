@@ -132,26 +132,57 @@ afterEach(async () => {
 
 describe('versioned model notices', () => {
   it.each([
-    ['commercial', 'unreviewed', en.modelLicense.categoryCommercial, en.modelLicense.notReviewed],
-    ['conditions', 'unreviewed', en.modelLicense.categoryConditions, en.modelLicense.notReviewed],
+    [
+      'commercial',
+      'unreviewed',
+      en.modelLicense.categoryCommercial,
+      en.modelLicense.notReviewed,
+      en.modelLicense.shortCommercial,
+    ],
+    [
+      'conditions',
+      'unreviewed',
+      en.modelLicense.categoryConditions,
+      en.modelLicense.notReviewed,
+      en.modelLicense.shortConditions,
+    ],
     [
       'noncommercial',
       'noncommercial',
       en.modelLicense.categoryNoncommercial,
       en.modelLicense.notReviewed,
+      en.modelLicense.shortNoncommercial,
     ],
-    ['commercial', 'cleared', en.modelLicense.categoryCommercial, en.modelLicense.reviewed],
-    [undefined, 'unreviewed', en.modelLicense.categoryUnknown, en.modelLicense.notReviewed],
-    ['permitted', 'unreviewed', en.modelLicense.categoryUnknown, en.modelLicense.notReviewed],
+    [
+      'commercial',
+      'cleared',
+      en.modelLicense.categoryCommercial,
+      en.modelLicense.reviewed,
+      en.modelLicense.shortCommercial,
+    ],
+    [
+      undefined,
+      'unreviewed',
+      en.modelLicense.categoryUnknown,
+      en.modelLicense.notReviewed,
+      en.modelLicense.shortUnknown,
+    ],
+    [
+      'permitted',
+      'unreviewed',
+      en.modelLicense.categoryUnknown,
+      en.modelLicense.notReviewed,
+      en.modelLicense.shortUnknown,
+    ],
   ])(
-    'shows a Licence: icon %s/%s trigger named by licence, category and review state',
-    async (category, review, categoryLabel, reviewLabel) => {
+    'shows an icon-and-text %s/%s trigger named by licence, category and review state',
+    async (category, review, categoryLabel, reviewLabel, shortLabel) => {
       await render({ ...info, license_category: category, review_status: review });
       const summary = `${info.license} · ${categoryLabel} · ${reviewLabel}`;
       const trigger = within(host).getByRole('button', {
         name: `${en.modelLicense.label}: ${summary}; Test model`,
       });
-      expect(trigger.textContent).toBe(`${en.modelLicense.label}:`);
+      expect(trigger.textContent).toBe(shortLabel);
       expect(trigger.getAttribute('title')).toBe(summary);
       const svg = trigger.querySelector('svg')!;
       expect(svg.getAttribute('aria-hidden')).toBe('true');

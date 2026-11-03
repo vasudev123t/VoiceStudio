@@ -21,8 +21,24 @@ if _BACKEND not in sys.path:
 # test module, which is what freezes DATA_DIR at `core.config` import time)
 # makes every local run behave like a clean CI runner. `setdefault` semantics:
 # an explicitly exported OMNIVOICE_DATA_DIR still wins.
-if not os.environ.get("OMNIVOICE_DATA_DIR"):
+#
+# pytest-xdist: the controller imports this file first and exports the dir it
+# made; every worker then inherits it, so all workers shared ONE prefs.json /
+# omnivoice.db / user-env and one worker's `llm_backend=off` flipped another's
+# "ready" assertion. A dir WE created (tracked in _OMNIVOICE_TEST_AUTO_DATA_DIR)
+# is therefore re-made per worker; an explicitly exported one is still honored.
+_AUTO_DATA_DIR = "_OMNIVOICE_TEST_AUTO_DATA_DIR"
+_inherited_auto_dir = os.environ.get("OMNIVOICE_DATA_DIR") if (
+    os.environ.get("PYTEST_XDIST_WORKER")
+    and os.environ.get("OMNIVOICE_DATA_DIR") == os.environ.get(_AUTO_DATA_DIR)
+) else None
+if _inherited_auto_dir:
+    _env_file = os.environ.get("OMNIVOICE_ENV_FILE", "")
+    if _env_file.startswith(_inherited_auto_dir):
+        del os.environ["OMNIVOICE_ENV_FILE"]  # re-derived below from the worker's dir
+if not os.environ.get("OMNIVOICE_DATA_DIR") or _inherited_auto_dir:
     os.environ["OMNIVOICE_DATA_DIR"] = tempfile.mkdtemp(prefix="omnivoice-test-data-")
+    os.environ[_AUTO_DATA_DIR] = os.environ["OMNIVOICE_DATA_DIR"]
 # Same story for the durable per-user env file (~/.config/omnivoice/env):
 # `main.py` loads it with override=True at import, so a TestClient importing
 # the app mid-suite would inject the developer's real TRANSLATE_* / key vars
@@ -363,6 +379,38 @@ def asr_model_installed(monkeypatch, request):
                 targets[id(val)] = val
     for mod in targets.values():
         monkeypatch.setattr(mod, "asr_model_missing_error", lambda **_kw: None)
+
+
+_MODEL_MANAGER_TEST_REPO = "test/checkpoint"
+
+
+@pytest.fixture
+def fresh_model_manager(monkeypatch):
+    """Load the real model manager while discarding collection-time stubs."""
+    import importlib
+
+    def load(*, force: bool = False):
+        for name in ("core.config", "services.model_manager"):
+            loaded = sys.modules.get(name)
+            if force or (loaded is not None and getattr(loaded, "__file__", None) is None):
+                sys.modules.pop(name, None)
+        return importlib.import_module("services.model_manager")
+
+    return load
+
+
+@pytest.fixture
+def offline_model_manager(fresh_model_manager, monkeypatch):
+    manager = fresh_model_manager()
+    for name in ("_torch", "_OmniVoice", "model"):
+        monkeypatch.setattr(manager, name, None)
+    monkeypatch.setenv("OMNIVOICE_MODEL", _MODEL_MANAGER_TEST_REPO)
+    for name in ("OMNIVOICE_PRELOAD_TTS_ASR", "HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE"):
+        monkeypatch.delenv(name, raising=False)
+    fake_torch = type("TestTorch", (), {"float16": object(), "float32": object()})()
+    monkeypatch.setattr(manager, "_lazy_torch", lambda: fake_torch)
+    monkeypatch.setattr(manager, "get_best_device", lambda: "cpu")
+    return manager
 
 
 @pytest.fixture(autouse=True)

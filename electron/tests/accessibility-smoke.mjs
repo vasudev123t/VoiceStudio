@@ -9,6 +9,7 @@ const routes = [
   '/gallery',
   '/transcriptions',
   '/calls',
+  '/workflows',
   '/stories',
   '/audiobook',
   '/dub',
@@ -41,7 +42,10 @@ const routes = [
   '/settings/support',
 ];
 
-const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || 'msedge', headless: true });
+const browser = await chromium.launch({
+  channel: process.env.PLAYWRIGHT_CHANNEL || 'msedge',
+  headless: true,
+});
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 const cdp = await page.context().newCDPSession(page);
 await page.addInitScript(() => localStorage.setItem('voicestudio.setup.complete.v1', '1'));

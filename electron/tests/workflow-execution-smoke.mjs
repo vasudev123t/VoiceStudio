@@ -106,14 +106,18 @@ await page.route(
     });
   },
 );
+async function fromTemplate(name) {
+  await page.getByRole('button', { name: 'New from template' }).click();
+  const picker = page.getByRole('dialog', { name: 'Start from a template' });
+  await picker.getByRole('button', { name, exact: true }).click();
+  await picker.waitFor({ state: 'detached' });
+}
 try {
   await page.addInitScript(() => localStorage.setItem('voicestudio.setup.complete.v1', '1'));
-  await page.goto(base + '/#/calls');
-  await page
-    .getByRole('button', { name: 'Batch narration · Normalize audio', exact: true })
-    .click();
+  await page.goto(base + '/#/workflows');
+  await fromTemplate('Batch narration · Normalize audio');
   await page.getByLabel('Scripts', { exact: true }).fill('First lesson\n---\nSecond lesson');
-  await page.locator('.react-flow__node').filter({ hasText: 'Speak' }).click();
+  await page.locator('.react-flow__node').filter({ hasText: 'Speech' }).click();
   await page.getByRole('button', { name: 'Target voice', exact: true }).click();
   await page.getByRole('option').filter({ hasText: 'Demo voice' }).click();
   await page.locator('.workflow-intro').getByRole('button', { name: 'Run workflow' }).click();
@@ -151,7 +155,7 @@ try {
   // An ASR-only recipe must not require a working TTS engine.
   ttsAvailable = false;
   await page.reload();
-  await page.getByRole('button', { name: 'Audio to transcript', exact: true }).click();
+  await fromTemplate('Audio to transcript');
   await page
     .getByLabel('Add audio', { exact: true })
     .setInputFiles({ name: 'lesson.wav', mimeType: 'audio/wav', buffer: wav });
@@ -174,7 +178,7 @@ try {
 
   ttsAvailable = true;
   await page.reload();
-  await page.getByRole('button', { name: 'Change the voice', exact: true }).click();
+  await fromTemplate('Change the voice');
   await page
     .getByLabel('Add audio', { exact: true })
     .setInputFiles({ name: 'lesson.wav', mimeType: 'audio/wav', buffer: wav });
@@ -190,12 +194,12 @@ try {
   await page.getByText('1 / 1 clips ready', { exact: true }).waitFor();
   assert.equal(converted, 1);
 
-  await page.getByRole('button', { name: 'Translate and narrate', exact: true }).click();
+  await fromTemplate('Translate and narrate');
   await page
     .getByLabel('Add audio', { exact: true })
     .setInputFiles({ name: 'lesson.wav', mimeType: 'audio/wav', buffer: wav });
   await page.getByText('lesson.wav', { exact: true }).waitFor();
-  await page.locator('.react-flow__node').filter({ hasText: 'Speak' }).click();
+  await page.locator('.react-flow__node').filter({ hasText: 'Speech' }).click();
   await page.getByRole('button', { name: 'Target voice', exact: true }).click();
   await page.getByRole('option').filter({ hasText: 'Demo voice' }).click();
   await page.locator('.workflow-intro').getByRole('button', { name: 'Run workflow' }).click();
@@ -209,15 +213,12 @@ try {
   assert.equal(generated, 3);
   await page.screenshot({ path: join(tmpdir(), 'voicestudio-workflow-localization.png') });
   // Removing a source releases its blob only after the last duplicated reference.
-  await page
-    .locator('.workflow-templates')
-    .getByRole('button', { name: 'Audio to transcript', exact: true })
-    .click();
+  await fromTemplate('Audio to transcript');
   await page
     .getByLabel('Add audio', { exact: true })
     .setInputFiles({ name: 'remove-me.wav', mimeType: 'audio/wav', buffer: wav });
   await page.getByText('remove-me.wav', { exact: true }).waitFor();
-  await page.getByLabel('Name', { exact: true }).fill('Source cleanup');
+  await page.getByLabel('Workflow name', { exact: true }).fill('Source cleanup');
   const sourceId = await page.evaluate(() => {
     const library = JSON.parse(localStorage.getItem('voicestudio.workflows.v1'));
     return library.documents.find((item) => item.id === library.activeId).steps[0].media[0].id;
@@ -286,7 +287,7 @@ try {
     ),
   );
   await page.reload(); // Reload restores IndexedDB and retries the persisted deletion queue.
-  await page.getByRole('heading', { name: 'Design a voice workflow' }).waitFor();
+  await page.getByRole('textbox', { name: 'Workflow name' }).waitFor();
   for (let i = 0; i < 40 && (await hasSource(deletedId)); i++) await page.waitForTimeout(50);
   assert.equal(await hasSource(deletedId), false, 'queued deletions are retried after a reload');
   await page.locator('.react-flow__node').filter({ hasText: 'Source clip' }).click();

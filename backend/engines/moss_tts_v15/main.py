@@ -142,6 +142,35 @@ def _measure_vram_mb() -> float:
 _state = None
 
 
+def _patch_xpu_mem_get_info(torch) -> None:
+    """Pinned copy of ``backend/core/xpu_compat.py`` (this sidecar cannot
+    import parent code): Intel Arc drivers on Windows refuse the free-memory
+    query that transformers/accelerate call while loading onto XPU, so fall
+    back to ``total - reserved``. Kept in step by
+    tests/test_xpu_mem_get_info_shim.py."""
+    xpu = getattr(torch, "xpu", None)
+    original = getattr(xpu, "mem_get_info", None)
+    if original is None or getattr(original, "_omnivoice_fallback", False):
+        return
+
+    def mem_get_info(device=None):
+        try:
+            return original(device)
+        except RuntimeError:
+            if device is None:
+                idx = int(xpu.current_device())
+            elif isinstance(device, int):
+                idx = device
+            else:
+                idx = torch.device(device).index
+                idx = int(xpu.current_device()) if idx is None else int(idx)
+            total = int(xpu.get_device_properties(idx).total_memory)
+            return max(total - int(xpu.memory_reserved(idx)), 0), total
+
+    mem_get_info._omnivoice_fallback = True
+    xpu.mem_get_info = mem_get_info
+
+
 def _snapshot_has_weights(path: str) -> bool:
     """Legacy Hub caches may contain only config files from a failed load."""
     root = Path(path)
@@ -253,6 +282,8 @@ def _load_model(stdout):
     device = accel.type if accel is not None else "cpu"  # 'cuda', 'npu', 'mps', 'xpu', 'cpu'
     if device == "mps":
         device = "cpu"  # MOSS is untested on MPS; fall back to CPU for safety
+    if device == "xpu":
+        _patch_xpu_mem_get_info(torch)
     dtype = torch.bfloat16 if device != "cpu" else torch.float32
     # "sdpa" works on CUDA + CPU and needs no extra dep. flash_attention_2
     # (Ampere+ CUDA, optional flash-attn) is opt-in via env.

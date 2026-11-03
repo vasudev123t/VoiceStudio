@@ -90,7 +90,7 @@ try {
   });
 
   await page.goto(ui + '/#/clone');
-  const device = page.getByRole('button', { name: 'Local device: Engine ready', exact: true });
+  const device = page.getByRole('button', { name: 'Local: Engine ready', exact: true });
   await device.waitFor({ timeout: 15_000 });
   await device.click();
   if (sysinfo.cpu_model)

@@ -37,11 +37,13 @@ public struct APIClient: Sendable {
         }
         catch { throw ClientError("mobile.errors.invalid_response") }
     }
-    public func download(_ request: URLRequest) async throws -> DownloadReply {
+    public func download(_ request: URLRequest, maxBytes: Int? = nil) async throws -> DownloadReply {
         try Task.checkCancellation()
         guard let url = request.url, PairingAddress.sameOrigin(url, address.baseURL) else { throw ClientError.invalidURL }
         do {
-            let reply = try await transport.download(request)
+            let reply: DownloadReply
+            if let maxBytes { reply = try await transport.download(request, maxBytes: maxBytes) }
+            else { reply = try await transport.download(request) }
             do {
                 try Task.checkCancellation()
                 let body: Data
@@ -202,4 +204,23 @@ public struct APIClient: Sendable {
         guard !value.isEmpty, value.utf8.allSatisfy({ (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0) || $0 == 45 || $0 == 95 }) else { throw ClientError("mobile.errors.invalid_response") }
         return value
     }
+}
+
+
+public struct CommunityItem: Decodable, Sendable, Identifiable {
+    public let id: String
+    public let name: String
+    public let author: String?
+    public let license: String?
+    public let language: String?
+}
+public struct CommunityPage: Decodable, Sendable { public let total: Int; public let items: [CommunityItem] }
+public struct CommunityVoice: Decodable, Sendable { public let profile_id: String; public let name: String }
+public extension APIClient {
+    func community(offset: Int = 0) async throws -> CommunityPage {
+        guard offset >= 0 else { throw ClientError("mobile.errors.invalid_response") }
+        return try await decode(CommunityPage.self,"/community/items?limit=100&offset=\(offset)")
+    }
+    func useCommunity(_ id: String) async throws -> CommunityVoice { try await decode(CommunityVoice.self,"/community/items/\(try Self.component(id))/use",method: "POST") }
+    func communityAudio(_ id: String) async throws -> Data { try await send(request("/community/items/\(try Self.component(id))/preview")).data }
 }

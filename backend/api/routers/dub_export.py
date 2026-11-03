@@ -9,7 +9,7 @@ import time
 import uuid
 import weakref
 from pathlib import Path, PureWindowsPath
-from typing import Optional
+from typing import Annotated, Optional
 
 from core.config import DUB_DIR
 from core.http_headers import content_disposition
@@ -71,16 +71,39 @@ async def _preserved_background(job: dict, job_id: str, lang: str, *, prepare: b
         raise HTTPException(status_code=409, detail={"code": "dub_background_unavailable", "message": str(exc)}) from exc
 
 
+# #2964: level of the separated background bed in exported mixes. 1.0 keeps
+# the bed at its original level (the only behaviour before this option); the
+# limiter in ``bed_mix_filter`` keeps a raised bed from clipping.
+DEFAULT_BED_LEVEL = 1.0
+MAX_BED_LEVEL = 4.0
+BedLevel = Annotated[float, Query(
+    ge=0.0, le=MAX_BED_LEVEL,
+    description="Background level when preserve_bg=1: 1.0 keeps the original level, 0 mutes it, up to 4.0.",
+)]
+
+
+def _bed_level_tag(bed_level: float) -> str:
+    """Cache-name suffix for a non-default bed level ("" at the default, so
+    caches written before #2964 keep their names).
+
+    Uses the exact level (``repr`` round-trips a float), so two accepted
+    levels never share a cached preview mixed at the other one.
+    """
+    if bed_level == DEFAULT_BED_LEVEL:
+        return ""
+    return "_bed" + repr(float(bed_level)).replace(".", "p").replace("+", "")
+
+
 def _unique_stamp() -> str:
     """Return a short unique suffix like '20260415T142301-ab12cd34' for export files."""
     return f"{time.strftime('%Y%m%dT%H%M%S')}-{uuid.uuid4().hex[:8]}"
 
 
-#: Seconds of silence on a `/tasks/stream` before a keepalive comment goes out.
-#: A task that is busy but quiet — ffmpeg on a long video, a slow TTS segment,
-#: a job queued behind another — leaves the stream byte-silent, and byte-silent
-#: SSE gets severed by the desktop webview, Chrome's ~5 min cap or a proxy's
-#: idle timeout (#1196, #2108). Comments are invisible to every consumer.
+#: Longest quiet spell, in seconds, before `/tasks/stream` writes a keepalive
+#: comment. A task can be busy yet silent (a long ffmpeg run, one slow TTS
+#: segment, a job waiting behind another); with nothing on the wire, desktop
+#: webviews, Chrome (~5 min cap) and proxy idle timeouts close the stream.
+#: Read at call time so tests can patch it.
 TASK_STREAM_KEEPALIVE_S = 15.0
 
 
@@ -283,6 +306,7 @@ async def stream_task(task_id: str, after_seq: int = 0):
                 try:
                     evt = await asyncio.wait_for(q.get(), timeout=TASK_STREAM_KEEPALIVE_S)
                 except asyncio.TimeoutError:
+                    # SSE comment line: ignored by every client, but keeps bytes flowing.
                     yield ": keepalive\n\n"
                     continue
                 if evt is None:
@@ -645,6 +669,7 @@ def _build_audio_export_cmd(
     bg_path: Optional[str],
     out_path: str,
     fmt: str,
+    bed_level: float = DEFAULT_BED_LEVEL,
 ) -> list[str]:
     """Build the ffmpeg command for an audio-only dub export (#119).
 
@@ -658,7 +683,7 @@ def _build_audio_export_cmd(
         # Mix the dubbed voice over the original background bed (same weights
         # as the video mux path) so ambience/music is preserved.
         cmd += ["-i", bg_path, "-filter_complex",
-                bed_mix_filter("1:a", "0:a", bed_gain=1.0),
+                bed_mix_filter("1:a", "0:a", bed_gain=bed_level),
                 "-map", "[aout]"]
     cmd += codec
     cmd.append(out_path)
@@ -670,6 +695,7 @@ def _build_audio_export_cmd(
 async def dub_download(
     job_id: str,
     preserve_bg: bool = Query(True, description="Mix background noise into dubbed tracks"),
+    bed_level: BedLevel = DEFAULT_BED_LEVEL,
     default_track: str = Query("", description="Default audio track; omitted selects the first dubbed track"),
     include_tracks: str = Query("", description="Comma-separated list of tracks to include (e.g. 'original,de,es'). Empty = include all."),
     save_authorization: str = Header("", alias="X-VoiceStudio-Path-Authorization"),
@@ -687,11 +713,14 @@ async def dub_download(
         raise HTTPException(status_code=404, detail="Job not found")
 
     tracks = job.get("dubbed_tracks", {})
-    if not tracks:
-        raise HTTPException(status_code=400, detail="No dubbed tracks generated yet")
-
     include_set = set(t.strip() for t in include_tracks.split(",") if t.strip()) if include_tracks else None
     include_original = include_set is None or "original" in include_set
+    is_audio_job = (job.get("input_type") or "video").lower() == "audio"
+    # A transcribed video can be exported before any dub exists: the original
+    # audio with its transcript as burned or soft subtitles (#3393). Audio
+    # jobs have nothing to add without a dub.
+    if not tracks and (is_audio_job or not include_original):
+        raise HTTPException(status_code=400, detail="No dubbed tracks generated yet")
 
     if include_set:
         filtered_tracks = {k: v for k, v in tracks.items() if k in include_set}
@@ -754,7 +783,7 @@ async def dub_download(
             output_name = f"dubbed_audio_{stamp}.m4a"
         out_path = os.path.join(exports_dir, output_name)
         bg = await _preserved_background(job, job_id, lang_code) if preserve_bg else None
-        cmd = _build_audio_export_cmd(ffmpeg, track_info["path"], bg, out_path, fmt)
+        cmd = _build_audio_export_cmd(ffmpeg, track_info["path"], bg, out_path, fmt, bed_level)
         try:
             rc, _, stderr = await run_ffmpeg(cmd, timeout=1800.0)
             if rc != 0:
@@ -979,7 +1008,7 @@ async def dub_download(
         for i, t in enumerate(tracks_to_process):
             tail = f",apad=whole_dur={apad_dur:.4f}" if apad_dur else ""
             filter_parts.append(bed_mix_filter(
-                f"{t['bg_idx']}:a", f"{t['idx']}:a", out=f"aout{i}", tail=tail, uniq=str(i), bed_gain=1.0,
+                f"{t['bg_idx']}:a", f"{t['idx']}:a", out=f"aout{i}", tail=tail, uniq=str(i), bed_gain=bed_level,
             ))
             t["out_label"] = f"[aout{i}]"
         for t in tracks_to_process:
@@ -1075,7 +1104,7 @@ async def dub_download(
 
     base_name = os.path.splitext(job.get('filename', 'output'))[0]
     safe_name = ''.join(c for c in base_name if c.isalnum() or c in '-_ ').strip() or 'output'
-    dl_name = f"dubbed_{safe_name}_{stamp}.mp4"
+    dl_name = f"{'dubbed' if tracks_to_process else 'subtitled'}_{safe_name}_{stamp}.mp4"
 
     # Structured warning surface for the Smart Fit fallback ladder: header is
     # a fixed ASCII token (FileResponse headers must be latin-1 safe); the
@@ -1156,6 +1185,7 @@ async def dub_preview_video(
     job_id: str,
     lang: str = Query(..., description="Language code of the dubbed track to mux in"),
     preserve_bg: bool = Query(True),
+    bed_level: BedLevel = DEFAULT_BED_LEVEL,
 ):
     """Return an inline-playable MP4 with the chosen dubbed track as sole audio.
 
@@ -1192,7 +1222,10 @@ async def dub_preview_video(
     if not exports_dir.startswith(_base + os.sep):
         raise HTTPException(status_code=400, detail="Invalid job id")
     os.makedirs(exports_dir, exist_ok=True)
-    bg_suffix = "surgical_v2_" + Path(bg_audio).stem if (preserve_bg and has_bg) else "nobg"
+    bg_suffix = (
+        "surgical_v2_" + Path(bg_audio).stem + _bed_level_tag(bed_level)
+        if (preserve_bg and has_bg) else "nobg"
+    )
     preview_path = os.path.realpath(
         os.path.join(exports_dir, f"preview_v2_{lang}_{bg_suffix}.mp4")
     )
@@ -1331,7 +1364,7 @@ async def dub_preview_video(
         audio_map = f"{track_idx}:a:0"
         if bg_idx is not None:
             tail = f",apad=whole_dur={apad_dur:.4f}" if apad_dur else ""
-            filter_parts.append(bed_mix_filter(f"{bg_idx}:a", f"{track_idx}:a", tail=tail, bed_gain=1.0))
+            filter_parts.append(bed_mix_filter(f"{bg_idx}:a", f"{track_idx}:a", tail=tail, bed_gain=bed_level))
             audio_map = "[aout]"
         elif apad_dur:
             filter_parts.append(f"[{track_idx}:a]apad=whole_dur={apad_dur:.4f}[aout]")
@@ -1493,43 +1526,45 @@ async def dub_get_onsets(job_id: str):
 
 @router.post("/dub/prosody-mirror/{job_id}")
 async def dub_prosody_mirror(job_id: str, req: ProsodyMirrorRequest):
-    """Suggest per-segment directions that mirror the source delivery.
+    """Suggest delivery directions from how the source actor spoke each line.
 
-    Measures each line on the Demucs vocals track (the mix when separation
-    did not run) against its speaker's baseline and returns taxonomy
-    directions the editor can apply to lines without one. Read-only: nothing
-    about the job changes.
+    Read-only: nothing on the job changes.
     """
     _job_dir_or_400(job_id)
     job = _get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    mix = _optional_dub_artifact(job.get("audio_path"), job_id)
     vocals = _optional_dub_artifact(job.get("vocals_path"), job_id)
-    src_path = vocals or mix
-    if not src_path:
-        raise HTTPException(status_code=404, detail="No audio track available for prosody analysis")
+    mix = _optional_dub_artifact(job.get("audio_path"), job_id)
+    audio_path = vocals or mix
+    if not audio_path:
+        raise HTTPException(status_code=404, detail="No audio track available for delivery analysis")
     source = "vocals" if vocals and vocals != mix else "mix"
 
     spans = [
-        SegmentSpan(id=seg.id, start=seg.start, end=seg.end, speaker_id=seg.speaker_id or "")
-        for seg in req.segments
+        SegmentSpan(
+            id=segment.id,
+            start=segment.start,
+            end=segment.end,
+            speaker_id=segment.speaker_id or "",
+        )
+        for segment in req.segments
     ]
     try:
-        results = await asyncio.to_thread(mirror_file, src_path, spans)
-    except AnalysisBudgetExceeded as e:
+        results = await asyncio.to_thread(mirror_file, audio_path, spans)
+    except AnalysisBudgetExceeded as exc:
+        logger.warning("Prosody mirror refused: %s", log_safe(exc))
         raise HTTPException(
             status_code=413,
-            detail="These segments overlap far more than the source audio allows. "
-            "Remove duplicated or overlapping segments and try again.",
-        ) from e
-    except (OSError, RuntimeError, ValueError) as e:
-        logger.warning("prosody mirror failed for %s: %s", log_safe(job_id), log_safe(e))
+            detail="The segments cover far more audio than the source holds. Remove duplicated or overlapping segments and try again.",
+        ) from exc
+    except (OSError, RuntimeError, ValueError) as exc:
+        logger.warning("Prosody mirror could not read the source audio: %s", log_safe(exc))
         raise HTTPException(
             status_code=422,
-            detail="Prosody analysis could not read this job's audio. Re-import the source and try again.",
-        ) from e
+            detail="The source audio could not be analysed. Re-import the source and try again.",
+        ) from exc
     return {"source": source, "segments": [result.to_dict() for result in results]}
 
 
@@ -1778,7 +1813,10 @@ class _LeasedMixResponse(FileResponse):
             _release_mix(self._lease)
 
 
-async def _mixed_dub_audio(exports_dir: str, lang: str, bg_audio: str, track_path: str) -> str:
+async def _mixed_dub_audio(
+    exports_dir: str, lang: str, bg_audio: str, track_path: str,
+    bed_level: float = DEFAULT_BED_LEVEL,
+) -> str:
     """One reusable background + dub WAV per (background, track) version.
 
     The audio preview streams this route with HTTP range requests, and every
@@ -1801,6 +1839,10 @@ async def _mixed_dub_audio(exports_dir: str, lang: str, bg_audio: str, track_pat
         (os.path.basename(path), info.st_size, info.st_mtime_ns)
         for path, info in ((bg_audio, os.stat(bg_audio)), (track_path, os.stat(track_path)))
     ]
+    if bed_level != DEFAULT_BED_LEVEL:
+        # Only a non-default level joins the identity, so default mixes keep
+        # the key they were cached under before #2964.
+        identity.append(("bed_level", bed_level))
     key = hashlib.sha256(json.dumps(identity).encode()).hexdigest()[:16]
     target = os.path.realpath(os.path.join(exports, f"mixed_{lang}_{key}.wav"))
     if not target.startswith(exports + os.sep):
@@ -1813,7 +1855,7 @@ async def _mixed_dub_audio(exports_dir: str, lang: str, bg_audio: str, track_pat
             partial = target + ".tmp.wav"
             cmd = [
                 find_ffmpeg(), "-i", bg_audio, "-i", track_path,
-                "-filter_complex", bed_mix_filter("0:a", "1:a", bed_gain=1.0),
+                "-filter_complex", bed_mix_filter("0:a", "1:a", bed_gain=bed_level),
                 "-map", "[aout]", "-c:a", "pcm_s16le", "-f", "wav", "-y", partial,
             ]
             try:
@@ -1855,6 +1897,7 @@ async def dub_download_audio(
     job_id: str,
     lang: str = Query(None),
     preserve_bg: bool = Query(True),
+    bed_level: BedLevel = DEFAULT_BED_LEVEL,
     save_authorization: str = Header("", alias="X-VoiceStudio-Path-Authorization"),
 ):
     job_dir = _existing_job_dir_or_404(job_id)
@@ -1881,7 +1924,7 @@ async def dub_download_audio(
     leased = None
     if bg_audio:
         try:
-            wav_path = leased = await _mixed_dub_audio(exports_dir, lang_label, bg_audio, wav_path)
+            wav_path = leased = await _mixed_dub_audio(exports_dir, lang_label, bg_audio, wav_path, bed_level)
         except Exception as exc:
             logger.exception("Failed to mix audio")
             raise HTTPException(status_code=500, detail={"code": "dub_background_unavailable", "message": "Could not preserve background audio"}) from exc
@@ -2148,6 +2191,7 @@ async def dub_download_mp3(
     job_id: str,
     lang: str = Query(None),
     preserve_bg: bool = Query(True),
+    bed_level: BedLevel = DEFAULT_BED_LEVEL,
     save_authorization: str = Header("", alias="X-VoiceStudio-Path-Authorization"),
     bitrate: str = Query("192k"),
 ):
@@ -2178,7 +2222,7 @@ async def dub_download_mp3(
         mixed_path = os.path.join(exports_dir, f"mixed_mp3_{stamp}.wav")
         cmd_mix = [
             ffmpeg, "-i", bg_audio, "-i", wav_path,
-            "-filter_complex", bed_mix_filter("0:a", "1:a", bed_gain=1.0),
+            "-filter_complex", bed_mix_filter("0:a", "1:a", bed_gain=bed_level),
             "-map", "[aout]", "-c:a", "pcm_s16le", "-y", mixed_path
         ]
         try:

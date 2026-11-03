@@ -93,8 +93,10 @@ Notes on the PIN gate (`NetworkAccessMiddleware`, `backend/main.py`):
   always served un-PIN'd so the PIN-prompt UI can load.
 - It is a **consumption** credential: a valid PIN never unlocks the admin surface
   (it is 6 digits, brute-forceable). Admin needs loopback or the API key.
-- It is completely inert when no PIN is set (the default, and every Docker
-  deploy).
+- It is completely inert when no PIN is set (including Docker until in-app
+  network sharing is enabled). Docker's bridge can make the host's own browser
+  a non-loopback client; if the PIN is lost, follow the
+  [Docker recovery steps](install/docker.md#recovering-from-a-lost-share-pin).
 
 ---
 
@@ -287,6 +289,16 @@ the gate); IPv4-mapped IPv6 addresses (`::ffff:192.168.1.5`) from dual-stack
 proxies are unwrapped so they match IPv4 CIDRs; the value is read at request
 time, so in production **restart the backend** to apply a change. Default empty
 — no change to the strict loopback default.
+
+### Docker host loopback
+
+`OMNIVOICE_TRUST_HOST_LOOPBACK=1` (server mode only) lets the Docker host's own
+browser skip the **share PIN**. Inside the container that browser arrives from
+the default gateway, so only that exact socket address qualifies, only on the
+main port (not the LAN-share listener), and forwarded headers are never read
+for it. It grants the PIN's consumption rights only: the API-key gate and admin
+routes are unaffected. Default off. Risks and setup:
+[Docker install](install/docker.md#trust-host-loopback).
 
 ---
 

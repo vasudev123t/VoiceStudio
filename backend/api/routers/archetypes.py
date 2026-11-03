@@ -253,46 +253,39 @@ def _is_blank_audio(audio_tensor) -> bool:
         return False
 
 
-_FLATNESS_FRAME = 1024
-_FLATNESS_HOP = 512
-#: Frames quieter than this fraction of the loudest frame's energy are the gaps
-#: between words, not speech; their spectrum is the noise floor and averaging it
-#: in drags the measurement toward the value of whatever silence sounds like.
-_FLATNESS_FRAME_FLOOR = 1e-4
+_WIN_LEN = 1024
+_WIN_STEP = _WIN_LEN // 2
+_LOG_FLOOR = 1e-12
+_PAUSE_FRACTION = 1e-4  # frames below this share of the loudest one are pauses
 
 
 def _spectral_flatness(audio_tensor) -> Optional[float]:
-    """Mean per-frame geometric-mean / arithmetic-mean of the power spectrum.
+    """Average spectral flatness over speech-carrying windows, or ``None``.
 
-    ~1.0 for broadband noise, →0 for a pure tone. The degenerate diffusion
-    renders this guards against are near-pure tonal buzzes, distinct from both
-    silence (caught by ``_is_blank_audio``) and real speech. Returns ``None``
-    if it can't be computed so callers don't act on a bad measurement.
-
-    Measured over short frames and averaged — the standard definition. A single
-    FFT of the whole clip (what this used to do) is not the same quantity: its
-    frequency resolution grows with clip length, so speech harmonics carve
-    ever-deeper nulls into the spectrum and the geometric mean collapses. That
-    made the result depend on how long the clip was rather than on what it
-    sounded like, and put real speech below the rejection threshold.
+    Flatness of one window is geometric mean / arithmetic mean of its power
+    spectrum: close to 0 for a tone, towards 1 for noise. Windowing the clip
+    (instead of one transform over all of it) keeps the number independent of
+    duration; pauses are dropped so their noise floor doesn't pull it up.
+    Too-short, non-finite or otherwise unmeasurable audio yields ``None``,
+    and so does any error: this check must never stop a render.
     """
     try:
         import torch
 
-        t = audio_tensor if isinstance(audio_tensor, torch.Tensor) else torch.as_tensor(audio_tensor)
-        t = t.detach().to("cpu", dtype=torch.float32)
-        if t.ndim > 1:
-            t = t.mean(dim=0)
-        t = t.flatten()
-        if t.numel() < _FLATNESS_FRAME or not torch.isfinite(t).all():
+        x = torch.as_tensor(audio_tensor).detach().to("cpu", dtype=torch.float32)
+        if x.ndim > 1:
+            x = x.mean(dim=0)
+        x = x.flatten()
+        if x.numel() < _WIN_LEN or not bool(torch.isfinite(x).all()):
             return None
-        frames = t.unfold(0, _FLATNESS_FRAME, _FLATNESS_HOP)
-        spec = torch.fft.rfft(frames * torch.hann_window(_FLATNESS_FRAME)).abs().pow(2) + 1e-12
-        energy = spec.sum(dim=1)
-        spec = spec[energy > energy.max() * _FLATNESS_FRAME_FLOOR]
-        if spec.shape[0] == 0:
+        windows = x.unfold(0, _WIN_LEN, _WIN_STEP) * torch.hann_window(_WIN_LEN)
+        spectra = torch.fft.rfft(windows, dim=1).abs().square() + _LOG_FLOOR
+        loudness = spectra.sum(dim=1)
+        spectra = spectra[loudness > loudness.max() * _PAUSE_FRACTION]
+        if spectra.shape[0] == 0:
             return None
-        return float((torch.exp(spec.log().mean(dim=1)) / spec.mean(dim=1)).mean())
+        flat = torch.exp(spectra.log().mean(dim=1)) / spectra.mean(dim=1)
+        return float(flat.mean())
     except Exception:  # never let the checker itself block a render
         return None
 
@@ -360,17 +353,21 @@ async def _render_archetype_wav(a: dict, out_path: Path, *, allow_model_load: bo
     # length-scaled helper (#1190) instead of the flat 300s default.
     from services.model_manager import generate_timeout_s
     _budget = generate_timeout_s(text, engine=model)
+    # A design profile's sample uses the seed the user saved it with (#3254);
+    # archetype previews keep the fixed preview seed.
+    seed = a.get("seed")
+    seed = _PREVIEW_SEED if seed is None else int(seed)
     audio_tensor = await run_on_gpu_pool_guarded(
-        lambda: _infer(_PREVIEW_SEED), what="Archetype preview generate",
+        lambda: _infer(seed), what="Archetype preview generate",
         timeout=_budget)
     if _is_unusable_audio(audio_tensor):
         # Blank OR a degenerate tonal buzz — retry once on a different seed to
         # step off the bad diffusion trajectory. Static message only: the
-        # archetype id is request-derived (CodeQL log-injection); the seed is a
-        # module constant, safe to log.
-        logger.warning("Archetype rendered unusable at seed %d — retrying once", _PREVIEW_SEED)
+        # archetype id is request-derived (CodeQL log-injection); the seed is an
+        # int, safe to log.
+        logger.warning("Archetype rendered unusable at seed %d — retrying once", seed)
         audio_tensor = await run_on_gpu_pool_guarded(
-            lambda: _infer(_PREVIEW_SEED + 1), what="Archetype preview generate",
+            lambda: _infer(seed + 1), what="Archetype preview generate",
             timeout=_budget)
     if _is_unusable_audio(audio_tensor):
         raise RuntimeError("the voice engine returned no audible audio for this archetype")

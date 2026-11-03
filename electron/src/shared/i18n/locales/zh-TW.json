@@ -104,9 +104,7 @@
     "dub": "翻譯並配音音訊或影片。",
     "stories": "用多種聲音創作場景。",
     "audiobook": "製作分章節的有聲書。",
-    "transcribe": "將錄音轉成文字。",
-    "collapseFooter": "收合底欄",
-    "expandFooter": "展開底欄"
+    "transcribe": "將錄音轉成文字。"
   },
   "longformPersistence": {
     "storage_unavailable_title": "無法載入專案",
@@ -377,13 +375,13 @@
     "hf_source_app_label": "VoiceStudio（已加密，建議）",
     "hf_source_cli_label": "HuggingFace CLI",
     "hf_source_env_label": "環境變數",
-    "theme_auto": "系統自動",
+    "theme_auto": "跟隨系統",
     "theme_light": "淺色",
     "reduce_motion": "減少動態效果",
     "reduce_motion_desc": "停止背景動畫與轉場效果。系統設定本身仍然生效，此項在其基礎上疊加。",
-    "perf_torch_compile": "停用 torch.compile",
-    "perf_torch_compile_note": "使用即時執行以避免 Triton 記憶體錯誤。",
-    "perf_torch_compile_hint": "使用即時執行以避免 Triton 記憶體錯誤。 <issueLink>#65</issueLink> · <crashLink>#2135</crashLink>",
+    "perf_torch_compile": "關閉 torch.compile",
+    "perf_torch_compile_note": "Triton 不穩定時，不使用已編譯核心執行模型。",
+    "perf_torch_compile_hint": "Triton 或 <code>torch.compile</code> 失敗後請開啟；後端在產生音訊時結束也適用。VoiceStudio 接著會傳入 <code>TORCH_COMPILE_DISABLE=1</code>，優先確保穩定而非編譯速度。顯示記憶體低於 16 GB 的 Windows 問題請見 <issueLink>#65</issueLink>；舊款 NVIDIA 的 CUDA 圖形問題請見 <crashLink>#2135</crashLink>。",
     "llmp_cli_help": "透過與代理修復相同的執行器使用已安裝的 CLI 及其登入。模型留空將使用 CLI 預設值。回應可能較慢，費用依 CLI 帳戶計收。",
     "llmp_sdk_help": "原生供應商使用 LiteLLM。其他供應商請輸入 provider/model。Bedrock 使用 API 金鑰或 AWS 設定檔；Vertex 將帳戶 ID 用作專案，並使用 Google 應用程式憑證。基礎 URL 為選填。",
     "llmp_cli_auth": "CLI 帳戶存取遭拒。請檢查登入、訂閱和所選模型。"
@@ -451,10 +449,10 @@
     "importFailed": "無法讀取該檔案。",
     "addLine": "新增線路",
     "addChapter": "新增章節",
-    "clearScript": "清空劇本",
-    "clearScriptHint": "移除劇本中的所有台詞和章節（角色表保留）",
     "clearConfirm": "清除全部 {{count}} 個腳本項目及待處理的匯入文字？此操作無法復原。",
-    "cleared": "劇本已清空",
+    "clearScript": "抹除腳本",
+    "clearScriptHint": "清除指令碼中的全部內容：所有行與所有章節",
+    "cleared": "腳本已抹除",
     "chapterN": "第{{n}}章",
     "stems": "莖",
     "stemsDone": "导出 {{count}} 字符干",
@@ -475,11 +473,8 @@
     "pasteAbove": "將文字貼到上面",
     "cancel": "取消",
     "splitIntoTracks": "分成幾行",
-    "splitMode": "拆分方式",
-    "split_sentences": "句子",
-    "split_paragraphs": "段落",
-    "split_chapters": "章節",
-    "splitModeHint": "每一行都作為獨立的一段錄音朗讀。單人朗讀時，按段落或整章拆分比按句子更連貫。",
+    "splitMode": "拆分依據",
+    "splitModeHint": "每一行都會當作獨立的一遍朗讀。只有一位敘述者時，依段落或章節拆分聽起來更自然。",
     "emptyText": "透過加入對話和旁白來開始你的故事。為演員陣容中的每個角色分配一個聲音。",
     "addFirst": "新增第一行",
     "linePlaceholder": "輸入對話或旁白…使用 [暫停 0.5 秒] 進行靜默休息",
@@ -510,7 +505,10 @@
     "exportFailed": "匯出失敗 — 檢查後端是否正在運作。",
     "global_speed": "速度",
     "global_speed_hint": "所有線路的讀取速度，沒有自己的速度覆蓋",
-    "deleteProjectConfirm": "要永久刪除此專案嗎？"
+    "deleteProjectConfirm": "要永久刪除此專案嗎？",
+    "split_chapters": "章節",
+    "split_paragraphs": "段落",
+    "split_sentences": "句子"
   },
   "common": {
     "stop": "停止",
@@ -1760,8 +1758,8 @@
     "backend_shutting_down": "VoiceStudio 正在關閉。請重新開啟應用程式後再試。",
     "crash_broken_env": "它在載入自身的 Python 相依套件時結束，因此與記憶體或顯示卡無關——執行環境不完整，或更新到一半就停住了。請在 設定 → 系統日誌 → 後端 中使用「清理並重試」，它會從頭重建環境並就地修復，不會動到你的聲音或專案。若之後仍然失敗，當機詳情會指出無法匯入的確切套件。",
     "crash_vram_default": "在較小的 GPU 上，常見原因是在 TTS 模型仍載入時再載入 ASR 模型，導致顯示記憶體（VRAM）不足：請先卸載 TTS 模型，或在 模型庫 → 模型 中選擇較小的 ASR 模型。",
-    "stream_cut_backend_alive": "串流提前結束，但後端仍在執行——因此它並沒有當機。在伺服器或容器化部署中，這通常是反向代理或負載平衡器在緩衝連線或使其逾時：請為此路由停用回應緩衝（nginx: proxy_buffering off; X-Accel-Buffering: no）並調高讀取逾時。直接執行桌面應用程式，或在沒有代理的 localhost 上執行，即可確認。",
-    "stream_cut_backend_alive_local": "串流提前結束，但後端仍在執行——因此並未當機。應用程式在任務進行中與後端斷線；當某個耗時步驟連續數分鐘沒有輸出時就可能發生，而後端通常仍會把任務完成。請等幾分鐘後從歷史記錄重新開啟該任務，或查看後端日誌（設定 → 系統日誌 → 後端）了解它當時在做什麼。"
+    "stream_cut_backend_alive": "請先檢查應用程式前方的反向代理或負載平衡器：為此路由關閉回應緩衝（proxy_buffering off; X-Accel-Buffering: no），並調高讀取逾時。連線中斷時後端仍在執行，所以並未當機；伺服器或容器部署中通常是代理所致，直接執行桌面應用程式或透過 localhost 存取即可確認或排除。",
+    "stream_cut_backend_alive_local": "請等待幾分鐘，再從歷史記錄重新開啟該工作；若找不到，請在 設定 → 系統日誌 → 後端 中查看後端日誌。一個耗時且無輸出的步驟之後，連線在工作途中中斷，但後端仍在執行，通常會把工作完成，所以這不是當機。"
   },
   "keyboard": {
     "title": "鍵盤快速鍵",
@@ -2265,7 +2263,12 @@
     "other_ways": "其他幫助方法",
     "star_short": "加星",
     "star_github": "在 GitHub 上加星標",
-    "join_discord": "加入不和諧"
+    "join_discord": "加入不和諧",
+    "sponsors_tier_strategic": "策略",
+    "sponsors_tier_company": "企業",
+    "sponsors_tier_development": "開發",
+    "sponsors_tier_community": "社群",
+    "sponsors_tier_supporter": "支持者"
   },
   "updates": {
     "tab": "更新",
@@ -2356,10 +2359,10 @@
     "hf_token_get": "沒有令牌？免費獲得一份 →",
     "hf_token_inline_prompt": "使用免費的 Hugging Face 令牌加快下載速度",
     "hf_token_inline_ph": "貼上 hf_… 令牌（可選）",
-    "hf_token_get_short": "免費獲得一份 →",
     "hf_token_active_using": "在 {{source}} 中找到 Hugging Face 權杖 — {{masked}}",
-    "hf_token_replace": "更換權杖…",
-    "hf_token_replace_warning": "這會取代為此應用程式儲存的權杖，但不會撤銷舊權杖。"
+    "hf_token_replace": "取代…",
+    "hf_token_replace_warning": "這會取代為此應用程式儲存的權杖，但不會撤銷舊權杖。",
+    "hf_token_get_short": "免費取得 →"
   },
   "history": {
     "dub_meta": "{{segments}} 個片段 · {{duration}} 秒",
@@ -2469,7 +2472,7 @@
     "warn_unknown_voice": "未知聲音 ‘{{name}}’ — 將使用預設聲音",
     "warn_empty_chapter": "章節「{{title}}」沒有可朗讀的文字",
     "warn_unknown_tag": "無法辨識的標記 {{tag}} — 將被朗讀出來",
-    "untitled": "未命名有聲書",
+    "untitled": "無標題",
     "dismiss": "關閉",
     "output": "輸出",
     "title": "有聲書",
@@ -2484,14 +2487,14 @@
     "preview_plan": "預覽計劃",
     "stop": "停止",
     "stopped_note": "已停止 — 已完成的章節已快取；再次點擊建立以繼續。",
-    "recovery_title": "已中斷的有聲書",
-    "recovery_progress": "{{total}} 章中有 {{done}} 章已快取",
-    "recovery_hint": "繼續時會重複使用已完成的章節，只合成剩餘內容。",
-    "resume": "繼續",
-    "open_chapter_cache": "開啟章節快取",
-    "cache_location_hint": "章節音訊快取：{{cachePath}} · 繼續資訊清單：{{manifestPath}}",
-    "resume_failed": "無法繼續有聲書：{{message}}",
-    "open_cache_failed": "無法開啟章節快取",
+    "recovery_title": "繼續製作尚未完成的有聲書",
+    "recovery_progress": "已就緒章節：{{done}}/{{total}}",
+    "recovery_hint": "已產生的音訊會保留，繼續時只製作尚缺的部分。",
+    "resume": "繼續產生",
+    "open_chapter_cache": "查看已儲存章節",
+    "cache_location_hint": "音訊資料夾：{{cachePath}} · 復原記錄：{{manifestPath}}",
+    "resume_failed": "無法繼續製作此有聲書：{{message}}",
+    "open_cache_failed": "無法顯示已儲存章節的資料夾",
     "progress_summary": "正在合成第 {{current}}/{{total}} 章",
     "eta": "剩餘約 {{time}}",
     "chapter_n": "第 {{n}} 章",
@@ -2545,15 +2548,17 @@
     "seed_ph": "自動",
     "vary_repeats": "改變重複的行",
     "vary_repeats_help": "為相同的行提供不同的 take，而不是重複使用一條錄音。",
-    "line_gap": "行間停頓",
     "joins_help": "行間停頓加在沒有自己 [pause] 的行之間，段落間停頓加在空行處。開啟裁剪時，會先裁掉每行自帶的開頭與結尾靜音，因此你設定的停頓就是實際聽到的停頓。",
-    "paragraph_gap": "段落間停頓",
-    "trim_edges": "裁剪引擎靜音",
-    "trim_edges_help": "拼接前移除引擎在每行附加的靜音。關閉以保留原始輸出。",
+    "trim_edges": "裁掉引擎靜音",
+    "trim_edges_help": "先裁掉各引擎在每行前後加入的靜音，再接合。需要原始輸出時請關閉。",
     "emotion_help": "分層情感 — 僅由 IndexTTS2 引擎應用。",
     "emotion_text": "情感描述",
     "emotion_text_ph": "例如 聽起來很疲勞和悲傷",
-    "emotion_alpha": "情感強度"
+    "emotion_alpha": "情感強度",
+    "recovery_load_failed": "無法檢查未完成的有聲書。",
+    "recovery_retry": "重試",
+    "line_gap": "行間停頓",
+    "paragraph_gap": "段落間停頓"
   },
   "voicePanel": {
     "title": "語音",
@@ -2749,13 +2754,6 @@
     "progress": "已驗證 {{done}} / {{total}} 個片段",
     "cancelled": "已取消",
     "fitting": "正在調整時間"
-  },
-  "sponsorSlot": {
-    "book": "預訂展示位",
-    "preview": "贊助商展示預覽",
-    "message": "您的品牌、網站和留言",
-    "email_app": "開啟郵件應用程式",
-    "copy_email": "複製信箱"
   },
   "supportPlans": {
     "remove": "移除贊助商列",

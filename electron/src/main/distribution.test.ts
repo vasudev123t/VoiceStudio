@@ -5,7 +5,11 @@ import {
   distributionProfile,
   resolveDistributionTarget,
 } from '../../../config/distributions.mjs';
-import { applicationUpdatesSupported, runtimeSetupSupported } from './distribution';
+import {
+  applicationUpdatesSupported,
+  applicationUpdatesUnsupportedReason,
+  runtimeSetupSupported,
+} from './distribution';
 
 describe('distribution contract', () => {
   test('accepts only the four maintained distribution identities', () => {
@@ -46,6 +50,18 @@ describe('distribution contract', () => {
     expect(applicationUpdatesSupported(true, 'snap-store', false)).toBe(false);
     expect(applicationUpdatesSupported(true, 'mac-app-store', false)).toBe(false);
     expect(applicationUpdatesSupported(false, 'direct', false)).toBe(false);
+  });
+
+  test('names why updates are unsupported, development first', () => {
+    expect(applicationUpdatesUnsupportedReason(true, 'direct', false)).toBeNull();
+    expect(applicationUpdatesUnsupportedReason(false, 'direct', true)).toBe('development');
+    expect(applicationUpdatesUnsupportedReason(false, 'snap-store', false)).toBe('development');
+    expect(applicationUpdatesUnsupportedReason(true, 'snap-store', true)).toBe('store');
+    expect(applicationUpdatesUnsupportedReason(true, 'mac-app-store', false)).toBe('store');
+    expect(applicationUpdatesUnsupportedReason(true, 'direct', true)).toBe('package-manager');
+    expect(applicationUpdatesUnsupportedReason(true, 'microsoft-store', true)).toBe(
+      'package-manager',
+    );
   });
 
   test('bundled-only distributions cannot invoke runtime setup downloads', () => {

@@ -69,9 +69,23 @@ class _MarkerGenerator:
 
 
 class _MarkerDetector:
+    """Gain-invariant, like AudioSeal: a level change (normalization, a
+    peak-safe encode) keeps the mark, while clipping or dropping it does not.
+    Marked = the comb centers agree with each other (within 10% of their
+    median) and stand well clear of the clip's own level. An absolute
+    threshold here once made a legitimate loudness change in the DSP chain
+    (#3429) read as a lost mark."""
+
     def detect_watermark(self, audio, sample_rate, message_threshold=0.5):
-        probes = audio[..., 8::_STRIDE]
-        conf = float((probes > 0.9).float().mean()) if probes.numel() else 0.0
+        probes = audio[..., 8::_STRIDE].flatten()
+        if not probes.numel():
+            return (0.0, torch.zeros(16))
+        level = float(probes.median())
+        rms = float(audio.pow(2).mean().sqrt())
+        if level <= 0 or level < 2.5 * rms:
+            conf = 0.0
+        else:
+            conf = float(((probes - level).abs() <= 0.1 * level).float().mean())
         if conf > 0.5:
             msg = torch.tensor(_wm().OMNI_MESSAGE, dtype=torch.float32)
         else:

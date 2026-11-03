@@ -1,6 +1,8 @@
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
 import { startHealthBackend } from './fake-health-backend.mjs';
+import { routesForShard } from './crawler-shards.mjs';
+import { waitForQuietRequests } from './crawler-settle.mjs';
 
 /**
  * Clicks every enabled button on every static route, once per backend fault mode, and fails on
@@ -13,6 +15,7 @@ import { startHealthBackend } from './fake-health-backend.mjs';
  *    new toast or alert, no changed text), so the user sees a button that "does nothing"
  *  - crash: an uncaught exception or unhandled promise rejection
  *  - console: a console.error the click caused
+ *  - unsettled: API traffic never gives the UI a full quiet grace within the request budget
  *  - frozen: the renderer stops answering after the click
  *
  * Fault modes apply to API writes (anything but GET/HEAD) issued after the click, so every button
@@ -29,8 +32,8 @@ import { startHealthBackend } from './fake-health-backend.mjs';
  * port from the shared fake backend itself.
  *
  * Env: VOICESTUDIO_UI_URL, VOICESTUDIO_CRAWL_MODES (comma list), VOICESTUDIO_CRAWL_ROUTES
- * (comma list of path substrings), VOICESTUDIO_CRAWL_SHARD (`i/n`: every n-th route from the
- * i-th, for parallel CI jobs), VOICESTUDIO_CRAWL_VERBOSE=1 to log every click.
+ * (comma list of path substrings), VOICESTUDIO_CRAWL_SHARD (`i/n`: the i-th of n cost-balanced
+ * route sets, for parallel CI jobs; see crawler-shards.mjs), VOICESTUDIO_CRAWL_VERBOSE=1 to log every click.
  */
 
 const BASE = process.env.VOICESTUDIO_UI_URL || 'http://localhost:3912';
@@ -88,7 +91,7 @@ async function openSession(browser, mode) {
       localStorage.setItem('voicestudio.setup.complete.v1', '1');
     } catch {}
   });
-  const state = { faulting: false, failedWrites: 0, inflight: new Set(), events: [] };
+  const state = { faulting: false, failedWrites: 0, inflight: new Set(), activity: 0, events: [] };
   await context.route('**/*', (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -109,10 +112,24 @@ async function openSession(browser, mode) {
   });
   page.on('requestfailed', countFailure);
   page.on('request', (request) => {
-    if (isApi(request) && request.resourceType() !== 'eventsource') state.inflight.add(request);
+    if (isApi(request) && request.resourceType() !== 'eventsource') {
+      state.inflight.add(request);
+      state.activity += 1;
+      recent.push(request);
+      if (recent.length > 6) recent.shift();
+    }
   });
-  page.on('requestfinished', (request) => state.inflight.delete(request));
-  page.on('requestfailed', (request) => state.inflight.delete(request));
+  // Name what kept the page busy, so an unsettled finding points at its request.
+  const recent = [];
+  const describeTraffic = () => {
+    const names = [...new Set([...state.inflight, ...recent].map((r) => `${r.method()} ${new URL(r.url()).pathname}`))];
+    return names.length ? `: ${names.slice(0, 6).join(', ')}` : '';
+  };
+  const finished = (request) => {
+    if (state.inflight.delete(request)) state.activity += 1;
+  };
+  page.on('requestfinished', finished);
+  page.on('requestfailed', finished);
   page.on('pageerror', (error) =>
     state.events.push({ kind: 'crash', detail: error.stack || error.message }),
   );
@@ -123,12 +140,12 @@ async function openSession(browser, mode) {
   page.on('dialog', (dialog) => dialog.accept().catch(() => {}));
   context.on('page', (popup) => popup !== page && popup.close().catch(() => {}));
 
-  const settle = async (grace = SETTLE_MS) => {
-    const deadline = Date.now() + REQUEST_BUDGET_MS;
-    while (state.inflight.size && Date.now() < deadline) await page.waitForTimeout(50);
-    await page.waitForTimeout(grace);
-    return state.inflight.size;
-  };
+  const settle = (grace = SETTLE_MS, snapshot) => waitForQuietRequests(state, {
+    wait: (duration) => page.waitForTimeout(duration),
+    graceMs: grace,
+    budgetMs: REQUEST_BUDGET_MS,
+    snapshot,
+  });
   const navigate = (to) =>
     page.evaluate(async (target) => {
       // Import once per page load: re-importing after a Vite hot update can catch the
@@ -144,6 +161,7 @@ async function openSession(browser, mode) {
     await settle(100);
     state.events.length = 0;
     state.failedWrites = 0;
+    recent.length = 0;
     await page.evaluate((feedback) => {
       window.__crawlErrors.length = 0;
       for (const element of document.querySelectorAll(feedback)) element.dataset.crawlSeen = '1';
@@ -167,24 +185,32 @@ async function openSession(browser, mode) {
       state.faulting = false;
       return null; // covered by an overlay or detached mid-click; not a finding
     }
-    const pending = await settle();
-    state.faulting = false;
+    let observation;
+    try {
+      observation = await settle(SETTLE_MS, () => page.locator(BUSY).filter({ visible: true }).count());
+    } finally {
+      state.faulting = false;
+    }
     const problems = [];
-    const responsive = await Promise.race([
+    const responsive = !observation.unresponsive && await Promise.race([
       page.evaluate(() => true),
       new Promise((resolve) => setTimeout(() => resolve(false), 5_000)),
     ]);
     if (!responsive) {
       await page.goto(`${BASE}/#${route}`);
-      return [{ kind: 'frozen', detail: 'renderer did not answer within 5s' }];
+      return [{ kind: 'frozen', detail: observation.unresponsive
+        ? 'renderer did not answer before the request budget expired'
+        : 'renderer did not answer within 5s' }];
     }
-    const after = await page.locator(BUSY).filter({ visible: true }).count();
-    if (!pending && after > before && new URL(page.url()).hash === `#${route}`)
+    if (!observation.settled)
+      problems.push({ kind: 'unsettled', detail: `API traffic did not stay quiet within ${REQUEST_BUDGET_MS}ms (${observation.pending} request(s) pending${describeTraffic()})` });
+    const after = observation.snapshot;
+    if (observation.settled && after > before && new URL(page.url()).hash === `#${route}`)
       problems.push({
         kind: 'stuck',
         detail: `${after - before} loading indicator(s) left after all requests settled`,
       });
-    if (state.failedWrites && mode !== 'fixture' && !pending) {
+    if (state.failedWrites && mode !== 'fixture' && observation.settled) {
       const greyed = await page.evaluate(() =>
         [...document.querySelectorAll('main [data-crawl-enabled]')]
           .filter((element) => element.matches('[disabled], [aria-disabled="true"]'))
@@ -249,6 +275,18 @@ async function canary(browser) {
       main.prepend(button);
       return button;
     };
+    add('canary-reload', () => {});
+    add('canary-late-request', () => {
+      setTimeout(() => {
+        const spinner = document.createElement('span');
+        spinner.className = 'animate-spin';
+        spinner.textContent = '.';
+        main.append(spinner);
+        // A background poll can start during the detector's React grace.
+        // The view recovers within that grace, measured from the response.
+        void fetch('/api/health').finally(() => setTimeout(() => spinner.remove(), 300));
+      }, 300);
+    });
     add('canary-stuck', () => {
       const spinner = document.createElement('span');
       spinner.className = 'animate-spin';
@@ -269,10 +307,42 @@ async function canary(browser) {
     const result = await clickAndCheck(page.getByRole('button', { name, exact: true }), route);
     return (result ?? []).map((problem) => problem.kind);
   };
+  assert.deepEqual(
+    await kinds('canary-late-request'),
+    [],
+    'recovering late request was mistaken for a stuck spinner',
+  );
   assert.ok((await kinds('canary-stuck')).includes('stuck'), 'stuck detector went blind');
   assert.ok((await kinds('canary-silent')).includes('silent'), 'silent detector went blind');
   assert.ok((await kinds('canary-disabled')).includes('disabled'), 'disabled detector went blind');
   assert.ok((await kinds('canary-crash')).includes('crash'), 'crash detector went blind');
+  // Playwright can reject the post-click DOM snapshot when a reload replaces
+  // its execution context. Recovery writes must not inherit this click's fault.
+  await arm();
+  const reloadError = new Error('Execution context was destroyed during reload');
+  const locate = page.locator.bind(page);
+  let busyReads = 0;
+  page.locator = (selector, ...args) => selector !== BUSY ? locate(selector, ...args) : {
+    filter: (options) => ({
+      count: async () => {
+        if (++busyReads === 2) throw reloadError;
+        return locate(selector, ...args).filter(options).count();
+      },
+    }),
+  };
+  try {
+    await assert.rejects(
+      clickAndCheck(page.getByRole('button', { name: 'canary-reload', exact: true }), route),
+      (error) => error === reloadError,
+      'snapshot reload must preserve the original recovery error',
+    );
+  } finally {
+    page.locator = locate;
+  }
+  const recoveryStatus = await page.evaluate(async () =>
+    (await fetch('/api/health', { method: 'POST' })).status,
+  );
+  assert.equal(recoveryStatus, 200, 'snapshot failure leaked fault injection into recovery');
   await session.context.close();
 }
 
@@ -463,7 +533,7 @@ try {
   await probe.addInitScript(() => localStorage.setItem('voicestudio.setup.complete.v1', '1'));
   await probe.goto(`${BASE}/#/settings/usage`);
   await probe.locator('main').first().waitFor();
-  const routes = [
+  const allRoutes = [
     ...new Set(
       await probe.evaluate(async () => {
         const { router } = await import('/src/router.tsx');
@@ -473,8 +543,8 @@ try {
   ]
     .filter((path) => path !== '/' && !path.includes('$'))
     .filter((path) => !routeFilter.length || routeFilter.some((part) => path.includes(part)))
-    .sort()
-    .filter((_, index) => index % shards === shard - 1);
+    .sort();
+  const routes = routesForShard(allRoutes, shard, shards);
   await probe.close();
 
   // Settle every mode before reporting: one mode's harness error must not close the shared

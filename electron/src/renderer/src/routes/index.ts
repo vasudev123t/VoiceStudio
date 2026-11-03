@@ -1,6 +1,7 @@
 import { createRootRoute, createRoute, lazyRouteComponent, redirect } from '@tanstack/react-router';
 import { AppShell } from '@/components/app-shell/app-shell';
 import { readLastSettingsRoute } from '@/lib/settings-route';
+import { NotFoundPage } from '@/components/not-found-page';
 
 const HomePage = lazyRouteComponent(() => import('@/features/home/home-page'), 'HomePage');
 
@@ -28,9 +29,15 @@ const ProjectsPage = lazyRouteComponent(
   () => import('@/features/projects/projects-page'),
   'ProjectsPage',
 );
-const CallsPage = lazyRouteComponent(
+const WorkflowsPage = lazyRouteComponent(
   () => import('@/features/workflows/workflows-page'),
   'WorkflowsPage',
+);
+// Calls lives beside the workflow canvas (a call step hands off to it), so it
+// shares the page but opens on the Calls view instead of the canvas.
+const CallsPage = lazyRouteComponent(
+  () => import('@/features/workflows/workflows-page'),
+  'WorkflowCallsPage',
 );
 const ToolsPage = lazyRouteComponent(() => import('@/features/tools/tools-page'), 'ToolsPage');
 const IntegrationsPage = lazyRouteComponent(
@@ -103,9 +110,7 @@ export const modelFamilyRoute = createRoute({
 export const catchAllRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '$',
-  beforeLoad: () => {
-    throw redirect({ to: '/' });
-  },
+  component: NotFoundPage,
 });
 
 export const transcriptionsRoute = createRoute({
@@ -168,6 +173,11 @@ export const callsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/calls',
   component: CallsPage,
+});
+export const workflowsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/workflows',
+  component: WorkflowsPage,
 });
 export const toolsRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -234,6 +244,11 @@ export const usageRoute = createRoute({
   path: '/settings/usage',
   component: SettingsPage,
 });
+export const accountRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/settings/account',
+  component: SettingsPage,
+});
 export const privacyRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings/privacy',
@@ -288,6 +303,7 @@ export const routeTree = rootRoute.addChildren([
   proRoute,
   storageRoute,
   privacyRoute,
+  accountRoute,
   permissionsRoute,
   performanceRoute,
   usageRoute,
@@ -304,6 +320,7 @@ export const routeTree = rootRoute.addChildren([
   mediaRoute,
   toolsRoute,
   callsRoute,
+  workflowsRoute,
   integrationsRoute,
   integrationDetailRoute,
   batchRoute,

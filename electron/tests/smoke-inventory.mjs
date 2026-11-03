@@ -16,6 +16,9 @@ export const OTHER_SMOKES = {
 
 const SMOKE_FILE = /smoke(\..*)?\.(mjs|ts)$/;
 
+/** Shared harness that launches Chromium and mocks /api for renderer smokes. */
+export const RENDERER_HELPER = 'smoke-api-mock.mjs';
+
 /**
  * What a smoke needs in order to run:
  *  - renderer: mocked UI in Chromium against the Vite smoke server (runs offline)
@@ -27,7 +30,7 @@ const SMOKE_FILE = /smoke(\..*)?\.(mjs|ts)$/;
 export function classifySmoke(file, source) {
   if (file.includes('-real-smoke.')) return 'real-backend';
   if (source.includes('_electron')) return 'electron';
-  if (/\bchromium\b/.test(source)) return 'renderer';
+  if (/\bchromium\b/.test(source) || source.includes(`'./${RENDERER_HELPER}'`)) return 'renderer';
   if (Object.hasOwn(OTHER_SMOKES, file)) return 'other';
   return 'unknown';
 }

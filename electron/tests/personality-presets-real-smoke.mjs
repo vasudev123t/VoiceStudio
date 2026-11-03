@@ -23,7 +23,7 @@ try {
   const after = await page.evaluate(() =>
     JSON.parse(localStorage.getItem('voicestudio.design.v1')),
   );
-  assert.equal(after.attrs.Pitch, 'moderate pitch');
+  assert.equal(after.attrs.Pitch, 'Medium');
   assert.equal(after.attrs.Gender, 'Auto');
   assert.equal(after.seed, before.seed);
   assert.equal(after.text, 'Preserve this script');

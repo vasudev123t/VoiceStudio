@@ -104,9 +104,7 @@
     "dub": "Terjemahkan dan sulihsuarakan audio atau video.",
     "stories": "Buat adegan dengan beberapa suara.",
     "audiobook": "Buat buku audio dengan bab.",
-    "transcribe": "Ubah rekaman menjadi teks.",
-    "collapseFooter": "Ciutkan footer",
-    "expandFooter": "Perluas footer"
+    "transcribe": "Ubah rekaman menjadi teks."
   },
   "longformPersistence": {
     "storage_unavailable_title": "Proyek tidak dapat dimuat",
@@ -377,13 +375,13 @@
     "hf_source_app_label": "VoiceStudio (terenkripsi, disarankan)",
     "hf_source_cli_label": "HuggingFace CLI",
     "hf_source_env_label": "Variabel lingkungan",
-    "theme_auto": "Otomatis Sistem",
+    "theme_auto": "Ikuti sistem",
     "theme_light": "Terang",
     "reduce_motion": "Kurangi gerakan",
     "reduce_motion_desc": "Menghentikan animasi latar dan transisi. Pengaturan sistem Anda tetap berlaku sendiri; ini menambahnya.",
     "perf_torch_compile": "Nonaktifkan torch.compile",
-    "perf_torch_compile_note": "Menggunakan eksekusi langsung untuk menghindari kesalahan memori Triton.",
-    "perf_torch_compile_hint": "Menggunakan eksekusi langsung untuk menghindari kesalahan memori Triton. <issueLink>#65</issueLink> · <crashLink>#2135</crashLink>",
+    "perf_torch_compile_note": "Menjalankan model tanpa kernel terkompilasi saat Triton tidak stabil.",
+    "perf_torch_compile_hint": "Nyalakan setelah kegagalan Triton atau <code>torch.compile</code>, termasuk jika backend keluar ketika membuat audio. VoiceStudio lalu mengirim <code>TORCH_COMPILE_DISABLE=1</code> dan mendahulukan kestabilan daripada kecepatan kompilasi. <issueLink>#65</issueLink> membahas Windows dengan VRAM di bawah 16 GB; <crashLink>#2135</crashLink> melacak gangguan grafik CUDA pada NVIDIA lama.",
     "llmp_cli_help": "Menggunakan CLI terpasang dan loginnya melalui pelaksana yang sama dengan perbaikan agen. Kosongkan Model untuk bawaan CLI. Respons mungkin lebih lambat; biaya mengikuti akun CLI.",
     "llmp_sdk_help": "Penyedia native memakai LiteLLM. Untuk penyedia lain, masukkan provider/model. Bedrock memakai kunci API atau profil AWS; Vertex memakai ID akun sebagai proyek dan kredensial Google. URL dasar opsional.",
     "llmp_cli_auth": "Akses akun CLI ditolak. Periksa login, langganan, dan model yang dipilih."
@@ -451,10 +449,10 @@
     "importFailed": "Tidak dapat membaca file itu.",
     "addLine": "Tambahkan Baris",
     "addChapter": "Tambahkan Bab",
-    "clearScript": "Kosongkan naskah",
-    "clearScriptHint": "Hapus semua baris dan bab dari naskah (pemeran tetap ada)",
     "clearConfirm": "Hapus semua {{count}} entri naskah dan teks impor yang tertunda? Tindakan ini tidak dapat dibatalkan.",
-    "cleared": "Naskah dikosongkan",
+    "clearScript": "Kosongkan skrip",
+    "clearScriptHint": "Menghapus seluruh isi skrip: semua baris dan semua bab",
+    "cleared": "Isi naskah dihapus",
     "chapterN": "Bab {{n}}",
     "stems": "Batang",
     "stemsDone": "Batang karakter {{count}} yang diekspor",
@@ -475,11 +473,8 @@
     "pasteAbove": "Tempel teks di atas",
     "cancel": "Batalkan",
     "splitIntoTracks": "Bagi menjadi beberapa baris",
-    "splitMode": "Pisahkan berdasarkan",
-    "split_sentences": "Kalimat",
-    "split_paragraphs": "Paragraf",
-    "split_chapters": "Bab",
-    "splitModeHint": "Setiap baris dibaca sebagai rekaman tersendiri. Untuk satu narator, paragraf atau bab utuh mengalir lebih baik daripada kalimat.",
+    "splitMode": "Pisahkan per",
+    "splitModeHint": "Setiap baris dibaca sebagai rekaman tersendiri. Untuk satu narator, Paragraf atau Bab terdengar lebih mengalir.",
     "emptyText": "Mulailah cerita Anda dengan menambahkan dialog dan alur narasi. Tetapkan suara untuk setiap karakter dalam Pemeran.",
     "addFirst": "Tambahkan Baris Pertama",
     "linePlaceholder": "Masuk ke dialog atau narasi… gunakan [jeda 0,5 detik] untuk jeda hening",
@@ -510,7 +505,10 @@
     "exportFailed": "Ekspor gagal — periksa apakah backend sedang berjalan.",
     "global_speed": "Kecepatan",
     "global_speed_hint": "Kecepatan membaca untuk semua lini tanpa mengesampingkan kecepatannya sendiri",
-    "deleteProjectConfirm": "Hapus proyek ini secara permanen?"
+    "deleteProjectConfirm": "Hapus proyek ini secara permanen?",
+    "split_chapters": "Bab",
+    "split_paragraphs": "Paragraf",
+    "split_sentences": "Kalimat"
   },
   "common": {
     "stop": "Berhenti",
@@ -1760,8 +1758,8 @@
     "backend_shutting_down": "VoiceStudio sedang ditutup. Buka kembali aplikasinya lalu coba lagi.",
     "crash_broken_env": "Ia mati saat memuat dependensi Python-nya sendiri, jadi ini bukan soal memori atau GPU Anda — lingkungannya tidak lengkap atau tertinggal setengah diperbarui. Gunakan \"Bersihkan & Coba Lagi\" di Pengaturan → Log → Backend, yang membangunnya ulang dari nol dan memperbaikinya di tempat, tanpa menyentuh suara atau proyek Anda. Jika masih gagal, detail crash menyebutkan paket persis yang gagal diimpor.",
     "crash_vram_default": "Pada GPU yang lebih kecil, penyebab umumnya adalah kehabisan VRAM saat memuat model ASR di atas model TTS: kosongkan model TTS terlebih dahulu, atau pilih model ASR yang lebih kecil di Katalog model → Model.",
-    "stream_cut_backend_alive": "Stream berakhir lebih awal, tetapi backend masih berjalan — jadi backend tidak mogok. Pada penyiapan server atau kontainer, ini biasanya karena reverse proxy atau load balancer yang mem-buffer atau memutus koneksi karena batas waktu: nonaktifkan buffering respons untuk rute ini (nginx: proxy_buffering off; X-Accel-Buffering: no) dan naikkan batas waktu bacanya. Menjalankan aplikasi desktop secara langsung, atau di localhost tanpa proxy, akan memastikannya.",
-    "stream_cut_backend_alive_local": "Stream berakhir lebih awal, tetapi backend masih berjalan — jadi tidak crash. Aplikasi kehilangan koneksi ke backend di tengah pekerjaan; ini terjadi saat langkah yang lama tidak mengirim apa pun selama beberapa menit, dan biasanya backend tetap menyelesaikan pekerjaannya. Tunggu beberapa menit lalu buka kembali pekerjaan dari riwayat, atau periksa log backend (Pengaturan → Log → Bagian belakang) untuk melihat apa yang sedang dikerjakannya."
+    "stream_cut_backend_alive": "Periksa dulu reverse proxy atau load balancer di depan aplikasi: matikan buffering respons untuk rute ini (proxy_buffering off; X-Accel-Buffering: no) dan naikkan batas waktu bacanya. Koneksi terputus saat backend tetap berjalan, jadi tidak ada yang crash; pada instalasi yang disajikan atau berbasis kontainer, penyebab biasanya proxy, dan menjalankan aplikasi desktop langsung atau lewat localhost akan membenarkan atau menyingkirkannya.",
+    "stream_cut_backend_alive_local": "Tunggu beberapa menit, lalu buka kembali pekerjaan dari riwayat; jika tidak ada, baca log backend di Pengaturan → Log → Backend. Koneksi terputus di tengah pekerjaan setelah langkah panjang yang sunyi, tetapi backend masih berjalan dan biasanya menyelesaikan pekerjaannya, jadi ini bukan crash."
   },
   "keyboard": {
     "title": "Pintasan keyboard",
@@ -2265,7 +2263,12 @@
     "other_ways": "Cara lain untuk membantu",
     "star_short": "Beri bintang",
     "star_github": "Bintangi di GitHub",
-    "join_discord": "Bergabunglah dengan Perselisihan"
+    "join_discord": "Bergabunglah dengan Perselisihan",
+    "sponsors_tier_strategic": "Strategis",
+    "sponsors_tier_company": "Perusahaan",
+    "sponsors_tier_development": "Pengembangan",
+    "sponsors_tier_community": "Komunitas",
+    "sponsors_tier_supporter": "Pendukung"
   },
   "updates": {
     "tab": "Pembaruan",
@@ -2356,10 +2359,10 @@
     "hf_token_get": "Tidak punya tokennya? Dapatkan satu gratis →",
     "hf_token_inline_prompt": "Percepat pengunduhan dengan token Hugging Face gratis",
     "hf_token_inline_ph": "Tempel hf_… token (opsional)",
-    "hf_token_get_short": "Dapatkan satu gratis →",
     "hf_token_active_using": "Token Hugging Face ditemukan di {{source}} — {{masked}}",
-    "hf_token_replace": "Ganti token…",
-    "hf_token_replace_warning": "Ini mengganti token yang disimpan untuk aplikasi ini. Token lama tidak dicabut."
+    "hf_token_replace": "Ganti…",
+    "hf_token_replace_warning": "Ini mengganti token yang disimpan untuk aplikasi ini. Token lama tidak dicabut.",
+    "hf_token_get_short": "Dapatkan gratis →"
   },
   "history": {
     "dub_meta": "{{segments}} segmen · {{duration}} dtk",
@@ -2469,7 +2472,7 @@
     "warn_unknown_voice": "Suara tidak dikenal ‘{{name}}’ — akan memakai default",
     "warn_empty_chapter": "Bab “{{title}}” tidak memiliki teks untuk dibacakan",
     "warn_unknown_tag": "Tag tidak dikenal {{tag}} — akan dibacakan",
-    "untitled": "Buku audio tanpa judul",
+    "untitled": "Tanpa judul",
     "dismiss": "Tutup",
     "output": "Keluaran",
     "title": "Buku Audio",
@@ -2484,14 +2487,14 @@
     "preview_plan": "Rencana pratinjau",
     "stop": "Hentikan",
     "stopped_note": "Dihentikan — bab yang selesai tersimpan di cache; tekan Buat lagi untuk melanjutkan.",
-    "recovery_title": "Buku audio terputus",
-    "recovery_progress": "{{done}} dari {{total}} bab telah di-cache",
-    "recovery_hint": "Lanjutkan menggunakan kembali bab yang selesai dan hanya menyintesis sisanya.",
-    "resume": "Lanjutkan",
-    "open_chapter_cache": "Buka cache bab",
-    "cache_location_hint": "Cache audio bab: {{cachePath}} · Manifes lanjutan: {{manifestPath}}",
-    "resume_failed": "Tidak dapat melanjutkan buku audio: {{message}}",
-    "open_cache_failed": "Tidak dapat membuka cache bab",
+    "recovery_title": "Lanjutkan buku audio yang belum selesai",
+    "recovery_progress": "Bab siap: {{done}} dari {{total}}",
+    "recovery_hint": "Audio yang sudah dibuat tetap disimpan; proses lanjutan hanya membuat bagian yang kurang.",
+    "resume": "Teruskan render",
+    "open_chapter_cache": "Tampilkan bab tersimpan",
+    "cache_location_hint": "Folder audio: {{cachePath}} · catatan pemulihan: {{manifestPath}}",
+    "resume_failed": "Buku audio ini tidak dapat diteruskan: {{message}}",
+    "open_cache_failed": "Folder bab tersimpan tidak dapat ditampilkan",
     "progress_summary": "Mensintesis {{current}} dari {{total}} bab",
     "eta": "~{{time}} tersisa",
     "chapter_n": "Bab {{n}}",
@@ -2545,15 +2548,17 @@
     "seed_ph": "Otomatis",
     "vary_repeats": "Bervariasi baris berulang",
     "vary_repeats_help": "Berikan pengambilan yang berbeda untuk baris identik daripada menggunakan kembali satu perekaman.",
-    "line_gap": "Jeda antar baris",
     "joins_help": "Jeda antar baris ditempatkan di antara baris tanpa [pause] sendiri; jeda antar paragraf ditempatkan pada baris kosong. Jika pemangkasan aktif, keheningan awal dan akhir setiap baris dipotong lebih dulu, sehingga jeda yang Anda atur adalah jeda yang terdengar.",
-    "paragraph_gap": "Jeda antar paragraf",
-    "trim_edges": "Pangkas keheningan mesin",
-    "trim_edges_help": "Menghapus keheningan yang ditambahkan mesin ke setiap baris sebelum digabung. Matikan untuk mempertahankan render mentah.",
+    "trim_edges_help": "Memotong keheningan yang ditambahkan tiap mesin sebelum dan sesudah baris, lalu menyambung baris-barisnya. Matikan untuk hasil mentah.",
     "emotion_help": "Emosi berjenjang — diterapkan hanya oleh mesin IndexTTS2.",
     "emotion_text": "Deskripsi emosi",
     "emotion_text_ph": "mis. terdengar lelah dan sedih",
-    "emotion_alpha": "Kekuatan emosi"
+    "emotion_alpha": "Kekuatan emosi",
+    "recovery_load_failed": "Tidak dapat memeriksa buku audio yang belum selesai.",
+    "recovery_retry": "Coba lagi",
+    "line_gap": "Durasi jeda antarbaris",
+    "paragraph_gap": "Durasi jeda antarparagraf",
+    "trim_edges": "Hapus bagian senyap dari mesin"
   },
   "voicePanel": {
     "title": "Suara",
@@ -2749,13 +2754,6 @@
     "progress": "{{done}} / {{total}} segmen divalidasi",
     "cancelled": "Dibatalkan",
     "fitting": "Menyesuaikan waktu"
-  },
-  "sponsorSlot": {
-    "book": "Pesan slot Anda",
-    "preview": "Pratinjau sponsor",
-    "message": "Merek, situs web & pesan Anda",
-    "email_app": "Buka aplikasi email",
-    "copy_email": "Salin email"
   },
   "supportPlans": {
     "remove": "Hapus bilah sponsor",

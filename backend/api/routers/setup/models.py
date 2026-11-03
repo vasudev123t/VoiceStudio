@@ -21,36 +21,23 @@ from core.browser_guard import reject_cross_site_get
 logger = logging.getLogger("omnivoice.setup.models")
 router = APIRouter()
 
-# ── Model Catalog (loaded from YAML) ──────────────────────────────────────
+# ── Model Catalog (loaded from YAML; services/model_catalogue.py) ─────────
 
-_YAML_PATH = Path(__file__).resolve().parents[3] / "config" / "models.yaml"
+from services.model_catalogue import (  # noqa: F401 — re-exported API
+    KNOWN_MODELS,
+    _hub_cache_roots,
+    _repo_dir_name,
+    _snapshot_dirs,
+    hf_cache_dir,
+    model_key,
+    package_cache_usage,
+    shares_repo,
+    snapshot_is_complete,
+)
 
-
-def _load_models_from_yaml() -> list[dict]:
-    """Load model catalog from config/models.yaml.
-
-    Falls back to an empty list if the file is missing or unreadable.
-    The YAML file is read once at import time — restart to pick up edits.
-    """
-    try:
-        import yaml  # PyYAML is already a transitive dep of huggingface_hub
-        with open(_YAML_PATH, "r", encoding="utf-8") as f:
-            data = yaml.safe_load(f)
-        models = data.get("models", [])
-        logger.info("Loaded %d models from %s", len(models), _YAML_PATH)
-        return models
-    except FileNotFoundError:
-        logger.warning("models.yaml not found at %s — using empty catalog", _YAML_PATH)
-        return []
-    except Exception:
-        logger.exception("Failed to load models.yaml — using empty catalog")
-        return []
-
-
-KNOWN_MODELS = _load_models_from_yaml()
 
 # Back-compat tuple view for code that expects (repo_id, label) pairs.
-REQUIRED_MODELS = [(m["repo_id"], m["label"]) for m in KNOWN_MODELS if m.get("required")]
+REQUIRED_MODELS = [(model_key(m), m["label"]) for m in KNOWN_MODELS if m.get("required")]
 
 
 # ── Dependency Injection ───────────────────────────────────────────────────
@@ -62,11 +49,12 @@ class ModelCatalog:
 
     def __init__(self, models: list[dict] | None = None):
         self.models = models if models is not None else KNOWN_MODELS
-        self._by_id = {m["repo_id"]: m for m in self.models}
-        self._required = [(m["repo_id"], m["label"]) for m in self.models if m.get("required")]
+        self._by_id = {model_key(m): m for m in self.models}
+        self._required = [(model_key(m), m["label"]) for m in self.models if m.get("required")]
 
-    def get(self, repo_id: str) -> dict | None:
-        return self._by_id.get(repo_id)
+    def get(self, key: str) -> dict | None:
+        """Entry by catalogue identity (the repo id for whole-repo entries)."""
+        return self._by_id.get(key)
 
     @property
     def required(self) -> list[tuple[str, str]]:
@@ -159,15 +147,6 @@ def _model_curated(model: dict, tags: "set[str] | None" = None) -> bool:
 
 # ── HF Cache Helpers ───────────────────────────────────────────────────────
 
-def hf_cache_dir() -> str:
-    return (
-        os.environ.get("HF_HUB_CACHE")
-        or os.environ.get("HUGGINGFACE_HUB_CACHE")
-        or os.environ.get("HF_HOME")
-        or os.path.expanduser("~/.cache/huggingface")
-    )
-
-
 # ── Disk-space guard (shared, single-sourced) ──────────────────────────────
 # MIN_FREE_GB is the headroom we insist on keeping free on the model-cache
 # volume — the wizard's absolute pre-install floor AND the extra buffer the
@@ -177,6 +156,10 @@ def hf_cache_dir() -> str:
 # install endpoint can't drift apart (mirrors the weight-floor single-sourcing).
 _GIB = 1024 ** 3
 MIN_FREE_GB = 10
+# Headroom the per-install check keeps free on top of the download, and the
+# preflight's hard floor. Smaller than MIN_FREE_GB (the comfortable-library
+# warning level) so a small model still installs on a nearly full disk.
+INSTALL_HEADROOM_GB = 2
 
 
 def disk_free_bytes(path: "str | None" = None) -> int:
@@ -200,7 +183,7 @@ def disk_free_bytes(path: "str | None" = None) -> int:
 
 
 def disk_space_error(to_download_bytes: "int | None", *, cache_dir: "str | None" = None) -> "str | None":
-    """Actionable message when *to_download_bytes* (+ MIN_FREE_GB headroom) won't
+    """Actionable message when *to_download_bytes* (+ INSTALL_HEADROOM_GB) won't
     fit on the cache volume; ``None`` when it fits, the size is unknown, or the
     volume can't be probed (never block on missing information).
 
@@ -214,7 +197,7 @@ def disk_space_error(to_download_bytes: "int | None", *, cache_dir: "str | None"
     free = disk_free_bytes(cache)
     if free <= 0:
         return None  # couldn't probe the volume → don't block on missing info
-    required = int(to_download_bytes) + MIN_FREE_GB * _GIB
+    required = int(to_download_bytes) + INSTALL_HEADROOM_GB * _GIB
     if free >= required:
         return None
 
@@ -223,7 +206,7 @@ def disk_space_error(to_download_bytes: "int | None", *, cache_dir: "str | None"
 
     return (
         f"Not enough disk space to install: this download needs {_gb(int(to_download_bytes))} "
-        f"plus {MIN_FREE_GB} GB free headroom ({_gb(required)} total), but only {_gb(free)} "
+        f"plus {INSTALL_HEADROOM_GB} GB free headroom ({_gb(required)} total), but only {_gb(free)} "
         f"is free at {cache}. Free up space (or move the model cache to a bigger volume) and retry."
     )
 
@@ -239,119 +222,6 @@ def disk_full_message(*, cache_dir: "str | None" = None) -> str:
         "(or move the model cache to a bigger volume) and retry; the download "
         "resumes from the part that already finished."
     )
-
-
-def _repo_dir_name(repo_id: str) -> str:
-    """HF cache dir name for a repo: 'k2-fsa/OmniVoice' → 'models--k2-fsa--OmniVoice'."""
-    return "models--" + repo_id.replace("/", "--")
-
-
-def _hub_cache_roots() -> list[str]:
-    """Candidate roots that directly contain ``models--*`` dirs.
-
-    HF stores repos under ``$HF_HUB_CACHE`` (== ``$HF_HOME/hub`` by default). When
-    only ``HF_HOME`` (or the ``~/.cache/huggingface`` default) is known, the repos
-    live under the ``hub`` subdir — so we probe both ``<dir>`` (the
-    ``HF_HUB_CACHE``-is-set case, e.g. VoiceStudio's Windows short cache) and
-    ``<dir>/hub`` (the ``HF_HOME``-only case). Without this the WinError-448
-    fallback would look one level too high and miss the cache (CodeRabbit #137).
-    """
-    base = hf_cache_dir()
-    roots = [base]
-    hub = os.path.join(base, "hub")
-    if hub not in roots:
-        roots.append(hub)
-    return roots
-
-
-# ── Weight-presence (truncated-cache) detection ─────────────────────────────
-# A cache that downloaded config/tokenizer files but not the weight shard still
-# occupies bytes on disk, so a size-only "installed" check (#352/#581/#606) reads
-# it as installed and the first-run wizard hides the re-download button, stranding
-# the user (#622). These helpers tell a *complete* snapshot from a truncated one by
-# checking for a plausible weight file — the same class `download.py` guards at
-# install time and `model_manager.py` repairs at load time. Shared here (the lowest
-# module in the setup import graph; `download.py` imports from this module) so the
-# floors live in exactly one place and can't drift between the three call sites.
-
-_MIN_WEIGHT_BYTES = 5 * 1024 * 1024  # tensor formats: a real shard is ≥ a few MB
-
-# Per-extension floors. ONNX graphs are legitimately small (a complete model can be
-# well under 5 MB), so they get a lower floor that still rejects a bytes-only partial.
-_WEIGHT_FLOORS = {
-    ".safetensors": _MIN_WEIGHT_BYTES,
-    ".bin": _MIN_WEIGHT_BYTES,
-    ".ckpt": _MIN_WEIGHT_BYTES,
-    ".pt": _MIN_WEIGHT_BYTES,
-    ".pth": _MIN_WEIGHT_BYTES,
-    ".gguf": _MIN_WEIGHT_BYTES,
-    ".onnx": 64 * 1024,
-}
-
-
-def snapshot_has_weights(snapshot_path: str) -> bool:
-    """True when a finished snapshot dir holds a plausible weight file.
-
-    A snapshot is complete if it contains a recognized weight file meeting its
-    per-extension floor OR any file ≥ the global 5 MB floor (the lenient catch for
-    non-standard weight names). Returns True when the path can't be inspected — an
-    un-walkable dir must never be reported as truncated, only a confirmed weight-less
-    one. `getsize` follows symlinks, so HF's snapshot→blob links resolve correctly;
-    a broken link (missing blob) raises OSError and is skipped, i.e. counts as absent.
-    """
-    try:
-        for root, _dirs, files in os.walk(snapshot_path, followlinks=True):
-            for f in files:
-                try:
-                    size = os.path.getsize(os.path.join(root, f))
-                except OSError:
-                    continue
-                ext = os.path.splitext(f)[1].lower()
-                floor = _WEIGHT_FLOORS.get(ext)
-                if floor is not None and size >= floor:
-                    return True
-                if size >= _MIN_WEIGHT_BYTES:
-                    return True
-    except OSError:
-        return True  # can't inspect — don't mislabel as truncated
-    return False
-
-
-def _snapshot_dirs(repo_id: str) -> list[str]:
-    """Existing snapshot revision dirs for a repo across the candidate cache roots."""
-    name = _repo_dir_name(repo_id)
-    dirs: list[str] = []
-    for root in _hub_cache_roots():
-        snaps = os.path.join(root, name, "snapshots")
-        try:
-            for rev in os.listdir(snaps):
-                rev_dir = os.path.join(snaps, rev)
-                if os.path.isdir(rev_dir):
-                    dirs.append(rev_dir)
-        except OSError:
-            continue
-    return dirs
-
-
-def snapshot_is_complete(model: dict, snapshot_path: str) -> bool:
-    """Apply the same catalogue requirements during installation and listing."""
-    config_only = bool(model.get("config_only"))
-    required = tuple(str(name) for name in (
-        model.get("config_required_files") if config_only else model.get("required_files")
-    ) or ())
-    if config_only and not required:
-        return False
-    try:
-        present = all(
-            os.path.isfile(os.path.join(snapshot_path, name))
-            and os.path.getsize(os.path.join(snapshot_path, name)) >= (
-                1 if config_only else _WEIGHT_FLOORS.get(os.path.splitext(name)[1].lower(), 1)
-            )
-            for name in required
-        )
-        return present and (config_only or snapshot_has_weights(snapshot_path))
-    except OSError:
-        return False
 
 
 def cache_is_complete(model: dict) -> bool:
@@ -387,13 +257,14 @@ def installed_snapshot_path(repo_id: str) -> "str | None":
         meta = get_model_catalog().get(repo_id)
         if meta is None:
             return None
-        snapshots = [path for path in _snapshot_dirs(repo_id) if snapshot_is_complete(meta, path)]
+        hub_repo = meta["repo_id"]
+        snapshots = [path for path in _snapshot_dirs(hub_repo) if snapshot_is_complete(meta, path)]
         if not snapshots:
             return None
         try:
             from services.hf_cache_repair import hf_cache_home
             from services.hf_revisions import installed_revision
-            pinned = installed_revision(repo_id, hf_cache_home())
+            pinned = installed_revision(hub_repo, hf_cache_home())
         except Exception:  # noqa: BLE001 — uncurated repo: newest snapshot wins
             pinned = None
         for path in snapshots:
@@ -548,7 +419,7 @@ def model_access_status(repo_id: str = Query(...)):
     from services import token_resolver
 
     resolved = token_resolver.resolve()
-    repositories = [repo_id]
+    repositories = [model["repo_id"]]
     prerequisite = str(model.get("prerequisite_repo_id") or "").strip()
     if prerequisite:
         repositories.append(prerequisite)
@@ -632,13 +503,24 @@ def list_models():
     host_tags = set(platform_tags)
     for m in KNOWN_MODELS:
         cached = cached_by_repo.get(m["repo_id"])
-        on_disk = cached is not None and cached["size_on_disk"] > 0
-        # A size-positive cache can still be a truncated download (config landed,
-        # weight shard didn't). Treat that as not-installed + incomplete so the
-        # wizard re-offers the download instead of stranding the user (#622).
-        incomplete = on_disk and not cache_is_complete(m)
+        if cached is not None and shares_repo(m):
+            # The repository also holds other entries' packages: only this
+            # entry's own files decide whether it is installed and its size.
+            cached = package_cache_usage(m)
+            on_disk = cached is not None
+            incomplete = False
+        else:
+            on_disk = cached is not None and cached["size_on_disk"] > 0
+            # A size-positive cache can still be a truncated download (config
+            # landed, weight shard didn't). Treat that as not-installed +
+            # incomplete so the wizard re-offers the download (#622).
+            incomplete = on_disk and not cache_is_complete(m)
+        key = model_key(m)
         out.append({
             **m,
+            # Rows are addressed by catalogue identity; hf_repo is the Hub repo.
+            "repo_id": key,
+            "hf_repo": m["repo_id"],
             "installed": on_disk and not incomplete,
             "incomplete": incomplete,
             "size_on_disk_bytes": cached["size_on_disk"] if cached else 0,
@@ -647,8 +529,8 @@ def list_models():
             # Curated "best for your system" pick (curated_on in models.yaml) —
             # drives the recommended badge in the wizard and Settings model store.
             "curated": _model_curated(m, host_tags),
-            "license_info": _model_license_info(m["repo_id"]),
-            "license_acceptance": _model_licence_acceptance(m["repo_id"]),
+            "license_info": _model_license_info(key),
+            "license_acceptance": _model_licence_acceptance(key),
         })
     response = {
         "target": "local",
@@ -662,7 +544,7 @@ def list_models():
         # The headroom disk_space_error keeps free on top of every download, so
         # the UI warns with the same rule (and names it) instead of a raw
         # "needs 4.8 GB, 10.2 GB free" that contradicts its own refusal (#2597).
-        "disk_headroom_gb": MIN_FREE_GB,
+        "disk_headroom_gb": INSTALL_HEADROOM_GB,
         "platform_tags": platform_tags,
     }
     _set_cache(cache_key, response)
@@ -762,10 +644,13 @@ def recommendations():
 
     entries = []
     for meta in curated:
-        rid = meta["repo_id"]
+        rid = model_key(meta)
         # Mirror /models: a truncated cache (weights missing) is not installed, so
         # the wizard counts it toward the remaining download instead of "all set".
-        installed = rid in cached_ids and cache_is_complete(meta)
+        if shares_repo(meta):
+            installed = package_cache_usage(meta) is not None
+        else:
+            installed = meta["repo_id"] in cached_ids and cache_is_complete(meta)
         entries.append({
             "repo_id": rid,
             "label": meta.get("label", rid),

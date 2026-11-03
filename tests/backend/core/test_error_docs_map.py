@@ -45,6 +45,7 @@ def test_all_keys_match_taxonomy():
     expected = {
         "GPU_ARCH_UNSUPPORTED",
         "HOST_MEMORY_EXHAUSTED",
+        "DISK_FULL",
         "WINDOWS_APP_CONTROL_BLOCKED",
         "AUDIO_IO_FAILED",
         "INVALID_MEDIA_FILE",

@@ -32,6 +32,7 @@ import json
 import logging
 import math
 import os
+import threading
 import re
 import sys
 import zlib
@@ -60,11 +61,13 @@ from omnivoice.utils.audio import (
     CLONE_REF_TEXT_MAX_SECONDS,
     CLONE_REF_TOO_LONG_MARKER,
     CLONE_REF_WINDOW_SECONDS,
+    check_reference_encode_memory,
     clone_ref_transcript_too_long_message,
     cross_fade_chunks,
     fade_and_pad_audio,
     load_audio,
     remove_silence_safe,
+    trim_passage_to_pauses,
     validate_clone_reference,
 )
 from omnivoice.utils.duration import RuleDurationEstimator
@@ -309,6 +312,56 @@ def _resolve_snapshot_dir(checkpoint) -> str:
 
 
 _DEFAULT_ASR_MODEL = "openai/whisper-large-v3-turbo"
+# Guards the lazy creation of each model's reference-ASR lock (see _reference_asr_lock).
+_ASR_LOCK_GUARD = threading.Lock()
+
+
+def _reference_asr_lock(model) -> "threading.RLock":
+    """The per-model lock around reference-ASR load, use and release.
+
+    A module function storing the lock in the instance ``__dict__`` (not a
+    method), so an instance attribute can never shadow it and every caller,
+    including models restored without ``__init__``, shares one lock.
+    """
+    lock = model.__dict__.get("_reference_asr_lock")
+    if lock is None:
+        with _ASR_LOCK_GUARD:
+            lock = model.__dict__.setdefault("_reference_asr_lock", threading.RLock())
+    return lock
+
+
+DIAG_ENV = "OMNIVOICE_DIAG"
+
+
+def _diag(event: str) -> None:
+    """One `[diag]` stderr line with a memory snapshot, when ``OMNIVOICE_DIAG=1``.
+
+    The engine sidecar installs no log handler, so `logger.info` never reaches
+    the backend log; stderr does. These lines show whether reference ASR has
+    left unified/GPU memory before synthesis. Off by default so synthesis pays
+    no snapshot cost and logs stay quiet on every platform. Never raises.
+    """
+    if os.environ.get(DIAG_ENV) != "1":
+        return
+    try:
+        import psutil
+
+        vm, sw = psutil.virtual_memory(), psutil.swap_memory()
+        gb = 1024 ** 3
+        parts = [
+            f"rss={psutil.Process().memory_info().rss / gb:.2f}G",
+            f"avail={vm.available / gb:.2f}G",
+            f"swap={sw.used / gb:.2f}G",
+        ]
+        if torch.cuda.is_available():
+            parts.append(f"cuda_alloc={torch.cuda.memory_allocated() / gb:.2f}G")
+            parts.append(f"cuda_reserved={torch.cuda.memory_reserved() / gb:.2f}G")
+        if torch.backends.mps.is_available():
+            parts.append(f"mps_alloc={torch.mps.current_allocated_memory() / gb:.2f}G")
+            parts.append(f"mps_driver={torch.mps.driver_allocated_memory() / gb:.2f}G")
+        print(f"[diag] {event} | {' '.join(parts)}", file=sys.stderr, flush=True)
+    except Exception:  # noqa: BLE001 — diagnostics must not break synthesis
+        pass
 
 
 def _reference_asr_repos() -> List[str]:
@@ -508,9 +561,15 @@ class OmniVoice(PreTrainedModel):
         for _lg in _quiet_loggers:
             _lg.setLevel(logging.WARNING)
 
-        # Disable tqdm on non-TTY (e.g., Tauri backend) to prevent OSError on Windows
-        _prev_tqdm = os.environ.get("TQDM_DISABLE")
-        if sys.stdout is not None and not sys.stdout.isatty():
+        _had_tqdm_setting = "TQDM_DISABLE" in os.environ
+        _previous_tqdm_setting = os.environ.get("TQDM_DISABLE")
+        _disable_tqdm = False
+        if sys.stdout is not None:
+            try:
+                _disable_tqdm = not sys.stdout.isatty()
+            except (AttributeError, OSError):
+                _disable_tqdm = True
+        if _disable_tqdm:
             os.environ["TQDM_DISABLE"] = "1"
 
         try:
@@ -562,11 +621,11 @@ class OmniVoice(PreTrainedModel):
         finally:
             for _lg, _lvl in _prev_levels:
                 _lg.setLevel(_lvl)
-            # Restore TQDM_DISABLE state
-            if _prev_tqdm is None:
-                os.environ.pop("TQDM_DISABLE", None)
-            else:
-                os.environ["TQDM_DISABLE"] = _prev_tqdm
+            if _disable_tqdm:
+                if _had_tqdm_setting:
+                    os.environ["TQDM_DISABLE"] = _previous_tqdm_setting
+                else:
+                    os.environ.pop("TQDM_DISABLE", None)
 
         return model
 
@@ -583,6 +642,10 @@ class OmniVoice(PreTrainedModel):
         from transformers import pipeline as hf_pipeline
 
         logger.info("Loading ASR model %s ...", model_name)
+        # Half precision on CUDA only. On MPS a float16 Whisper transcribes the
+        # reference passage into text that does not match its audio, and the
+        # clone then babbles for a minute; memory on 8 GB Macs is handled by
+        # releasing the recognizer before synthesis instead.
         asr_dtype = (
             torch.float16 if str(self.device).startswith("cuda") else torch.float32
         )
@@ -593,6 +656,7 @@ class OmniVoice(PreTrainedModel):
             device_map=self.device,
         )
         logger.info("ASR model loaded on %s.", self.device)
+        _diag(f"ASR loaded dtype={asr_dtype} device={self.device}")
 
     def _load_cached_reference_asr(self):
         """Implicit cloning fallback may reuse local weights, never download them."""
@@ -606,6 +670,28 @@ class OmniVoice(PreTrainedModel):
         # Pass a directory rather than the repo ID so transformers cannot make
         # metadata requests or download missing assets from a partial snapshot.
         self.load_asr_model(model_name=snapshot)
+
+    def _release_implicit_asr(self):
+        """Free a Whisper that cloning loaded on its own, before synthesis.
+
+        The implicit fallback loads a full-precision Whisper next to the TTS
+        weights. On an 8 GB unified-memory Mac the two do not fit together and
+        the clone swaps until it times out, so the recognizer is dropped as soon
+        as the reference is transcribed. An explicitly loaded ASR stays.
+        """
+        if getattr(self, "_asr_pipe", None) is None:
+            return
+        self._asr_pipe = None
+        import gc
+
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        mps = getattr(torch, "mps", None)
+        if mps is not None and torch.backends.mps.is_available():
+            mps.empty_cache()
+        logger.info("Released implicitly loaded reference ASR.")
+        _diag("ASR released before synthesis")
 
     @torch.inference_mode()
     def transcribe(
@@ -854,6 +940,7 @@ class OmniVoice(PreTrainedModel):
         short_idx, long_idx = full_task.get_indices(
             gen_config, self.audio_tokenizer.config.frame_rate
         )
+        _diag(f"TTS synthesis starting asr_resident={getattr(self, '_asr_pipe', None) is not None}")
 
         results = [None] * full_task.batch_size
 
@@ -878,6 +965,7 @@ class OmniVoice(PreTrainedModel):
                 )
             )
 
+        _diag("TTS synthesis finished")
         return generated_audios
 
     def create_voice_clone_prompt(
@@ -902,6 +990,23 @@ class OmniVoice(PreTrainedModel):
         Returns:
             A :class:`VoiceClonePrompt` that can be passed to :meth:`generate`.
         """
+        # Overlapping in-process clones must not release each other's recognizer:
+        # whether to release is decided from the state at entry, so the whole
+        # load -> use -> release sequence runs under one per-model lock.
+        with _reference_asr_lock(self):
+            implicit_asr = getattr(self, "_asr_pipe", None) is None
+            try:
+                return self._create_voice_clone_prompt(ref_audio, ref_text, preprocess_prompt)
+            finally:
+                if implicit_asr:
+                    self._release_implicit_asr()
+
+    def _create_voice_clone_prompt(
+        self,
+        ref_audio: Union[str, tuple[torch.Tensor, int]],
+        ref_text: Optional[str],
+        preprocess_prompt: bool,
+    ) -> VoiceClonePrompt:
         if self.audio_tokenizer is None:
             raise RuntimeError(
                 "Audio tokenizer is not loaded. Make sure you loaded the model "
@@ -1015,6 +1120,18 @@ class OmniVoice(PreTrainedModel):
                 transcribed,
                 key=lambda item: (speech_score(item[0], item[1]), activity_score(item[1])),
             )
+            trimmed = trim_passage_to_pauses(ref_wav, self.sampling_rate)
+            if trimmed.size(-1) != ref_wav.size(-1):
+                # Re-read the passage so the transcript covers exactly its audio.
+                # A trim that leaves no words must not turn a usable passage
+                # into a "no speech" failure: keep the untrimmed one then.
+                try:
+                    trimmed_text = self.transcribe((trimmed, self.sampling_rate))
+                except Exception:  # noqa: BLE001 — the untrimmed passage is still valid
+                    logger.warning("Trimmed-passage transcription failed; keeping the untrimmed passage")
+                    trimmed_text = ""
+                if speech_score(trimmed_text, trimmed) > 0:
+                    ref_wav, ref_text = trimmed, trimmed_text
             if speech_score(ref_text, ref_wav) == 0:
                 # A transcript is only accepted up to CLONE_REF_TEXT_MAX_SECONDS.
                 transcript_hint = (
@@ -1064,17 +1181,32 @@ class OmniVoice(PreTrainedModel):
             ref_text = self.transcribe((ref_wav, self.sampling_rate))
             logger.debug("Auto-transcribed ref_text: %s", ref_text)
 
+        _diag(
+            f"reference passage {ref_wav.size(-1) / self.sampling_rate:.2f}s "
+            f"ref_text_chars={len(ref_text)}"
+        )
+
         chunk_size = self.audio_tokenizer.config.hop_length
         clip_size = int(ref_wav.size(-1) % chunk_size)
         ref_wav = ref_wav[:, :-clip_size] if clip_size > 0 else ref_wav
         aligned_rms = torch.sqrt(torch.mean(torch.square(ref_wav))).item()
         validate_clone_reference(ref_wav, aligned_rms)
         selected_ref_rms = aligned_rms / input_gain
-        ref_audio_tokens = self.audio_tokenizer.encode(
-            ref_wav.unsqueeze(0).to(self.audio_tokenizer.device),
-        ).audio_codes.squeeze(
-            0
-        )  # (C, T)
+        check_reference_encode_memory(
+            ref_wav.size(-1) / self.sampling_rate,
+            torch.device(self.audio_tokenizer.device).type,
+        )
+        # #3340: with autograd on (the default in a request thread) the
+        # tokenizer also kept every activation for a backward pass that never
+        # comes — measured +27% peak RAM on a 20 s clip. generate() runs in
+        # inference mode, but the clone-prompt cache calls this method
+        # directly, so the encode needs its own.
+        with torch.inference_mode():
+            ref_audio_tokens = self.audio_tokenizer.encode(
+                ref_wav.unsqueeze(0).to(self.audio_tokenizer.device),
+            ).audio_codes.squeeze(
+                0
+            )  # (C, T)
 
         if preprocess_prompt:
             ref_text = add_punctuation(ref_text)

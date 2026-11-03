@@ -33,12 +33,12 @@ function sha256File(path) {
 }
 
 function releaseArtifact(name, distribution) {
-  const installerPrefix =
+  // Direct and Snap packages are `VoiceStudio-<version>-…`; store builds carry a label.
+  const installer =
     {
-      direct: "VoiceStudio-Electron-",
-      "microsoft-store": "VoiceStudio-MicrosoftStore-",
-      "mac-app-store": "VoiceStudio-MacAppStore-",
-    }[distribution] ?? "VoiceStudio-Electron-";
+      "microsoft-store": /^VoiceStudio-MicrosoftStore-/,
+      "mac-app-store": /^VoiceStudio-MacAppStore-/,
+    }[distribution] ?? /^VoiceStudio-\d/;
   const updatePrefix =
     distribution === "microsoft-store"
       ? "electron-microsoft-store-stable-"
@@ -46,7 +46,7 @@ function releaseArtifact(name, distribution) {
         ? "electron-stable-"
         : null;
   return (
-    name.startsWith(installerPrefix) ||
+    installer.test(name) ||
     (updatePrefix !== null && name.startsWith(updatePrefix) && name.endsWith(".yml"))
   );
 }

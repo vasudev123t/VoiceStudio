@@ -3,13 +3,18 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { classifySmoke, listSmokes } from './smoke-inventory.mjs';
+import { RENDERER_HELPER, classifySmoke, listSmokes } from './smoke-inventory.mjs';
 
 const chromiumSource = "import { chromium } from 'playwright';";
 const electronSource = "import { _electron as electron } from 'playwright';";
 
 test('mocked renderer smokes are classified by content, not name', () => {
   assert.equal(classifySmoke('convert-live-smoke.mjs', chromiumSource), 'renderer');
+});
+
+test('smokes that launch through the shared renderer helper are renderer smokes', () => {
+  const source = "import { launchSmokeBrowser } from './smoke-api-mock.mjs';";
+  assert.equal(classifySmoke('theme-picker-smoke.mjs', source), 'renderer');
 });
 
 test('-real-smoke files need a real backend', () => {
@@ -45,7 +50,7 @@ test('renderer smokes honour PLAYWRIGHT_CHANNEL instead of hardcoding Edge', () 
       const source = readFileSync(join(dir, file), 'utf8');
       // Every Edge default must sit behind the env override; /usr/bin/chromium is a host path.
       return (
-        /(?<!PLAYWRIGHT_CHANNEL \|\| )['"]msedge['"]/.test(source) ||
+        /(?<!PLAYWRIGHT_CHANNEL \|\| |fallbackChannel: )['"]msedge['"]/.test(source) ||
         source.includes('/usr/bin/chromium')
       );
     })
@@ -53,11 +58,20 @@ test('renderer smokes honour PLAYWRIGHT_CHANNEL instead of hardcoding Edge', () 
   assert.deepEqual(hardcoded, []);
 });
 
+test('the shared renderer helper lets PLAYWRIGHT_CHANNEL override a fallback channel', () => {
+  const source = readFileSync(join(dir, RENDERER_HELPER), 'utf8');
+  assert.match(source, /process\.env\.PLAYWRIGHT_CHANNEL \|\| fallbackChannel/);
+});
+
 test('renderer smokes do not depend on a live backend', () => {
   // A fixed backend port means the smoke talks to a real server; CI has none.
   const live = listSmokes(dir)
     .filter((smoke) => smoke.kind === 'renderer')
-    .filter(({ file }) => /(127\.0\.0\.1|localhost):3900|VOICESTUDIO_BACKEND_URL/.test(readFileSync(join(dir, file), 'utf8')))
+    .filter(({ file }) =>
+      /(127\.0\.0\.1|localhost):3900|VOICESTUDIO_BACKEND_URL/.test(
+        readFileSync(join(dir, file), 'utf8'),
+      ),
+    )
     .map((smoke) => smoke.file);
   assert.deepEqual(live, []);
 });
@@ -65,5 +79,5 @@ test('renderer smokes do not depend on a live backend', () => {
 test('renderer smoke count is deliberate', () => {
   // Update on purpose when a renderer smoke is added or removed.
   const renderer = listSmokes(dir).filter((smoke) => smoke.kind === 'renderer');
-  assert.equal(renderer.length, 37);
+  assert.equal(renderer.length, 40);
 });

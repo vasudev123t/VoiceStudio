@@ -4,6 +4,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonObjectBuilder
+import kotlinx.serialization.json.put
 
 @Serializable data class Health(val status: String, val version: String, val device: String? = null)
 @Serializable data class Session(val token: String, @SerialName("expires_at") val expiresAt: Double, @SerialName("expires_in") val expiresIn: Int)
@@ -28,7 +30,15 @@ data class Generation(val id: String, val audioPath: String, val duration: Doubl
 @Serializable data class TaskResult(@SerialName("task_id") val taskId: String)
 @Serializable data class Job(val id: String = "", val status: String, val error: String? = null,
     @SerialName("last_event") val lastEvent: JsonObject? = null)
-@Serializable data class Segment(val id: JsonElement? = null, val start: Double, val end: Double, val text: String)
+@Serializable data class Segment(val id: JsonElement? = null, val start: Double, val end: Double, val text: String, @SerialName("speaker_id") val speakerId: String? = null,@SerialName("text_original") val textOriginal: String? = null, val gain: Double? = null, val speed: Double? = null, val direction: String? = null, @SerialName("effect_preset") val effectPreset: String? = null, val instruct: String? = null)
+/** Keep saved rendering overrides while callers choose new words, voice and language. */
+internal fun JsonObjectBuilder.putRenderSettings(segment: Segment) {
+    segment.gain?.let {put("gain",it)}
+    segment.speed?.let {put("speed",it)}
+    segment.direction?.let {put("direction",it)}
+    segment.effectPreset?.let {put("effect_preset",it)}
+    segment.instruct?.let {put("instruct",it)}
+}
 @Serializable data class Transcription(val segments: List<Segment>, @SerialName("source_lang") val sourceLang: String? = null)
 @Serializable data class TranslatedSegment(val id: JsonElement, val text: String, val error: String? = null)
 @Serializable data class Translation(val translated: List<TranslatedSegment>)

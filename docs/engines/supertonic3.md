@@ -45,6 +45,10 @@ Seven preset voices are surfaced: `M1` (default), `M3`, `M4`, `M5`, `F3`,
 caller passes one explicitly; unknown ids fall back to the default with a
 log line.
 
+In the Clone composer, choose a voice from the searchable **Preset voice** menu.
+The current voice remains selected when you open the menu and press Enter;
+type to filter, use the arrow keys to move, and Escape to close.
+
 ## Behaviour notes
 
 - Output is 44.1 kHz mono.

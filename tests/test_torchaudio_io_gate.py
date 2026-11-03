@@ -21,8 +21,11 @@ import pytest
 BACKEND = Path(__file__).resolve().parents[1] / "backend"
 GATED = {"load", "info", "save"}
 # audio_io wraps the calls; the IndexTTS sidecar cannot import parent services
-# and carries its own guarded soundfile fallback.
-ALLOWED = {"services/audio_io.py", "engines/indextts/main.py"}
+# and carries its own guarded soundfile fallback; pyannote_audio_compat never
+# reads audio itself: it wraps the ``torchaudio.load``/``info`` that pyannote (a
+# third-party library) calls, routing them to soundfile — the same fix this gate
+# enforces, applied to code we can't edit.
+ALLOWED = {"services/audio_io.py", "engines/indextts/main.py", "services/pyannote_audio_compat.py"}
 
 
 def test_backend_never_calls_torchaudio_io_directly():

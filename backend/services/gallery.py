@@ -403,6 +403,14 @@ def _quiet(exc: BaseException) -> None:
     logger.debug("Voice gallery unreachable (%s: %s)", type(exc).__name__, exc)
 
 
+def _report_rejected_download(exc: GalleryError, context: str) -> None:
+    """Keep a missing remote artifact quiet while reporting invalid content."""
+    if "HTTP 404" in str(exc):
+        _quiet(exc)
+        return
+    logger.warning("%s could not be accepted: %s", context, exc)
+
+
 # ── Update check ─────────────────────────────────────────────────────────────
 
 async def check_for_updates(
@@ -449,10 +457,7 @@ async def check_for_updates(
         # A signature failure is not a transient network hiccup — it is the one
         # state the user should be able to see, so record it. The app still
         # works: previews render locally.
-        if "HTTP 404" in str(exc):
-            _quiet(exc)
-        else:
-            logger.warning("Voice gallery update rejected: %s", exc)
+        _report_rejected_download(exc, "Voice gallery update")
         state["last_checked"] = ts
         state["last_error"] = str(exc)
         _save_state(state)
@@ -595,10 +600,7 @@ async def fetch_featured(
             raise GalleryError("featured tarball digest does not match the manifest")
         extracted = _extract_featured(body, manifest)
     except GalleryError as exc:
-        if "HTTP 404" in str(exc):
-            _quiet(exc)
-        else:
-            logger.warning("Featured preview set rejected: %s", exc)
+        _report_rejected_download(exc, "Featured voice set")
         return status(now=now)
     except Exception as exc:
         _quiet(exc)

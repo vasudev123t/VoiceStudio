@@ -18,22 +18,13 @@ lands, the app forces the **classic LFS path**, which streams through the
 standard progress reporter and gives accurate downloaded/remaining/speed.
 
 To keep that path **fast** despite Xet being off, the app runs a built-in
-**multi-connection (segmented) downloader on by default** — it fetches each file
-over parallel byte-ranges (IDM/uGet style), so the legacy-LFS path is no longer
-single-stream. It reports real live speed/ETA and **falls back to the normal
-download**, so it can never compromise a correct install.
-
-Ranges are capped at 16 MB each and eight of them are in flight at a time, so a
-completed range is committed to a resume manifest every few seconds. On a
-connection that drops mid-transfer, only the ranges in flight are refetched: the
-attempt is retried and the accelerator resumes from its manifest rather than
-starting the file over. An origin that does not serve ranges at all is handled
-inside the accelerator as a single stream, not as a failure.
-
-The accelerator is disabled for the rest of the install — handing over to the
-plain `snapshot_download` path — when it fails for a reason that is not
-transient network trouble, and on the install's final attempt, so it can never
-be the reason an install fails outright. Adding a
+**multi-connection (segmented) downloader on by default**. It keeps up to eight
+byte ranges in flight, caps each range at 16 MB, and records every completed
+range in a resume manifest. After a dropped connection, only unfinished ranges
+are fetched again: the install retries the accelerator and resumes that
+manifest. An origin without range support remains a single stream within the
+accelerator. A non-transient failure or the final attempt disables acceleration
+for the rest of that install and lets plain `snapshot_download` take over. Adding a
 free Hugging Face token (first-run setup, or Settings → Credentials) makes this
 faster still — authenticated downloads get higher rate limits and fewer stalls.
 To force the old single-stream path, set `OMNIVOICE_SEGMENTED_DOWNLOAD=0`.
@@ -104,6 +95,16 @@ in **Settings → Models → Hugging Face mirror**. Mirror integrity is a
 non-issue: `huggingface_hub` verifies every download by checksum regardless
 of endpoint. Opt out with `OMNIVOICE_HF_ENDPOINT_MODE=manual`.
 
+This retry also applies to the model weights fetched by one-click engine
+installation. It retries once only when a network failure selects a different
+automatic endpoint; explicit endpoint choices stay fixed, and a full disk
+stops the download immediately.
+
+If an engine's live sidecar fails while fetching its first-use model weights,
+an automatic endpoint change also restarts that sidecar before one retry, so
+its Hub client reads the new endpoint. An unchanged endpoint or a non-network
+engine failure does not restart it.
+
 **Explicit (always wins).** To pin an endpoint yourself:
 
 ```
@@ -140,10 +141,17 @@ failed download at once. Caveats:
 
 ## Cancelling a download
 
-the engine's **Weights** list in **Model Catalogue** lets you cancel an in-flight install. Cancellation stops
-further retries and clears the failure cooldown so you can restart
-immediately. A file that's already streaming finishes first — cancellation
-takes effect at the next retry boundary.
+The engine's **Weights** list in **Model Catalogue** lets you cancel an
+in-flight install. The transfer stops at its next chunk (or before it starts,
+if you cancel while it is still resolving; with the opt-in Xet transfer a file
+already in progress may finish first), and the row shows *cancelling*
+until cleanup finishes. Cleanup removes what that download wrote: partial
+`*.incomplete` / `*.part` files, files it finished, and new snapshot entries.
+Files that were already in the cache before you started (an earlier revision
+or another model's files) are kept, so the model returns to its previous state.
+On Windows, a file still held open is retried for a few seconds before it is
+left in place. Cancelling also clears the failure cooldown, so you can start
+the download again immediately.
 
 ## Troubleshooting
 
@@ -157,5 +165,5 @@ takes effect at the next retry boundary.
   the engine's **Weights** list in **Model Catalogue** and install it again.
 - **Out of disk** — model sizes are shown in the catalog; free space or change
   the cache location with `HF_HOME` / `HF_HUB_CACHE`. An install also keeps
-  10 GB free on the model disk after the download, so it needs the download
-  size plus 10 GB; the warning in Model Catalogue shows both numbers.
+  2 GB free on the model disk after the download, so it needs the download
+  size plus 2 GB; the warning in Model Catalogue shows both numbers.

@@ -20,7 +20,9 @@ def test_finite_language_options_without_loading_models(engine, allowed, rejecte
 
 def test_open_ended_engine_keeps_all_language_options(tts):
     from omnivoice.utils.lang_map import LANG_NAME_TO_ID
-    assert tts.language_options('omnivoice') == sorted(LANG_NAME_TO_ID)
+    # Plus the regional Portuguese choices, which resolve to its "pt" (#3143).
+    expected = sorted({*LANG_NAME_TO_ID, 'portuguese (brazil)', 'portuguese (portugal)'})
+    assert tts.language_options('omnivoice') == expected
 
 
 def test_installed_kokoro_tables_are_read_without_importing_model(tmp_path, monkeypatch, tts):
@@ -139,6 +141,7 @@ def test_metadata_releases_temporary_sidecar_exit_handlers(monkeypatch, engine, 
     ('melotts', 'english', 'japanese'),
     ('qwen3-tts', 'korean', 'bengali'),
     ('outetts', 'bengali', 'hindi'),
+    ('voxcpm2', 'thai', 'bengali'),
 ])
 def test_curated_mlx_models_declare_documented_languages(model, allowed, rejected, monkeypatch, tts):
     monkeypatch.setenv('OMNIVOICE_MLX_AUDIO_MODEL', model)

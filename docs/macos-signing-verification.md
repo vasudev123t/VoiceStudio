@@ -60,7 +60,7 @@ scripts/verify-macos-signing.sh
 
 # A specific bundle or DMG (for example from electron/release/):
 scripts/verify-macos-signing.sh "path/to/VoiceStudio.app"
-scripts/verify-macos-signing.sh ~/Downloads/VoiceStudio-Electron-*.dmg
+scripts/verify-macos-signing.sh ~/Downloads/VoiceStudio-*.dmg
 
 # Release gate — fail on any unsigned or un-notarized component:
 scripts/verify-macos-signing.sh "VoiceStudio.app" --require-signed

@@ -26,6 +26,9 @@ ERROR_DOCS: dict[str, str] = {
     # as the unclassified floor message and the report could only say
     # `RuntimeError`.
     "HOST_MEMORY_EXHAUSTED": f"{_BASE}/docs/install/troubleshooting.md#generation-failure-diagnosis",
+    # The volume holding data / model cache / temp is full (ENOSPC, EDQUOT,
+    # WinError 112/39); the error journal already used this class name.
+    "DISK_FULL": f"{_BASE}/docs/install/troubleshooting.md#generation-failure-diagnosis",
     "WINDOWS_APP_CONTROL_BLOCKED": f"{_BASE}/docs/install/troubleshooting.md#generation-failure-diagnosis",
     "AUDIO_IO_FAILED": f"{_BASE}/docs/install/troubleshooting.md#generation-failure-diagnosis",
     "INVALID_MEDIA_FILE": f"{_BASE}/docs/electron-dubbing.md#unreadable-source-file",

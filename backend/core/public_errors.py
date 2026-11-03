@@ -131,6 +131,16 @@ def stream_failure(code: str, *, device: str | None = None) -> dict[str, object]
             ),
             "retryable": True,
         },
+        "transcription_disk_full": {
+            "code": "transcription_disk_full",
+            "detail": (
+                "Transcription stopped because the disk is full. Free space on "
+                "the drive that holds VoiceStudio's data, model cache or temp "
+                "folder (Settings → Storage shows disk usage and clears "
+                "temporary files), then try again."
+            ),
+            "retryable": True,
+        },
         "transcription_pipe_lost": {
             "code": "transcription_pipe_lost",
             "detail": (
@@ -170,6 +180,16 @@ def transcription_failure_code(error: object) -> str:
 
     from services.ffmpeg_utils import MediaToolUnavailableError
 
+    try:
+        from core.failure import is_disk_full_error
+
+        # Every chunk write (temp WAV, model cache) fails the same way until
+        # space is freed; "check the selected ASR engine" sends the user to the
+        # wrong place.
+        if is_disk_full_error(error if isinstance(error, BaseException) else str(error)):
+            return "transcription_disk_full"
+    except Exception:  # noqa: BLE001 — classification must never raise
+        pass
     pipe = False
     for exc in _exception_chain(error):
         if isinstance(exc, MediaToolUnavailableError):
@@ -225,10 +245,10 @@ def stream_generation_failure(error: BaseException | object) -> dict[str, object
         # a Python type, not user text, and no substring of `error` is copied.
         payload["error_class"] = type(error).__name__
     try:
+        enriched = public_exception_response(error, fallback=str(payload["detail"]))
         from core.failure import is_terminal_failure_topic
 
-        enriched = public_exception_response(error, fallback=str(payload["detail"]))
-        terminal = is_terminal_failure_topic(enriched.get("docs_topic"))
+        is_terminal = is_terminal_failure_topic(enriched.get("docs_topic"))
     except Exception:
         return payload
     hint = enriched.get("hint")
@@ -238,12 +258,7 @@ def stream_generation_failure(error: BaseException | object) -> dict[str, object
         topic = enriched.get("docs_topic")
         if topic:
             payload["docs_topic"] = topic
-            # #2177: a build mismatch, a device selection or an OS policy does
-            # not change between two renders of the same text. Marking these
-            # terminal stops the floor message's "try again" from being the
-            # only advice, and stops the client re-rendering the whole passage
-            # on the classic path to reach the identical failure.
-            if terminal:
+            if is_terminal:
                 payload["terminal"] = True
                 payload["retryable"] = False
             try:
@@ -286,6 +301,24 @@ def public_engine_health(ok: bool, diagnostic: Any) -> str:
     """Map an engine-owned health diagnostic to a stable response message."""
     del diagnostic
     return "Healthy" if ok else "Engine unavailable; check the backend log for details."
+
+
+def classified_request_detail(message: str) -> dict[str, str] | None:
+    """Structured 400 detail for a request failure of a known class, else None.
+
+    ``{"docs_topic", "message", "hint"}`` lets the desktop app show its
+    localized copy and the class's in-app fix (#2929/#2678) instead of the
+    English sentence, and puts the topic in the bug report. Every classified
+    class qualifies, so a class added to the taxonomy needs no route change.
+    Values are VoiceStudio-owned constants only — never ``message`` itself.
+    """
+    from core.failure import classify, public_hint_for_topic
+
+    topic = classify(message)
+    hint = public_hint_for_topic(topic) if topic else ""
+    if not hint:
+        return None
+    return {"docs_topic": topic, "message": hint, "hint": hint}
 
 
 def public_exception_response(error: BaseException, *, fallback: str) -> dict[str, str]:

@@ -6,7 +6,7 @@ import {
   languageSupported,
 } from './language-options';
 import { QueryClient } from '@tanstack/react-query';
-import { rankOptions } from '@shared/components/VirtualSearchableSelect';
+import { rankOptions } from './language-search';
 import { LANGUAGES } from './languages';
 
 it('gives every canonical language a code without changing persisted values', () => {
@@ -55,4 +55,22 @@ it('keeps disabled recent choices behind enabled choices and uses exact matches 
     'French',
     'German',
   ]);
+});
+it('marks regional and script variants with their primary language for grouping', () => {
+  const [simplified, traditional, german] = languageOptions(
+    ['Chinese (Simplified)', 'Chinese (Traditional)', 'German'],
+    'en',
+    'Auto',
+  );
+  expect(simplified.family).toBe('cmn');
+  expect(traditional.family).toBe('cmn');
+  expect(simplified.familyLabel).toBeTruthy();
+  expect(german.family).toBeUndefined();
+  const [brazil, portugal] = languageOptions(
+    ['Portuguese (Brazil)', 'Portuguese (Portugal)'],
+    'en',
+    'Auto',
+  );
+  expect([brazil.family, portugal.family]).toEqual(['pt', 'pt']);
+  expect(brazil.familyLabel).toBe('Portuguese');
 });

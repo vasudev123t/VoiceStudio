@@ -28,6 +28,7 @@ const locales = [
   'uk',
   'ar',
   'zh-TW',
+  'gl',
 ];
 const longStringLocales = ['de', 'fr', 'ru', 'uk', 'hi', 'ar', 'zh-TW'];
 const routes = ['settings/general', 'settings/performance', 'settings/models', 'clone', 'dub'];

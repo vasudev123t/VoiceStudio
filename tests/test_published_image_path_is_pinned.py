@@ -8,6 +8,8 @@ yaml = pytest.importorskip("yaml")
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORKFLOW = os.path.join(ROOT, ".github", "workflows", "docker.yml")
+# CUDA amd64, ROCm amd64 and CUDA arm64 (#2831) image jobs.
+FLAVORS = 3
 
 
 def _env():
@@ -24,30 +26,30 @@ def test_the_ghcr_paths_are_explicit_and_keep_the_legacy_alias():
 
 def test_release_backfills_require_an_actual_git_tag():
     workflow = open(WORKFLOW, encoding="utf-8").read()
-    assert workflow.count('git rev-parse "refs/tags/${RELEASE_REF}^{commit}"') == 2
+    assert workflow.count('git rev-parse "refs/tags/${RELEASE_REF}^{commit}"') == FLAVORS
     assert 'git rev-parse "${RELEASE_REF}^{commit}"' not in workflow
 
 
-def test_both_ghcr_paths_are_published_by_both_builds():
+def test_both_ghcr_paths_are_published_by_every_build():
     text = open(WORKFLOW, encoding="utf-8").read()
-    assert text.count("${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}") == 2
-    assert text.count("${{ env.REGISTRY }}/${{ env.LEGACY_IMAGE_NAME }}") == 2
+    assert text.count("${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}") == FLAVORS
+    assert text.count("${{ env.REGISTRY }}/${{ env.LEGACY_IMAGE_NAME }}") == FLAVORS
 
 
-def test_current_release_tags_are_backfilled_for_both_gpu_flavors():
+def test_current_release_tags_are_backfilled_for_every_gpu_flavor():
     text = open(WORKFLOW, encoding="utf-8").read()
-    assert text.count('[[ "$RELEASE_REF" =~ ^v[0-9]+\\.[0-9]+\\.[0-9]+$ ]]') == 2
-    assert text.count('${RELEASE_REF}^{commit}') == 2
-    assert text.count('VERSION="${RELEASE_REF#v}"') == 4
-    assert text.count("test \"$PACKAGE_VERSION\" = '1.0.0'") == 2
-    assert text.count('test "$PACKAGE_VERSION" = "$TAG_VERSION"') == 2
-    assert text.count('if [[ "$PROMOTE_STABLE" == "true" ]]') == 2
-    assert text.count("docker buildx imagetools create") == 4
+    assert text.count('[[ "$RELEASE_REF" =~ ^v[0-9]+\\.[0-9]+\\.[0-9]+(-beta\\.[0-9]+)?$ ]]') == FLAVORS
+    assert text.count('${RELEASE_REF}^{commit}') == FLAVORS
+    assert text.count('VERSION="${RELEASE_REF#v}"') == 2 * FLAVORS
+    assert text.count("test \"$PACKAGE_VERSION\" = '1.0.0'") == FLAVORS
+    assert text.count('test "$PACKAGE_VERSION" = "$TAG_VERSION"') == FLAVORS
+    assert text.count('if [[ "$PROMOTE_STABLE" == "true" ]]') == FLAVORS
+    assert text.count("docker buildx imagetools create") == 2 * FLAVORS
 
 
 def test_sha_tags_follow_the_checked_out_source_commit():
     text = open(WORKFLOW, encoding="utf-8").read()
-    assert text.count("git rev-parse --short=7 HEAD") == 2
+    assert text.count("git rev-parse --short=7 HEAD") == FLAVORS
     assert "type=sha" not in text
     assert "GITHUB_SHA::7" not in text
 

@@ -212,13 +212,28 @@ class IsolatedFasterWhisperBackend(SubprocessASRBackend):
     gpu_compat = ("cuda", "cpu")
 
     @classmethod
+    def runtime_gpu_compat(cls):
+        from core.windows_rocm.ct2 import gpu_compatible
+
+        return gpu_compatible()
+
+    @classmethod
     def is_available(cls) -> tuple[bool, str]:
         from core.execstack import ensure_ctranslate2_loadable
+        from core.windows_rocm.ct2 import availability_status
+
+        if (status := availability_status()) is not None:
+            if not cls.sidecar_script().is_file():
+                return False, "ASR sidecar script missing; reinstall VoiceStudio"
+            return status
 
         ok, detail = ensure_ctranslate2_loadable()
         if not ok:
             return False, f"faster-whisper cannot load CTranslate2: {detail}"
         try:
+            from core.windows_rocm.ct2 import prepare_import
+
+            prepare_import()
             import faster_whisper  # noqa: F401
         except Exception as e:
             return False, f"faster-whisper not installed: {e}"
@@ -231,6 +246,10 @@ class IsolatedFasterWhisperBackend(SubprocessASRBackend):
         from services.asr_backend import _ctranslate2_cudnn_ok
 
         return _ctranslate2_cudnn_ok()
+
+    @classmethod
+    def shares_parent_torch(cls) -> bool:
+        return True
 
     @classmethod
     def venv_python(cls) -> Path:

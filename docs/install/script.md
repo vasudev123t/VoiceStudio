@@ -1,18 +1,18 @@
 # Shell installer (Electron)
 
 The shell installer supports macOS (Apple Silicon and Intel) and Linux x64.
-On Windows, download the `VoiceStudio-Electron-…-win-x64.exe` installer (or
+On Windows, download the `VoiceStudio-…-win-x64.exe` installer (or
 `…-win-arm64.exe` on a Snapdragon/ARM PC) from
 [Releases](https://github.com/debpalash/VoiceStudio/releases).
 
-Or use PowerShell (the endpoint detects PowerShell's user agent):
+Or use PowerShell. Use the `.ps1` URL: the bare `/install` URL is not guaranteed to detect PowerShell and can return the shell script (#2973):
 
 ```powershell
-irm https://voicestudio.sh/install | iex
-$env:VOICESTUDIO_VERSION='X.Y.Z'; irm https://voicestudio.sh/install | iex
+irm https://voicestudio.sh/install.ps1 | iex
+$env:VOICESTUDIO_VERSION='X.Y.Z'; irm https://voicestudio.sh/install.ps1 | iex
 # Clear a previous version override before selecting main:
 Remove-Item Env:VOICESTUDIO_VERSION -ErrorAction SilentlyContinue
-$env:VOICESTUDIO_INSTALL_MODE='main'; irm https://voicestudio.sh/install | iex
+$env:VOICESTUDIO_INSTALL_MODE='main'; irm https://voicestudio.sh/install.ps1 | iex
 ```
 
 On ARM64 Windows the script installs the native ARM64 build and falls back to the x64 build when a release has none. Windows main builds also need Visual Studio C++ build tools (plus the ARM64 build tools on ARM). The script builds
@@ -31,6 +31,8 @@ curl -fsSL https://voicestudio.sh/install | sh -s -- --main
 ```
 
 `--source` is an alias for `--main`. It cannot be combined with `--version`.
+Release packages are named `VoiceStudio-<version>-<os>-<arch>`; the installers
+still find the `VoiceStudio-Electron-*` names that releases up to v0.5.7-beta.3 used.
 After downloading the script for inspection, the equivalent local commands are
 `sh scripts/install.sh`, `sh scripts/install.sh --version X.Y.Z`, and
 `sh scripts/install.sh --main`.

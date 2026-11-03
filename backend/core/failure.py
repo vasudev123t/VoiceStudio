@@ -87,6 +87,24 @@ class InvalidMediaFileError(ValueError):
         super().__init__(message)
 
 
+SOURCE_LANGUAGE_REQUIRED_MESSAGE = (
+    "Speech recognition did not report which language this video is spoken in, "
+    "so batch dubbing cannot translate it. Open the video in Dubbing and choose "
+    "its source language, or select a speech recognition model that detects the "
+    "language, then try again."
+)
+
+
+class SourceLanguageRequiredError(ValueError):
+    """ASR reported no language and nobody chose one, so there is nothing to translate from."""
+
+    code = "source_language_required"
+    docs_topic = "SOURCE_LANGUAGE_REQUIRED"
+
+    def __init__(self, message: str = SOURCE_LANGUAGE_REQUIRED_MESSAGE):
+        super().__init__(message)
+
+
 def is_no_audio_stream_stderr(text: "str | bytes | None") -> bool:
     """True when ffmpeg's stderr says the input had no audio stream to extract.
 
@@ -132,6 +150,11 @@ _HINTS: dict[str, str] = {
     # was told to go and check their engine instead. A separate class (not a
     # wider GPU_OOM) because the remedy differs: free system RAM, not VRAM.
     "HOST_MEMORY_EXHAUSTED": "The machine ran out of memory during generation. Close other memory-heavy apps and browser tabs, unload models you are not using with Flush models, render a shorter passage, or select a lighter TTS engine. On Windows, enlarging the page file also gives a large engine room to load.",
+    # ENOSPC/EDQUOT, Windows ERROR_DISK_FULL/ERROR_HANDLE_DISK_FULL: a write
+    # failed because the volume holding VoiceStudio's data, model cache or temp
+    # folder is full. Retrying the same request fails identically until space
+    # is freed, and no engine or device change helps.
+    "DISK_FULL": "The disk is full, so VoiceStudio could not write a file. Free space on the drive that holds VoiceStudio's data, model cache or temp folder (Settings → Storage shows disk usage, clears temporary files and lists the largest models), then try again.",
     "PKG_RESOURCES_MISSING": "Run `uv pip install --reinstall 'setuptools>=75,<80'` in the backend venv (a plain install is skipped when setuptools' metadata is present but its pkg_resources files were removed by antivirus). Restart after.",
     "GATEKEEPER_QUARANTINE": "Clear the macOS quarantine flag (xattr -cr the app), then reopen.",
     "APPIMAGE_WEBKIT_WHITESCREEN": "Launch with WEBKIT_DISABLE_DMABUF_RENDERER=1 set.",
@@ -188,6 +211,10 @@ _HINTS: dict[str, str] = {
     # stream … Error opening output files: Invalid argument", which the dub
     # page showed verbatim and which read as a disk/permission problem.
     "NO_AUDIO_TRACK": "Check that the file plays with sound in a media player. If its audio is in a separate file, choose that file instead, or merge the audio into the video first.",
+    # The ASR engine (e.g. a whisper.cpp build without language metadata)
+    # reported no language. Batch has no source picker, so Dubbing is the place
+    # to choose one; guessing English would translate the wrong language.
+    "SOURCE_LANGUAGE_REQUIRED": "Open the video in Dubbing, choose its source language and translate there, or pick a speech recognition model in Model Catalogue that detects the spoken language.",
     "INVALID_MEDIA_FILE": "Check the source in a media player. If it cannot play, wait for the download or copy to finish, free disk space if needed, then download a fresh copy and upload it again.",
     # #2929/#2678: the voice has no transcript and no speech-to-text model is
     # installed to produce one, so the only advice that works is one of those two.
@@ -273,11 +300,19 @@ _HF_CONTEXT_MARKERS = (
 
 
 _DISK_FULL_SIGNATURES = (
-    "errno 28", "no space left",
+    "no space left",
     # Linux says "Disk quota exceeded"; macOS says "Disc quota exceeded".
     "disk quota exceeded", "disc quota exceeded",
-    "winerror 112", "winerror 39", "not enough space on the disk",
+    "not enough space on the disk",
 )
+# The numeric spellings, bounded so ``[WinError 390]`` / ``[Errno 280]`` never
+# match. Windows ERROR_DISK_FULL (112) and ERROR_HANDLE_DISK_FULL (39); ENOSPC
+# is 28 on every platform this app ships on.
+_DISK_FULL_CODE_RE = re.compile(r"\berrno 28\b|\bwinerror (?:112|39)\b")
+
+
+def _has_disk_full_signature(low: str) -> bool:
+    return any(sig in low for sig in _DISK_FULL_SIGNATURES) or bool(_DISK_FULL_CODE_RE.search(low))
 # EDQUOT is 122 on Linux and 69 on macOS (absent on Windows) — use the platform's.
 _DISK_FULL_ERRNOS = frozenset(
     n for n in (getattr(errno, "ENOSPC", None), getattr(errno, "EDQUOT", None)) if n is not None
@@ -285,7 +320,9 @@ _DISK_FULL_ERRNOS = frozenset(
 
 
 def is_disk_full_error(reason: "BaseException | str | None") -> bool:
-    """True when an install/download died because the volume is full.
+    """True when a failure is the volume being full (ENOSPC/EDQUOT, WinError
+    112/39). ``classify`` names it DISK_FULL; install/download paths use it to
+    stop retrying.
 
     Accepts an exception (checks ``errno``/``winerror`` through the
     ``__cause__``/``__context__`` chain, so a wrapped ``OSError`` still counts) or
@@ -300,12 +337,11 @@ def is_disk_full_error(reason: "BaseException | str | None") -> bool:
                 seen.add(id(exc))
                 if getattr(exc, "errno", None) in _DISK_FULL_ERRNOS or getattr(exc, "winerror", None) in (39, 112):
                     return True
-                if any(sig in str(exc).lower() for sig in _DISK_FULL_SIGNATURES):
+                if _has_disk_full_signature(str(exc).lower()):
                     return True
                 exc = exc.__cause__ or exc.__context__
             return False
-        low = (reason or "").lower()
-        return any(sig in low for sig in _DISK_FULL_SIGNATURES)
+        return _has_disk_full_signature((reason or "").lower())
     except Exception:
         return False
 
@@ -412,23 +448,26 @@ _CONTEXT_FREE_HINT_CLASSES = frozenset({
     # as the bare "Generation failed. Check the selected engine and try
     # again." with no hint, and the reporter could only file a RuntimeError.
     "HOST_MEMORY_EXHAUSTED",
-    # #2177: CUDA's own "no kernel image is available for execution" — a driver
-    # sentence no other failure produces, and the one class a streaming render
-    # on an unsupported card hits every single time. The non-streaming path has
-    # named this since #756; the streaming frame could only answer with the
-    # floor message, so the report arrived as a bare RuntimeError.
+    # Matched on the OS's own errno/winerror (ENOSPC, EDQUOT, WinError 112/39)
+    # or its fixed "no space left on device" wording — nothing else produces
+    # them. Without it a full disk reached every context-free surface (the
+    # global 500 handler, the streaming frame) as the bare "VoiceStudio hit an
+    # internal error" even though the error journal already named DISK_FULL.
+    "DISK_FULL",
+    # CUDA's own "no kernel image is available" sentence: only a torch build
+    # lacking kernels for this GPU's architecture produces it.
     "GPU_ARCH_UNSUPPORTED",
-    # #1227's trigger is the numeric WinError (4551/1260), locale-independent
-    # and unmistakable — the same reasoning that already admits
-    # WINDOWS_UNTRUSTED_MOUNT (448) and WINDOWS_PAGING_FILE_TOO_SMALL (1455).
-    # Left out when those two were added, so a blocked load reached a streaming
-    # render with no way to learn an Application Control policy caused it.
+    # Keyed on the numeric WinError (4551/1260), which no other failure
+    # raises; previously only the non-streaming path surfaced its hint.
     "WINDOWS_APP_CONTROL_BLOCKED",
-    # Matched on the library name or ``audio_io.AUDIO_WRITE_FAILED_MARKER`` — a
-    # marker chosen over generic wording precisely so an unrelated open cannot
-    # claim the audio remedy. The desktop app already routes this topic to
-    # Settings → Storage, a recovery that could never fire while the hint was
-    # dropped before reaching the client.
+    # Matched on SOURCE_LANGUAGE_REQUIRED_MESSAGE, a sentence this app writes
+    # itself (SourceLanguageRequiredError), so no foreign text can claim it.
+    # It is terminal, and a terminal class without its hint would end a render
+    # while explaining nothing.
+    "SOURCE_LANGUAGE_REQUIRED",
+    # Keyed on the audio library's name or the audio-write marker in
+    # ``audio_io``; the desktop app already sends this topic to Settings ->
+    # Storage.
     "AUDIO_IO_FAILED",
     "SOCKS_PROXY_SUPPORT_MISSING",
     "SSL_HANDSHAKE_FAILURE",
@@ -472,30 +511,27 @@ _CONTEXT_FREE_HINT_CLASSES = frozenset({
 })
 
 
-#: Classes that cannot succeed on a retry of the same request. The failure is in
-#: the build, the device selection or an OS policy — none of which a second
-#: render changes — so the stream frame marks them terminal rather than
-#: inviting the "try again" the floor message ends with. #2177's reporter ran
-#: the same generation twice, ninety seconds apart, to the same result.
-#:
-#: `terminal` also stops the client re-rendering the whole text on the classic
-#: path (``shouldFallbackToClassic``), which for these classes would fail
-#: identically after paying for the render twice.
+# Classes where retrying the identical request cannot help: the cause is the
+# build, the device choice, an OS policy, or content that is simply absent.
+# Each member must also be in _CONTEXT_FREE_HINT_CLASSES, otherwise a render
+# would be declared final without saying why. Disk space and memory can
+# recover, so AUDIO_IO_FAILED / GPU_OOM / HOST_MEMORY_EXHAUSTED stay out.
 _TERMINAL_FAILURE_CLASSES = frozenset({
     "GPU_ARCH_UNSUPPORTED",
     "WINDOWS_APP_CONTROL_BLOCKED",
-    # The same file has no audio on every retry.
     "NO_AUDIO_TRACK",
-    # A missing package or a missing transcript model does not appear between
-    # two renders of the same request.
+    "SOURCE_LANGUAGE_REQUIRED",
     "ENGINE_DEPENDENCY_MISSING",
     "REFERENCE_STT_MISSING",
 })
 
 
 def is_terminal_failure_topic(topic: str | None) -> bool:
-    """Whether repeating the same render cannot repair the diagnosed cause."""
-    return topic in _TERMINAL_FAILURE_CLASSES
+    """True when ``topic`` names a failure that a retry will reproduce."""
+    try:
+        return isinstance(topic, str) and topic in _TERMINAL_FAILURE_CLASSES
+    except Exception:
+        return False
 
 
 def append_hint(text: str) -> str:
@@ -521,6 +557,8 @@ _GPU_OOM_SIGNATURES = (
     "mps backend out of memory",
     "hip out of memory",
     "out of memory on device",
+    "xpu out of memory",           # torch's Intel XPU caching allocator
+    "out_of_device_memory",        # Intel XPU driver: UR_RESULT_ERROR_OUT_OF_DEVICE_MEMORY
 )
 
 
@@ -591,7 +629,9 @@ def is_host_oom(error: BaseException | str) -> bool:
         if id(current) in seen:
             continue
         seen.add(id(current))
-        if type(current).__name__ == "MemoryError":
+        # isinstance, so a MemoryError subclass raised to explain itself (the
+        # reference-encode preflight, #3340) keeps the host-RAM remedy.
+        if isinstance(current, MemoryError):
             return True
         # OSError.winerror carries the number even when the text is localized.
         if getattr(current, "winerror", None) == 8:
@@ -632,8 +672,13 @@ def classify(reason: BaseException | str) -> str:
             return "GPU_OOM"
         if is_host_oom(reason):
             return "HOST_MEMORY_EXHAUSTED"
+        # The errno/winerror of a disk-full OSError (anywhere in the chain)
+        # survives an exception whose message was replaced or localized.
+        disk_full = is_disk_full_error(reason)
         # Every other rule is a message rule; unchanged behavior from here.
         reason = str(reason)
+    else:
+        disk_full = False
     low = (reason or "").lower()
     if is_gpu_oom(low):
         return "GPU_OOM"
@@ -644,13 +689,17 @@ def classify(reason: BaseException | str) -> str:
     # all the way through to the unclassified floor message.
     if is_host_oom(low):
         return "HOST_MEMORY_EXHAUSTED"
-    # #2177: the GPU's compute capability isn't in this torch build's arch list,
-    # so CUDA refuses to launch kernels. Checked after the OOM branch so real
-    # memory pressure is never relabelled, and matched on CUDA's own sentence —
-    # nothing else produces it, which is what makes the hint safe to attach on
-    # the context-free surfaces. ``generation.py`` already re-raises this class
-    # with the same remedy; without a topic the streaming frame could only show
-    # "Generation failed. Check the selected engine and try again."
+    # The volume is full (ENOSPC/EDQUOT, WinError 112/39). After the memory
+    # classes, which name RAM rather than disk; before every message rule, so a
+    # path in the OS sentence (an AppImage mount, a "quarantine" folder) or an
+    # engine/transformers wording around it can never claim the failure. The
+    # one exception is a video download, whose own class names the job folder
+    # it could not write (#1225) — a strictly more specific remedy.
+    if (disk_full or is_disk_full_error(low)) and not _is_download_write_refusal(reason, low):
+        return "DISK_FULL"
+    # The CUDA runtime's wording for "this torch build has no kernels for the
+    # GPU's compute capability". Placed after the memory/disk classes so real
+    # resource pressure keeps its own class.
     if "no kernel image is available" in low:
         return "GPU_ARCH_UNSUPPORTED"
     # Before the errno / "invalid argument" rules: ffmpeg's no-stream failure
@@ -660,6 +709,8 @@ def classify(reason: BaseException | str) -> str:
         return "NO_AUDIO_TRACK"
     if INVALID_MEDIA_FILE_MESSAGE.lower() in low:
         return "INVALID_MEDIA_FILE"
+    if SOURCE_LANGUAGE_REQUIRED_MESSAGE.lower() in low:
+        return "SOURCE_LANGUAGE_REQUIRED"
     if "pkg_resources" in low:
         return "PKG_RESOURCES_MISSING"
     if "quarantine" in low or "is damaged" in low or "gatekeeper" in low:
@@ -721,9 +772,7 @@ def classify(reason: BaseException | str) -> str:
     # under the VoiceStudio data dir, not the system temp dir. Checked first so
     # a download's errno 22 stops being handed the transcribe path's
     # "check your TEMP folder" hint, which sends the user to the wrong place.
-    if is_os_write_refusal(reason) and any(
-        marker in low for marker in _DOWNLOAD_CONTEXT_MARKERS
-    ):
+    if _is_download_write_refusal(reason, low):
         return "VIDEO_DOWNLOAD_OS_ERROR"
     # #1256: a third-party library shelled out to `ffprobe`/`ffmpeg` BY NAME and
     # the OS had nothing to run. VoiceStudio's own code always resolves the
@@ -1173,13 +1222,18 @@ _INCOMPLETE_CACHE_PHRASES = (
     # Matched as two fragments: the file list between them varies with the
     # transformers version and the requested weight variant.
     ("error no file named", "found in directory"),
+    # A snapshot may have all its weights but lack the audio tokenizer's
+    # processor config (#2984). Require the missing-config wording too:
+    # an AutoFeatureExtractor import/compatibility failure is not repairable
+    # by downloading model files.
+    ("can't load feature extractor for", "directory containing a preprocessor_config.json file"),
 )
 
 
 def is_incomplete_cache_message(text: str) -> bool:
-    """True when *text* is transformers reporting a snapshot with no weights.
+    """True when transformers reports missing weights or feature-extractor config.
 
-    Takes an already-lowercased string. Shared by :func:`classify` and
+    Accepts text in any case. Shared by :func:`classify` and
     model_manager's cache self-heal so the healer and the error message can
     never disagree about what an interrupted download looks like.
     """
@@ -1259,12 +1313,17 @@ def is_corrupt_weights_message(text: str) -> bool:
     return is_corrupt_model_file_message(text)
 
 
+def _is_download_write_refusal(reason: Optional[str], low: str) -> bool:
+    """An OS write refusal raised while saving a downloaded video (#1225)."""
+    return is_os_write_refusal(reason) and any(marker in low for marker in _DOWNLOAD_CONTEXT_MARKERS)
+
+
 def is_os_write_refusal(reason: Optional[str]) -> bool:
     """True when *reason* looks like the OS refusing a file operation (a full
     or removed drive, a read-only folder, an antivirus/cloud-sync lock) rather
     than a network or format failure. Signature match only; never raises."""
     low = (reason or "").lower()
-    return any(sig in low for sig in _OS_WRITE_REFUSAL_SIGNATURES)
+    return any(sig in low for sig in _OS_WRITE_REFUSAL_SIGNATURES) or is_disk_full_error(low)
 
 
 def describe_path_target(path: str) -> str:

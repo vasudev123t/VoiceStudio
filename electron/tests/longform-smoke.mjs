@@ -147,13 +147,12 @@ try {
   );
   assert.equal(await page.getByLabel('Author', { exact: true }).inputValue(), 'Test author');
   assert.equal(await page.getByLabel('Word', { exact: true }).inputValue(), 'SQL');
-  await page
-    .locator('[data-slot=secondary-sidebar]')
-    .getByText('Projects', { exact: true })
-    .click();
+  // Projects is a tab beside the controls; Audiobook (the pane title) switches back.
+  await page.getByRole('tab', { name: 'Projects', exact: true }).click();
   await page.getByLabel('Project name', { exact: true }).fill('Saved book fixture');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await page.getByRole('button', { name: 'Saved book fixture', exact: true }).waitFor();
+  await page.getByRole('tab', { name: 'Audiobook', exact: true }).click();
   await page.getByRole('textbox', { name: 'Script', exact: true }).fill('Unsaved edit');
   await page.goto((process.env.VOICESTUDIO_UI_URL || 'http://localhost:3902') + '/#/projects');
   await page.getByRole('button', { name: 'Rename Saved book fixture', exact: true }).click();
@@ -180,33 +179,31 @@ try {
     .getByRole('navigation', { name: 'Workspaces', exact: true })
     .getByRole('button', { name: 'Stories', exact: true })
     .click();
-  await page
-    .getByRole('dialog')
-    .getByRole('link', { name: 'Stories', exact: true })
-    .click();
+  await page.getByRole('dialog').getByRole('link', { name: 'Stories', exact: true }).click();
   await page
     .locator('[data-slot=secondary-sidebar]')
     .getByRole('button', { name: 'Narrator fixture', exact: true })
     .click();
   await page.getByRole('button', { name: 'Add First Line', exact: true }).click();
   await page.getByRole('textbox', { name: /Enter dialogue/ }).fill('A story line [pause 0.5s]');
-  await page.getByText(/assign a voice to each character/).click();
+  await page.locator('aside summary').filter({ hasText: /^Cast/ }).click();
   await page.getByRole('button', { name: 'Add character', exact: true }).click();
   await page.getByLabel('Character name', { exact: true }).fill('Mara');
   const character = page
-    .locator('aside details')
+    .locator('aside [data-slot=cast-member]')
     .filter({ has: page.getByLabel('Character name', { exact: true }) });
-  await character.getByText('Default', { exact: true }).first().click();
-  await character.getByRole('button', { name: 'Actor fixture', exact: true }).click();
+  await character.getByRole('button', { name: 'Voice: Default', exact: true }).click();
   await page
-    .getByRole('textbox', { name: /Enter dialogue/ })
-    .first()
-    .locator('..')
-    .locator('..')
-    .locator('summary')
-    .first()
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Actor fixture', exact: true })
     .click();
-  await page.locator('main').getByRole('button', { name: 'Mara', exact: true }).click();
+  // Each script line carries one row of chips; the speaker chip opens a picker.
+  await page
+    .locator('[data-slot=story-block]')
+    .first()
+    .getByRole('button', { name: 'Speaker: Narrator', exact: true })
+    .click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Mara', exact: true }).click();
   await page.getByRole('button', { name: 'Add Line', exact: true }).click();
   await page
     .getByRole('textbox', { name: /Enter dialogue/ })

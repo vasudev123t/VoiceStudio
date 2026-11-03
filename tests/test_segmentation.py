@@ -363,7 +363,7 @@ class TestSpeakerAssignment:
         out = assign_speakers_from_diarization(segs, FakeDiar())
         assert out[0]["speaker_id"] == "Speaker 1"  # SPEAKER_00 + 1
 
-    def test_diarization_falls_back_to_midpoint_when_no_overlap(self):
+    def test_diarization_falls_back_to_nearest_turn_when_no_overlap(self):
         class FakeTurn:
             def __init__(self, start, end):
                 self.start = start
@@ -375,8 +375,9 @@ class TestSpeakerAssignment:
 
         segs = [{"start": 0.0, "end": 2.0, "text": "x", "id": "1", "speaker_id": "?"}]
         out = assign_speakers_from_diarization(segs, FakeDiar())
-        # No overlap, no midpoint match — speaker_id stays "?"
-        assert out[0]["speaker_id"] == "?"
+        # No overlap, no midpoint match: the nearest turn's speaker, never the
+        # stale pre-diarization label (#3419).
+        assert out[0]["speaker_id"] == "Speaker 4"
 
 
 # ---------------------------------------------------------------------------

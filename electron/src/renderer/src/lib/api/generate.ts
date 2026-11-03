@@ -128,6 +128,15 @@ export function sanitizeInstruct(free: string): SanitizedInstruct {
 
 // ── Request ────────────────────────────────────────────────────────────────
 
+/** The `instruct` field to send, or '' for none. Free-form engines keep the user's wording. */
+function instructField(input: CloneGenerateInput): string {
+  const written = input.instruct ?? '';
+  if (!written) return '';
+  return input.instructVocabulary === 'freeform'
+    ? written.trim()
+    : sanitizeInstruct(written).instruct;
+}
+
 /** Multipart body for `POST /generate` (classic whole-file path). */
 export function toGenerateForm(input: CloneGenerateInput): FormData {
   const form = new FormData();
@@ -153,6 +162,9 @@ export function toGenerateForm(input: CloneGenerateInput): FormData {
 
   if (input.profileId) {
     form.append('profile_id', input.profileId);
+    // A manual correction overrides the saved transcript. Omit blank input so
+    // whitespace cannot shadow the profile's existing reference text.
+    if (input.refText?.trim()) form.append('ref_text', input.refText);
   } else if (input.refAudio) {
     const name =
       input.refAudioName ||
@@ -162,14 +174,17 @@ export function toGenerateForm(input: CloneGenerateInput): FormData {
     form.append('ref_text', input.refText ?? '');
   }
 
-  if (input.instruct) {
-    const instruct =
-      input.instructVocabulary === 'freeform'
-        ? input.instruct.trim()
-        : sanitizeInstruct(input.instruct).instruct;
-    if (instruct) form.append('instruct', instruct);
+  const instruct = instructField(input);
+  if (instruct) form.append('instruct', instruct);
+  if (input.designRecipe !== undefined) {
+    form.append('design_recipe', JSON.stringify(input.designRecipe));
   }
-  if (input.designRecipe) form.append('design_recipe', JSON.stringify(input.designRecipe));
+  if (input.emoVector) {
+    form.append('emo_vector', JSON.stringify(input.emoVector));
+  } else if (input.emoText?.trim()) {
+    form.append('emo_text', input.emoText.trim());
+    if (input.emoAlpha !== undefined) form.append('emo_alpha', String(input.emoAlpha));
+  }
   // Optional RVC post-step: the backend converts the take before watermarking.
   if (input.rvcVoiceId) form.append('rvc_voice_id', input.rvcVoiceId);
   return form;
@@ -235,12 +250,7 @@ export interface GenerateOptions {
 export class StreamingPreviewError extends Error {
   readonly retryable: boolean;
   readonly terminal: boolean;
-  /**
-   * The backend exception TYPE behind an otherwise generic failure. Every
-   * unclassified engine failure renders one fixed floor message, so without
-   * this an auto-filed report cannot be told apart from any other (#1800).
-   * Never the exception message — only its class name.
-   */
+  /** Backend exception class name (never a message), or null when absent. */
   readonly errorClass: string | null;
   constructor(
     message: string,

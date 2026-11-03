@@ -1,4 +1,5 @@
 import { _electron as electron } from 'playwright';
+import { execFileSync } from 'node:child_process';
 import {
   appendFileSync,
   cpSync,
@@ -14,6 +15,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { DEFAULT_FIXTURES, startHealthBackend } from './fake-health-backend.mjs';
+import { forceAndWaitForExit } from './desktop-harness-exit.mjs';
 import { isAllowedRequest, STAR_COUNT_STUB, STAR_COUNT_URL } from './local-first.mjs';
 
 const workspaceRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -55,13 +57,33 @@ export const freePort = () =>
     });
   });
 
+/** True when an app launch died because a port chosen by `freePort()` was taken meanwhile. */
+export const isPortConflict = (error) => /EADDRINUSE/.test(String(error?.message ?? error));
+
+/**
+ * `freePort()` can only report a port that was free a moment ago: between closing its
+ * probe and Electron binding the port, another process (a parallel test, the previous
+ * app still shutting down) can take it. Retry the launch with fresh ports rather than
+ * failing a test for a collision that has nothing to do with it.
+ */
+export async function launchWithFreshPorts(launchOnce, nextPorts, attempts = 3) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await launchOnce();
+    } catch (error) {
+      if (attempt >= attempts || !isPortConflict(error)) throw error;
+      await nextPorts();
+    }
+  }
+}
+
 const slug = (name) =>
   name
     .replace(/[^a-z0-9]+/gi, '-')
     .replace(/^-|-$/g, '')
     .toLowerCase();
 
-async function launch({ profile, backendPort, proxyPort, seed }) {
+async function launch({ profile, backendPort, seed }) {
   // VS Code terminals export ELECTRON_RUN_AS_NODE=1, which makes Electron boot as plain Node.
   const { ELECTRON_RUN_AS_NODE: _runAsNode, ...inherited } = process.env;
   const app = await electron.launch({
@@ -80,12 +102,16 @@ async function launch({ profile, backendPort, proxyPort, seed }) {
       VOICESTUDIO_SKIP_BACKEND: '1',
       VOICESTUDIO_ALLOW_MULTIPLE_INSTANCES: '1',
       VOICESTUDIO_DISABLE_UPDATER: '1',
-      VOICESTUDIO_ELECTRON_PROXY_PORT: String(proxyPort),
+      // The OS assigns it at bind time; a pre-picked port can be taken before the app binds it.
+      VOICESTUDIO_ELECTRON_PROXY_PORT: '0',
     },
     timeout: 60000,
   });
+  // Playwright disposes its process channel when Electron closes. Keep the
+  // actual child so post-crash guards can inspect exit state without that channel.
+  const child = app.process();
   const output = [];
-  for (const stream of [app.process().stdout, app.process().stderr]) {
+  for (const stream of [child.stdout, child.stderr]) {
     stream?.on('data', (chunk) => output.push(String(chunk)));
   }
   const context = app.context();
@@ -110,6 +136,7 @@ async function launch({ profile, backendPort, proxyPort, seed }) {
   try {
     page = await app.firstWindow();
   } catch (error) {
+    await app.close().catch(() => {});
     // The app died before showing a window: its own output is the only evidence of why.
     let journal = '(none)';
     try {
@@ -133,13 +160,14 @@ async function launch({ profile, backendPort, proxyPort, seed }) {
   });
   // The main-process guard predates the app; one reload also replays the first page's console.
   await page.reload();
-  return { app, page, errors };
+  return { app, child, page, errors };
 }
 
 /**
  * Runs `body` against a freshly launched desktop app and enforces the run-wide guards:
  * every request stays local, no renderer errors, no main-process errors. On failure the
  * trace, a screenshot and the app logs are saved to ARTIFACT_DIR/<test name>/.
+ * Planned exits use session.crash() to capture guards before the process dies.
  */
 export async function withApp(t, options, body) {
   const { profile: given, fixtures, seed = true, backend: backendMode = 'up' } = options;
@@ -160,15 +188,39 @@ export async function withApp(t, options, body) {
           },
         })
       : null;
-  const backendPort = backend ? backend.port : await freePort();
-  const proxyPort = await freePort();
+  let backendPort = backend ? backend.port : await freePort();
   const live = [];
-  const session = { profile, backend, relaunch: null };
+  const session = { profile, backend, relaunch: null, crash: null };
   const start = async () => {
-    const started = await launch({ profile, backendPort, proxyPort, seed });
+    // With the dev proxy on an OS-assigned port, the backend port is the only one
+    // picked ahead of time, so it is the only one worth re-picking on a collision.
+    const started = await launchWithFreshPorts(
+      () => launch({ profile, backendPort, seed }),
+      async () => {
+        backendPort = await freePort();
+      },
+      backend ? 1 : 3,
+    );
     live.push(started);
     Object.assign(session, started);
     return session;
+  };
+  session.crash = async () => {
+    const started = live.at(-1);
+    // The crashed process cannot return its request log afterward.
+    await collectGuards(started);
+    const signal = AbortSignal.timeout(30_000);
+    started.expectedExit = true;
+    await forceAndWaitForExit(started.child, started.app, () => {
+      if (process.platform === 'win32') {
+        // Playwright launches through cmd.exe. Kill the entire tree and verify
+        // both the wrapper exit and Electron close, even if taskkill races a child.
+        execFileSync('taskkill.exe', ['/PID', String(started.child.pid), '/T', '/F'], {
+          windowsHide: true,
+          timeout: 10_000,
+        });
+      } else started.child.kill('SIGKILL');
+    }, signal);
   };
   session.relaunch = async () => {
     const previous = live.at(-1);
@@ -182,9 +234,12 @@ export async function withApp(t, options, body) {
   let unobserved = 0;
   async function collectGuards(started) {
     errors.push(...started.errors);
-    const child = started.app.process();
-    // A killed app cannot be asked for its log; every other read error must fail the run.
-    if (child.exitCode !== null || child.signalCode !== null) return;
+    const { child } = started;
+    if (child.exitCode !== null || child.signalCode !== null) {
+      assert.equal(started.expectedExit, true, 'Desktop process exited unexpectedly');
+      // Planned crashes already collected this launch's guards while it was alive.
+      return;
+    }
     const seen = await started.app.evaluate(() => globalThis.__requestLog);
     // An empty log means the guard never ran (hook missing or replaced), not that all is well.
     if (!seen.some((url) => url.startsWith('app:'))) unobserved += 1;

@@ -623,7 +623,7 @@ def purge_jobs(job_ids, *, delete_rows, include_inflight: bool = False) -> None:
         _expire_withdrawn(now, protected=len(targets))
 
 
-def save_job(job_id: str, job: dict, filename: str = "", duration: float = 0.0, content_hash: str = "") -> None:
+def save_job(job_id: str, job: dict, filename: str = "", duration: float = 0.0, content_hash: str = "", *, strict: bool = False) -> None:
     """Persist dub job state to SQLite so it survives restarts. Uses UPSERT
     on `id` so repeated saves in a session keep the latest snapshot.
 
@@ -635,6 +635,8 @@ def save_job(job_id: str, job: dict, filename: str = "", duration: float = 0.0, 
     keys history restore off language_code, so a frozen "" hid finished
     tracks until the user re-picked a language.
     """
+    # Speaker reanalysis publishes its in-memory candidate only after a durable
+    # write; strict callers must observe failure instead of a successful replay.
     with _dub_jobs_lock:
         # The withdrawal gate lives HERE, not in the callers (#1252 review).
         # Eight call sites across generate / translate / export / core persist
@@ -642,14 +644,19 @@ def save_job(job_id: str, job: dict, filename: str = "", duration: float = 0.0, 
         # post-ingest save able to resurrect a dub the user deleted mid-render.
         # One choke point closes the class and the ninth caller inherits it.
         if job_id in _withdrawn_jobs:
+            if strict:
+                raise LookupError("Dub job was deleted")
             logger.info(
                 "Dub job %s was deleted while it was still running — not persisting", log_safe(job_id),
             )
             return
-        _persist_job(job_id, job, filename, duration, content_hash)
+        if strict:
+            _persist_job(job_id, job, filename, duration, content_hash, strict=True)
+        else:
+            _persist_job(job_id, job, filename, duration, content_hash)
 
 
-def _persist_job(job_id: str, job: dict, filename: str, duration: float, content_hash: str) -> None:
+def _persist_job(job_id: str, job: dict, filename: str, duration: float, content_hash: str, *, strict: bool = False) -> None:
     """The actual write. Callers go through :func:`save_job`, which gates it."""
     try:
         segments = job.get("segments") or []
@@ -675,6 +682,8 @@ def _persist_job(job_id: str, job: dict, filename: str, duration: float, content
             )
     except Exception as exc:
         logger.error("Failed to persist dub job %s: %s", log_safe(job_id), log_safe(exc))
+        if strict:
+            raise
         return
     event_bus.emit("dub_history", {"action": "saved", "id": job_id})
 
@@ -853,13 +862,13 @@ def _probe_codecs(path: str) -> tuple[str, str]:
         out = subprocess.run(
             local_inputs_only([ffprobe, "-v", "error", "-select_streams", "v:0",
              "-show_entries", "stream=codec_name", "-of", "csv=p=0", path], tool="ffprobe"),
-            capture_output=True, text=True, timeout=10,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10,
         )
         vcodec = (out.stdout or "").strip().lower()
         out = subprocess.run(
             local_inputs_only([ffprobe, "-v", "error", "-select_streams", "a:0",
              "-show_entries", "stream=codec_name", "-of", "csv=p=0", path], tool="ffprobe"),
-            capture_output=True, text=True, timeout=10,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10,
         )
         acodec = (out.stdout or "").strip().lower()
         return vcodec, acodec

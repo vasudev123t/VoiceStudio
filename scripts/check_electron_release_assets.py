@@ -15,6 +15,12 @@ from pathlib import Path
 from typing import Any
 
 
+# Stable is `X.Y.Z`; Beta is `X.Y.Z-beta.N`. Nothing else is an update channel.
+CHANNEL_VERSION = {
+    "stable": re.compile(r"\d+\.\d+\.\d+"),
+    "beta": re.compile(r"\d+\.\d+\.\d+-beta\.\d+"),
+}
+
 TARGETS = {
     # electron-updater's Provider.getCustomChannelName appends an OS suffix
     # for macOS/Linux but leaves Windows channel names unchanged.
@@ -31,6 +37,15 @@ TARGETS = {
 OPTIONAL_TARGETS = {
     "win32-arm64": ("win32-arm64", "win", "arm64", ".exe"),
 }
+
+
+def artifact_name(version: str, os_token: str, arch: str, extension: str) -> str:
+    """Direct-download name (electron-builder.config.mjs `artifactName`).
+
+    Releases up to v0.5.7-beta.3 were `VoiceStudio-Electron-*`; they are built
+    and verified from their own tags, so only the current name is checked here.
+    """
+    return f"VoiceStudio-{version}-{os_token}-{arch}{extension}"
 
 
 class ReleaseContractError(RuntimeError):
@@ -57,12 +72,12 @@ def _asset_map(release: dict[str, Any]) -> dict[str, dict[str, Any]]:
 def verify_release(
     release: dict[str, Any], manifest_dir: Path, *, channel: str, version: str
 ) -> list[str]:
-    # Stable is the only Electron update feed; there is no `preview` release.
-    if channel != "stable":
+    if channel not in CHANNEL_VERSION:
         raise ReleaseContractError(f"unsupported channel: {channel}")
-    if re.fullmatch(r"\d+\.\d+\.\d+", version) is None:
+    if CHANNEL_VERSION[channel].fullmatch(version) is None:
         raise ReleaseContractError(f"{channel} version has the wrong shape: {version}")
-    if release.get("isPrerelease"):
+    # Beta ships as a GitHub prerelease so it can never become `latest`.
+    if bool(release.get("isPrerelease")) != (channel == "beta"):
         raise ReleaseContractError(f"{channel} prerelease flag does not match the channel")
     expected_tag = f"v{version}"
     if release.get("tagName") != expected_tag:
@@ -79,7 +94,7 @@ def verify_release(
         if target in OPTIONAL_TARGETS:
             # Skip only when NOTHING of this target is published: an installer
             # or blockmap without its manifest is an incomplete release.
-            payload = f"VoiceStudio-Electron-{version}-{os_token}-{arch}{extension}"
+            payload = artifact_name(version, os_token, arch, extension)
             traces = (manifest_name, payload, f"{payload}.blockmap")
             if not manifest_path.is_file() and not any(name in assets for name in traces):
                 continue
@@ -108,7 +123,7 @@ def verify_release(
             raise ReleaseContractError(
                 f"{manifest_name} has version {declared_version}, expected {version}"
             )
-        expected_artifact = f"VoiceStudio-Electron-{version}-{os_token}-{arch}{extension}"
+        expected_artifact = artifact_name(version, os_token, arch, extension)
         if artifact != expected_artifact or legacy_path != artifact:
             raise ReleaseContractError(f"{manifest_name} points at unexpected artifact {artifact}")
         if legacy_sha != file_sha or len(file_sha) < 80:
@@ -131,7 +146,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--release-json", type=Path, required=True)
     parser.add_argument("--manifest-dir", type=Path, required=True)
-    parser.add_argument("--channel", choices=("stable",), required=True)
+    parser.add_argument("--channel", choices=tuple(CHANNEL_VERSION), required=True)
     parser.add_argument("--version", required=True)
     args = parser.parse_args()
     release = json.loads(args.release_json.read_text(encoding="utf-8"))

@@ -100,7 +100,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
           targets: ${{ matrix.target }}
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: native/desktop-bridge -> target
           key: microsoft-store-${{ matrix.target }}
@@ -185,8 +185,10 @@ jobs:
           )[0]
           if ($null -eq $previous) { throw "No previous direct release exists before $currentVersion" }
           New-Item -ItemType Directory -Path previous-release | Out-Null
-          gh release download $previous.Tag --repo $env:GITHUB_REPOSITORY --pattern 'VoiceStudio-Electron-*-win-x64.exe' --dir previous-release
-          $directInstaller = @(Get-ChildItem previous-release/VoiceStudio-Electron-*-win-x64.exe)
+          # Direct installers are VoiceStudio-<version>-win-x64.exe; releases up to
+          # v0.5.7-beta.3 named them VoiceStudio-Electron-<version>-win-x64.exe.
+          gh release download $previous.Tag --repo $env:GITHUB_REPOSITORY --pattern 'VoiceStudio-[0-9]*-win-x64.exe' --pattern 'VoiceStudio-Electron-*-win-x64.exe' --dir previous-release
+          $directInstaller = @(Get-ChildItem previous-release/VoiceStudio-*-win-x64.exe)
           if ($directInstaller.Count -ne 1) { throw "Expected one previous direct installer, found $($directInstaller.Count)" }
           $result = Start-Process -FilePath $directInstaller[0].FullName -ArgumentList '/S' -Wait -PassThru
           if ($result.ExitCode -ne 0) { throw "Previous release install failed: $($result.ExitCode)" }
@@ -233,7 +235,7 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: microsoft-store-*
           merge-multiple: true
@@ -293,7 +295,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$(git rev-parse "$RELEASE_TAG^{commit}")" || {
             echo "Checkout does not match the release tag"; exit 1;
           }
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: microsoft-store-partner-center-handoff
           path: microsoft-store-handoff

@@ -26,7 +26,7 @@ export const TERMINAL_MODEL_INSTALL_STATES = new Set([
 export function modelInstallPollInterval(query: {
   state: { data?: ModelInstallJobsResponse };
 }): number | false {
-  return query.state.data?.jobs.some((job) => !TERMINAL_MODEL_INSTALL_STATES.has(job.state))
+  return query.state.data?.jobs?.some((job) => !TERMINAL_MODEL_INSTALL_STATES.has(job.state))
     ? 2_000
     : false;
 }

@@ -9,6 +9,8 @@ export interface CatalogueModel {
   label: string;
   role: string;
   families?: string[];
+  /** Engine ids that load this checkpoint (models.yaml `engines:`). */
+  engines?: string[];
   size_gb: number;
   installed: boolean;
   supported: boolean;
@@ -37,12 +39,23 @@ export interface ModelCatalogueResponse {
   disk_headroom_gb?: number;
 }
 
-export function useModelCatalogue() {
+/** How often a screen waiting on a missing model re-reads the catalogue. */
+export const CATALOGUE_POLL_WHILE_WAITING_MS = 15_000;
+
+export function useModelCatalogue({
+  pollWhile,
+}: {
+  /** Keep re-reading while this holds, e.g. while a gate waits on a download. */
+  pollWhile?: (data: ModelCatalogueResponse | undefined) => boolean;
+} = {}) {
   const status = useBackendStatus();
   return useQuery({
     queryKey: ['model-catalogue'],
     queryFn: () => apiJson<ModelCatalogueResponse>('/models'),
     staleTime: 30_000,
     enabled: isBackendReachable(status.stage),
+    refetchInterval: pollWhile
+      ? (query) => (pollWhile(query.state.data) ? CATALOGUE_POLL_WHILE_WAITING_MS : false)
+      : undefined,
   });
 }

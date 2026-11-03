@@ -1,6 +1,9 @@
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
-const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || 'msedge', headless: true });
+const browser = await chromium.launch({
+  channel: process.env.PLAYWRIGHT_CHANNEL || 'msedge',
+  headless: true,
+});
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   await page.addInitScript(() => {
@@ -25,20 +28,24 @@ try {
   await side.getByRole('button', { name: narrator.name, exact: true }).click();
   await page.getByRole('button', { name: /Add (?:First )?Line/, exact: true }).click();
   await page.getByRole('textbox', { name: /Enter dialogue/ }).fill('Welcome to our short story.');
-  await side.getByText(/assign a voice to each character/).click();
+  await side.locator('summary').filter({ hasText: /^Cast/ }).click();
   await side.getByRole('button', { name: 'Add character', exact: true }).click();
   await side.getByLabel('Character name', { exact: true }).fill('Guest');
   const character = side
-    .locator('details')
+    .locator('[data-slot=cast-member]')
     .filter({ has: page.getByLabel('Character name', { exact: true }) })
     .first();
-  await character.getByText('Default', { exact: true }).first().click();
-  await character.getByRole('button', { name: actor.name, exact: true }).click();
+  await character.getByRole('button', { name: 'Voice: Default', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: actor.name, exact: true }).click();
   await page.getByRole('button', { name: /Add (?:First )?Line/, exact: true }).click();
   const line = page.getByRole('textbox', { name: /Enter dialogue/ }).last();
   await line.fill('Thank you. It is lovely to be here.');
-  await line.locator('..').locator('..').locator('summary').first().click();
-  await page.locator('main').getByRole('button', { name: 'Guest', exact: true }).click();
+  await page
+    .locator('[data-slot=story-block]')
+    .last()
+    .getByRole('button', { name: 'Speaker: Narrator', exact: true })
+    .click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Guest', exact: true }).click();
   const request = page.waitForRequest((r) => r.url().endsWith('/longform/render'));
   await page.getByRole('button', { name: 'Generate', exact: true }).click();
   const body = (await request).postDataJSON();

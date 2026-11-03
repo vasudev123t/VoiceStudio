@@ -83,6 +83,9 @@ OMNI_MESSAGE = [0, 1, 0, 0, 1, 1, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1]
 # the audio, so per-chunk embedding/detection is equivalent.
 _CHUNK_SECONDS = 30
 
+# Re-embeds allowed to fit a marked take under full scale (see embed_watermark).
+_HEADROOM_PASSES = 3
+
 
 # AudioSeal vendors moshi's ``@torch_compile_lazy`` on SEANetEncoder.forward,
 # so the first EMBED — not the model load, which prefetch already warms —
@@ -521,14 +524,35 @@ def embed_watermark(
 
         # AudioSeal 0.2 ignores sample_rate: normalize each bounded chunk
         # explicitly, then add only the resampled watermark to the source.
-        with _eager_audioseal():
-            watermarked = torch.cat(
-                [
-                    _embed_chunk(generator, seg, sample_rate, msg)
-                    for seg in _iter_chunks(audio, sample_rate)
-                ],
-                dim=-1,
-            )
+        def _embed(host: torch.Tensor) -> torch.Tensor:
+            with _eager_audioseal():
+                return torch.cat(
+                    [
+                        _embed_chunk(generator, seg, sample_rate, msg)
+                        for seg in _iter_chunks(host, sample_rate)
+                    ],
+                    dim=-1,
+                )
+
+        watermarked = _embed(audio)
+        # Every exit (PCM16 stream frames, WAV, MP3) is fixed-point, so any
+        # marked sample over full scale is clipped AFTER the mark and the mark
+        # is damaged there. A take peak-normalized close to 0 dBFS (or a raw
+        # take) leaves the residual no headroom. Never touch audio after
+        # marking: when the residual pushes an in-range take over full scale,
+        # attenuate the HOST and re-embed until it fits (bounded; one extra
+        # embed for a real AudioSeal residual). A host that is already over
+        # full scale before marking is left as it came in.
+        host_peak = float(audio.abs().max()) if audio.numel() else 0.0
+        gain = 1.0
+        for _ in range(_HEADROOM_PASSES if 0.0 < host_peak <= 1.0 else 0):
+            excess = float(watermarked.abs().max()) - 1.0
+            scaled_peak = host_peak * gain
+            if not excess > 0.0 or excess >= scaled_peak:
+                break
+            # Lower the host peak by the overshoot (the residual stays put).
+            gain *= (scaled_peak - excess) / scaled_peak
+            watermarked = _embed(audio * gain)
 
         # Restore original shape
         if len(original_shape) == 2:

@@ -8,9 +8,11 @@ loaded model. The deterministic identity sample is rendered lazily on first
 preview/use instead.
 
 This module runs torch-free against an isolated data dir and drives the real
-`create_profile` / `get_profile_audio` endpoint coroutines directly. Each test
-uses `asyncio.run(...)` (NOT a shared/`get_event_loop()` loop) and the module
-lives at top-level `tests/` (not `tests/backend/`) to avoid the
+`create_profile` / `get_profile_audio` endpoint coroutines directly. Pass
+`design_recipe=None` and `engine=None` explicitly: FastAPI only unwraps
+`Form(None)` defaults during request injection, not direct Python calls.
+Each test uses `asyncio.run(...)` (NOT a shared/`get_event_loop()` loop) and
+the module lives at top-level `tests/` (not `tests/backend/`) to avoid the
 sys.modules-isolation collection-order leak.
 """
 from __future__ import annotations
@@ -68,7 +70,7 @@ def test_design_save_creates_row_when_model_unavailable(iso, monkeypatch):
             seed=None,
             personality="",
             kind="design",
-            vd_states=json.dumps(_VD),
+            vd_states=json.dumps(_VD), design_recipe=None, engine=None,
         )
     )
     assert result["kind"] == "design"
@@ -107,7 +109,7 @@ def test_cold_design_save_does_not_load_engine(iso, monkeypatch):
         return await asyncio.wait_for(prof.create_profile(
             name="Offline design", ref_audio=None, ref_text="", instruct="female",
             language="English", seed=None, personality="", kind="design",
-            vd_states=json.dumps(_VD), image=None,
+            vd_states=json.dumps(_VD), design_recipe=None, engine=None, image=None,
         ), timeout=1)
 
     result = asyncio.run(save())
@@ -135,7 +137,7 @@ def test_warm_design_save_preserves_identity_sample(iso, monkeypatch):
     result = asyncio.run(prof.create_profile(
         name="Warm design", ref_audio=None, ref_text="Sample line", instruct="female",
         language="English", seed=None, personality="", kind="design",
-        vd_states=json.dumps(_VD), image=None,
+        vd_states=json.dumps(_VD), design_recipe=None, engine=None, image=None,
     ))
     assert len(renders) == 1 and renders[0]["sample_script"] == "Sample line"
     with db.db_conn() as conn:
@@ -176,7 +178,7 @@ def test_design_save_cannot_cold_load_after_residency_check(iso, monkeypatch, on
         return await asyncio.wait_for(prof.create_profile(
             name="Unloaded during save", ref_audio=None, ref_text="", instruct="female",
             language="English", seed=None, personality="", kind="design",
-            vd_states=json.dumps(_VD), image=None,
+            vd_states=json.dumps(_VD), design_recipe=None, engine=None, image=None,
         ), timeout=1)
 
     result = asyncio.run(save())
@@ -201,7 +203,7 @@ def test_all_auto_design_is_saveable(iso, monkeypatch):
             seed=None,
             personality="",
             kind="design",
-            vd_states=json.dumps(_VD_AUTO),
+            vd_states=json.dumps(_VD_AUTO), design_recipe=None, engine=None,
         )
     )
     assert result["kind"] == "design"
@@ -231,7 +233,7 @@ def test_lazy_sample_renders_on_first_audio_request(iso, monkeypatch):
             seed=None,
             personality="",
             kind="design",
-            vd_states=json.dumps(_VD),
+            vd_states=json.dumps(_VD), design_recipe=None, engine=None,
         )
     )
     pid = result["id"]

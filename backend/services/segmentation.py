@@ -605,36 +605,79 @@ def segment_transcript(
     return [s.to_dict() for s in segments]
 
 
+def _overlap_by_label(start: float, end: float, turns: Sequence[tuple]) -> dict:
+    """Seconds of ``[start, end]`` covered by each speaker's turns."""
+    acc: dict = {}
+    for ts, te, label in turns:
+        left = max(start, ts)
+        right = min(end, te)
+        if right > left:
+            acc[label] = acc.get(label, 0.0) + (right - left)
+    return acc
+
+
+def _nearest_turn_label(
+    start: float, end: float, turns: Sequence[tuple], max_gap: float = float("inf"),
+) -> Optional[str]:
+    """Label of the turn closest in time to ``[start, end]`` (ties: earlier
+    turn), or None when no turn lies within ``max_gap`` seconds."""
+    best, best_gap = None, None
+    for ts, te, label in turns:
+        gap = max(ts - end, start - te, 0.0)
+        if gap <= max_gap and (best_gap is None or gap < best_gap):
+            best, best_gap = label, gap
+    return best
+
+
+def _label_from_turns(start: float, end: float, turns: Sequence[tuple]) -> Optional[str]:
+    """Speaker for a span: most overlap, then midpoint membership, then the
+    nearest turn (#3419).
+
+    Diarizers leave gaps between turns and drop very short utterances, so a
+    short line can sit wholly outside every turn. Before the nearest-turn
+    step such a line kept the label it had before diarization: the
+    silence-gap estimate on the streaming path, ``Speaker 1`` elsewhere. That
+    label belongs to a different numbering, so it could name a speaker the
+    diarizer never found or attribute the line to the wrong person.
+    """
+    overlap = _overlap_by_label(start, end, turns)
+    if overlap:
+        return max(overlap.items(), key=lambda kv: kv[1])[0]
+    mid = (start + end) / 2.0
+    for ts, te, label in turns:
+        if ts <= mid <= te:
+            return label
+    return _nearest_turn_label(start, end, turns)
+
+
+def _assign_from_turn_tuples(segments: List[dict], turns: Sequence[tuple]) -> List[dict]:
+    for s in segments:
+        label = _label_from_turns(s["start"], s["end"], turns)
+        if label is not None:
+            s["speaker_id"] = label
+    return segments
+
+
 def assign_speakers_from_diarization(
     segments: List[dict],
     diarization,
 ) -> List[dict]:
     """Replace speaker_id based on a pyannote diarization result (overlap-weighted)."""
-    for s in segments:
-        start, end = s["start"], s["end"]
-        mid = (start + end) / 2.0
-        overlap: dict[str, float] = {}
-        for turn, _, speaker in diarization.itertracks(yield_label=True):
-            left = max(start, turn.start)
-            right = min(end, turn.end)
-            if right > left:
-                overlap[speaker] = overlap.get(speaker, 0.0) + (right - left)
-        if overlap:
-            winner = max(overlap.items(), key=lambda kv: kv[1])[0]
-        else:
-            # fall back to midpoint membership
-            winner = None
-            for turn, _, speaker in diarization.itertracks(yield_label=True):
-                if turn.start <= mid <= turn.end:
-                    winner = speaker
-                    break
-        if winner is not None:
-            try:
-                idx = int(winner.split("_")[-1]) + 1
-                s["speaker_id"] = f"Speaker {idx}"
-            except ValueError:
-                s["speaker_id"] = winner
-    return segments
+    turns = [
+        (turn.start, turn.end, _diar_speaker_label(spk))
+        for turn, _, spk in diarization.itertracks(yield_label=True)
+    ]
+    return _assign_from_turn_tuples(segments, turns)
+
+
+def _normalise_turn_dicts(turns) -> List[tuple]:
+    return [
+        (t["start"], t["end"], t["speaker"])
+        for t in (turns or [])
+        if t.get("speaker") is not None
+        and t.get("start") is not None
+        and t.get("end") is not None
+    ]
 
 
 def assign_speakers_from_turns(
@@ -645,34 +688,15 @@ def assign_speakers_from_turns(
     turns produced by an ASR backend that diarizes inline (e.g. FunASR's cam++).
 
     Mirrors :func:`assign_speakers_from_diarization`'s overlap-weighting (winner
-    = most-overlapping speaker; midpoint membership as fallback) without a
-    pyannote object. ``speaker`` is used verbatim — FunASR already labels its
-    speakers ``"Speaker N"``. Falls back to the silence-gap heuristic when no
-    usable turns are supplied.
+    = most-overlapping speaker; midpoint membership, then nearest turn, as
+    fallbacks) without a pyannote object. ``speaker`` is used verbatim — FunASR
+    already labels its speakers ``"Speaker N"``. Falls back to the silence-gap
+    heuristic when no usable turns are supplied.
     """
-    clean = [
-        t for t in (turns or [])
-        if t.get("speaker") is not None and t.get("start") is not None and t.get("end") is not None
-    ]
+    clean = _normalise_turn_dicts(turns)
     if not clean:
         return assign_speakers_heuristic(segments)
-    for s in segments:
-        start, end = s["start"], s["end"]
-        mid = (start + end) / 2.0
-        overlap: dict = {}
-        for t in clean:
-            left = max(start, t["start"])
-            right = min(end, t["end"])
-            if right > left:
-                overlap[t["speaker"]] = overlap.get(t["speaker"], 0.0) + (right - left)
-        if overlap:
-            s["speaker_id"] = max(overlap.items(), key=lambda kv: kv[1])[0]
-        else:
-            for t in clean:
-                if t["start"] <= mid <= t["end"]:
-                    s["speaker_id"] = t["speaker"]
-                    break
-    return segments
+    return _assign_from_turn_tuples(segments, clean)
 
 
 def assign_speakers_heuristic(
@@ -726,28 +750,54 @@ def assign_speakers_heuristic(
 # words all map to ONE speaker is returned byte-for-byte unchanged — same dict,
 # id, text, start, end — so single-speaker dubs and their timing never move.
 
-def _word_speaker(w: "Word", turns: Sequence[tuple]) -> Optional[str]:
-    """Majority-overlap speaker label for a word; midpoint membership as a
-    fallback; ``None`` when the word has no diarization coverage at all."""
-    acc: dict = {}
-    for ts, te, label in turns:
-        left = max(w.start, ts)
-        right = min(w.end, te)
-        if right > left:
-            acc[label] = acc.get(label, 0.0) + (right - left)
+#: A word outside every turn takes the nearest turn's speaker when that turn
+#: is at most this far away; farther words inherit a neighbouring word's label.
+NEAREST_WORD_TURN_S = 0.5
+
+
+def _word_attribution(w: "Word", turns: Sequence[tuple]) -> tuple:
+    """``(label, exclusive)`` for a word.
+
+    ``label`` is the majority-overlap speaker, then midpoint membership, then
+    the nearest turn within NEAREST_WORD_TURN_S, else None. ``exclusive`` is
+    True only when turns of exactly one speaker cover at least half the word:
+    acoustic evidence strong enough to keep a one-word turn (see
+    :func:`_fill_and_smooth`).
+    """
+    acc = _overlap_by_label(w.start, w.end, turns)
     if acc:
-        return max(acc.items(), key=lambda kv: kv[1])[0]
+        label = max(acc.items(), key=lambda kv: kv[1])[0]
+        dur = max(w.end - w.start, 1e-6)
+        return label, len(acc) == 1 and acc[label] >= 0.5 * dur
     mid = (w.start + w.end) / 2.0
     for ts, te, label in turns:
         if ts <= mid <= te:
-            return label
-    return None
+            return label, False
+    return _nearest_turn_label(w.start, w.end, turns, NEAREST_WORD_TURN_S), False
 
 
-def _fill_and_smooth(labels: List[Optional[str]]) -> List[Optional[str]]:
+def _word_speaker(w: "Word", turns: Sequence[tuple]) -> Optional[str]:
+    """Speaker label for a word (see :func:`_word_attribution`)."""
+    return _word_attribution(w, turns)[0]
+
+
+def _keeps_one_word_turn(words: Sequence["Word"], i: int, exclusive: Sequence[bool]) -> bool:
+    """A one-word run between two runs of another speaker is a real reply
+    ("How are you? Fine. Good to hear."), not diarization noise, when only its
+    speaker's turn covers it and it is a sentence of its own: the word before
+    it ends a sentence, or the word itself does (#3419)."""
+    if not exclusive[i]:
+        return False
+    return bool(_SENTENCE_END.search(words[i - 1].text) or _SENTENCE_END.search(words[i].text))
+
+
+def _fill_and_smooth(
+    labels: List[Optional[str]], keep: Optional[Sequence[bool]] = None,
+) -> List[Optional[str]]:
     """Forward/back-fill gaps (words with no coverage inherit a neighbor) and
     smooth single-word flips, so one mis-attributed word inside a speaker's run
-    (diarization noise) doesn't trigger a spurious split."""
+    (diarization noise) doesn't trigger a spurious split. ``keep[i]`` marks a
+    one-word flip that is a genuine turn and must not be smoothed."""
     out = list(labels)
     n = len(out)
     last = None
@@ -764,6 +814,8 @@ def _fill_and_smooth(labels: List[Optional[str]]) -> List[Optional[str]]:
             nxt = out[i]
     for i in range(1, n - 1):
         if out[i] != out[i - 1] and out[i - 1] == out[i + 1]:
+            if keep is not None and keep[i]:
+                continue
             out[i] = out[i - 1]
     return out
 
@@ -788,7 +840,13 @@ def _resplit_core(
         if len(seg_words) < 2:
             out.append(seg)
             continue
-        labels = _fill_and_smooth([_word_speaker(w, turns) for w in seg_words])
+        attributed = [_word_attribution(w, turns) for w in seg_words]
+        exclusive = [a[1] for a in attributed]
+        keep = [
+            0 < i < len(seg_words) - 1 and _keeps_one_word_turn(seg_words, i, exclusive)
+            for i in range(len(seg_words))
+        ]
+        labels = _fill_and_smooth([a[0] for a in attributed], keep)
         if len({l for l in labels if l is not None}) <= 1:
             out.append(seg)  # single speaker (or unknown) → byte-for-byte unchanged
             continue
@@ -844,6 +902,20 @@ def resplit_segments_by_diarization(
     return _resplit_core(segments, words, turns)
 
 
+def label_segments_by_diarization(
+    segments: List[dict], words: Sequence["Word"], diarization,
+) -> List[dict]:
+    """Label segments from a diarization result, then split any segment whose
+    words span more than one speaker (#486, #3419).
+
+    The single entry point every transcription path uses, so no path can label
+    a two-speaker segment with its majority speaker and stop there — that left
+    the second speaker's turn merged into the first one's line.
+    """
+    assigned = assign_speakers_from_diarization(segments, diarization)
+    return resplit_segments_by_diarization(assigned, words, diarization)
+
+
 def resplit_segments_by_turns(
     segments: List[dict], words: Sequence["Word"], turns: Sequence[dict],
 ) -> List[dict]:
@@ -851,14 +923,7 @@ def resplit_segments_by_turns(
 
     ``speaker`` is used verbatim (FunASR already labels ``"Speaker N"``), matching
     :func:`assign_speakers_from_turns`."""
-    norm = [
-        (t["start"], t["end"], t["speaker"])
-        for t in (turns or [])
-        if t.get("speaker") is not None
-        and t.get("start") is not None
-        and t.get("end") is not None
-    ]
-    return _resplit_core(segments, words, norm)
+    return _resplit_core(segments, words, _normalise_turn_dicts(turns))
 
 
 def deduplicate_chunk_segments(segments: list[dict]) -> list[dict]:

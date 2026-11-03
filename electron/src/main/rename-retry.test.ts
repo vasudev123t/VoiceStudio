@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { DIRECTORY_RENAME, renameWithRetry } from './rename-retry';
+import { DIRECTORY_RENAME, renameWithRetry, retryTransient } from './rename-retry';
 
 function failing(codes: string[]) {
   const calls: string[] = [];
@@ -58,6 +58,19 @@ describe('renameWithRetry', () => {
       renameWithRetry('a', 'b', { platform: 'linux', rename: linux.rename, sleep: async () => {} }),
     ).rejects.toMatchObject({ code: 'EPERM' });
     expect(linux.calls).toHaveLength(1);
+  });
+
+  it('retries any filesystem step a Windows lock blocks, not only rename', async () => {
+    let calls = 0;
+    const result = await retryTransient(
+      async () => {
+        if (++calls < 3) throw Object.assign(new Error('EBUSY'), { code: 'EBUSY' });
+        return 'copied';
+      },
+      { platform: 'win32', sleep: async () => {} },
+    );
+    expect(result).toBe('copied');
+    expect(calls).toBe(3);
   });
 
   it('is the only main-process module that renames through node:fs directly', () => {

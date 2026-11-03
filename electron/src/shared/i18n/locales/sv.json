@@ -104,9 +104,7 @@
     "dub": "Översätt och dubba ljud eller video.",
     "stories": "Skapa scener med flera röster.",
     "audiobook": "Skapa ljudböcker med kapitel.",
-    "transcribe": "Omvandla inspelningar till text.",
-    "collapseFooter": "Fäll ihop sidfoten",
-    "expandFooter": "Fäll ut sidfoten"
+    "transcribe": "Omvandla inspelningar till text."
   },
   "longformPersistence": {
     "storage_unavailable_title": "Projekten kunde inte läsas in",
@@ -377,13 +375,13 @@
     "hf_source_app_label": "VoiceStudio (krypterad, rekommenderas)",
     "hf_source_cli_label": "HuggingFace CLI",
     "hf_source_env_label": "Miljövariabel",
-    "theme_auto": "Systemval",
+    "theme_auto": "Följ systemet",
     "theme_light": "Ljust",
     "reduce_motion": "Minska rörelse",
     "reduce_motion_desc": "Stoppar bakgrundsanimationer och övergångar. Systeminställningen gäller ändå; det här läggs till.",
-    "perf_torch_compile": "Inaktivera torch.compile",
-    "perf_torch_compile_note": "Använder direkt körning för att undvika minnesfel i Triton.",
-    "perf_torch_compile_hint": "Använder direkt körning för att undvika minnesfel i Triton. <issueLink>#65</issueLink> · <crashLink>#2135</crashLink>",
+    "perf_torch_compile": "Stäng av torch.compile",
+    "perf_torch_compile_note": "Kör modellen utan kompilerade kärnor när Triton är instabilt.",
+    "perf_torch_compile_hint": "Slå på detta efter fel i Triton eller <code>torch.compile</code>, även när backend stängs under ljudskapandet. VoiceStudio skickar då <code>TORCH_COMPILE_DISABLE=1</code> och väljer stabilitet framför kompilerad hastighet. <issueLink>#65</issueLink> gäller Windows med mindre än 16 GB VRAM; <crashLink>#2135</crashLink> följer CUDA-grafproblem på äldre NVIDIA-kort.",
     "llmp_cli_help": "Använder installerad CLI och dess inloggning via samma körning som agentreparation. Lämna Modell tomt för CLI-standard. Svaren kan vara långsammare; kostnader följer ditt CLI-konto.",
     "llmp_sdk_help": "Inbyggda leverantörer använder LiteLLM. Ange provider/model för andra. Bedrock använder API-nyckel eller AWS-profil; Vertex använder konto-ID som projekt och Google-autentisering. Bas-URL är valfri.",
     "llmp_cli_auth": "Åtkomst till CLI-kontot nekades. Kontrollera inloggning, prenumeration och vald modell."
@@ -451,10 +449,10 @@
     "importFailed": "Kunde inte läsa den filen.",
     "addLine": "Lägg till rad",
     "addChapter": "Lägg till kapitel",
-    "clearScript": "Rensa manus",
-    "clearScriptHint": "Ta bort alla rader och kapitel från manuset (rollistan behålls)",
     "clearConfirm": "Rensa alla {{count}} manusposter och eventuell väntande importerad text? Detta kan inte ångras.",
-    "cleared": "Manuset rensat",
+    "clearScript": "Töm manus",
+    "clearScriptHint": "Tömmer hela manuset: alla rader och alla kapitel",
+    "cleared": "Manuset tömdes",
     "chapterN": "Kapitel {{n}}",
     "stems": "Stammar",
     "stemsDone": "Exporterade {{count}} teckenstammar",
@@ -475,11 +473,7 @@
     "pasteAbove": "Klistra in texten ovan",
     "cancel": "Avbryt",
     "splitIntoTracks": "Dela upp i rader",
-    "splitMode": "Dela upp efter",
-    "split_sentences": "Meningar",
-    "split_paragraphs": "Stycken",
-    "split_chapters": "Kapitel",
-    "splitModeHint": "Varje rad läses som en egen tagning. För en enda berättare flyter stycken eller hela kapitel bättre än meningar.",
+    "splitModeHint": "Varje rad läses som en egen inspelning. Med en enda berättare flyter Stycken eller Kapitel bättre.",
     "emptyText": "Börja din berättelse genom att lägga till dialog- och berättarrader. Tilldela varje karaktär en röst i rollen.",
     "addFirst": "Lägg till första raden",
     "linePlaceholder": "Gå in i dialog eller berättarröst... använd [paus 0,5s] för en tyst paus",
@@ -510,7 +504,11 @@
     "exportFailed": "Exporten misslyckades – kontrollera att backend körs.",
     "global_speed": "Hastighet",
     "global_speed_hint": "Läshastighet för alla linjer utan egen hastighetsöverstyrning",
-    "deleteProjectConfirm": "Ta bort projektet permanent?"
+    "deleteProjectConfirm": "Ta bort projektet permanent?",
+    "splitMode": "Dela upp efter",
+    "split_chapters": "Kapitel",
+    "split_paragraphs": "Stycken",
+    "split_sentences": "Meningar"
   },
   "common": {
     "stop": "Sluta",
@@ -1760,8 +1758,8 @@
     "backend_shutting_down": "VoiceStudio stängs av. Öppna appen igen och försök på nytt.",
     "crash_broken_env": "Den dog när den läste in sina egna Python-beroenden, så det handlar varken om minne eller om din GPU — miljön är ofullständig eller halvuppdaterad. Använd ”Rensa & Försök igen” under Inställningar → Loggar → Backend, som bygger om den från grunden och reparerar den på plats utan att röra dina röster eller projekt. Misslyckas det ändå anger kraschdetaljerna exakt vilket paket som inte gick att importera.",
     "crash_vram_default": "På mindre GPU:er är den vanliga orsaken att VRAM-minnet tar slut när ASR-modellen läses in ovanpå TTS-modellen: ladda ur TTS-modellen först, eller välj en mindre ASR-modell under Modellkatalog → Modeller.",
-    "stream_cut_backend_alive": "Strömmen avbröts i förtid, men backend körs fortfarande — den kraschade alltså inte. I en serverad eller containerbaserad miljö beror det oftast på en omvänd proxy eller lastbalanserare som buffrar anslutningen eller bryter den efter en tidsgräns: stäng av svarsbuffring för den här rutten (nginx: proxy_buffering off; X-Accel-Buffering: no) och höj dess tidsgräns för läsning. Att köra skrivbordsappen direkt, eller på localhost utan proxy, bekräftar det.",
-    "stream_cut_backend_alive_local": "Strömmen avslutades i förtid, men backend körs fortfarande — så den kraschade inte. Appen tappade anslutningen till backend mitt i jobbet; det händer när ett långt steg är tyst i flera minuter, och backend slutför oftast jobbet ändå. Vänta några minuter och öppna jobbet igen från historiken, eller titta i backend-loggen (Inställningar → Loggar → Backend) för att se vad den höll på med."
+    "stream_cut_backend_alive": "Kontrollera först den omvända proxyn eller lastbalanseraren framför appen: stäng av svarsbuffring för den här rutten (proxy_buffering off; X-Accel-Buffering: no) och höj läs-timeouten. Anslutningen bröts medan backend fortsatte köra, så ingenting kraschade; vid serverad eller containeriserad installation är en proxy oftast orsaken, och att köra skrivbordsappen direkt eller via localhost bekräftar eller utesluter det.",
+    "stream_cut_backend_alive_local": "Vänta några minuter och öppna jobbet igen från historiken; finns det inte där, läs backend-loggen under Inställningar → Loggar → Backend. Anslutningen föll mitt i jobbet efter ett långt tyst steg, men backend körs fortfarande och slutför normalt arbetet, så det var ingen krasch."
   },
   "keyboard": {
     "title": "Kortkommandon",
@@ -2265,7 +2263,12 @@
     "other_ways": "Andra sätt att hjälpa till",
     "star_short": "Stjärna",
     "star_github": "Stjärna på GitHub",
-    "join_discord": "Gå med i Discord"
+    "join_discord": "Gå med i Discord",
+    "sponsors_tier_strategic": "Strategisk",
+    "sponsors_tier_company": "Företag",
+    "sponsors_tier_development": "Utveckling",
+    "sponsors_tier_community": "Community",
+    "sponsors_tier_supporter": "Supporter"
   },
   "updates": {
     "tab": "Uppdateringar",
@@ -2356,10 +2359,10 @@
     "hf_token_get": "Har du ingen token? Få en gratis →",
     "hf_token_inline_prompt": "Snabba upp nedladdningarna med ett gratis Hugging Face-token",
     "hf_token_inline_ph": "Klistra in hf_… token (valfritt)",
-    "hf_token_get_short": "Få en gratis →",
     "hf_token_active_using": "Hugging Face-token hittades i {{source}} — {{masked}}",
-    "hf_token_replace": "Ersätt token…",
-    "hf_token_replace_warning": "Detta ersätter token som sparats för denna app. Den gamla token återkallas inte."
+    "hf_token_replace": "Byt ut…",
+    "hf_token_replace_warning": "Detta ersätter token som sparats för denna app. Den gamla token återkallas inte.",
+    "hf_token_get_short": "Hämta en gratis →"
   },
   "history": {
     "dub_meta": "{{segments}} segment · {{duration}} s",
@@ -2469,7 +2472,7 @@
     "warn_unknown_voice": "Okänd röst ‘{{name}}’ — standardrösten används",
     "warn_empty_chapter": "Kapitlet ”{{title}}” saknar uppläst text",
     "warn_unknown_tag": "Okänd tagg {{tag}} — den läses upp",
-    "untitled": "Namnlös ljudbok",
+    "untitled": "Namnlös",
     "dismiss": "Avfärda",
     "output": "Utdata",
     "title": "Ljudbok",
@@ -2484,14 +2487,14 @@
     "preview_plan": "Förhandsgranska plan",
     "stop": "Stoppa",
     "stopped_note": "Stoppad — färdiga kapitel är cachade; klicka på Skapa igen för att fortsätta.",
-    "recovery_title": "Avbruten ljudbok",
-    "recovery_progress": "{{done}} av {{total}} kapitel är cachade",
-    "recovery_hint": "Fortsätt återanvänder färdiga kapitel och syntetiserar bara det som återstår.",
-    "resume": "Fortsätt",
-    "open_chapter_cache": "Öppna kapitelcache",
-    "cache_location_hint": "Cache för kapitelljud: {{cachePath}} · Återupptagningsmanifest: {{manifestPath}}",
+    "recovery_title": "Fortsätt med en ofärdig ljudbok",
+    "recovery_progress": "Färdiga kapitel: {{done}} av {{total}}",
+    "recovery_hint": "Redan skapat ljud behålls; fortsatt körning framställer bara det som saknas.",
+    "resume": "Fortsätt rendera",
+    "open_chapter_cache": "Visa sparade kapitel",
+    "cache_location_hint": "Ljudmapp: {{cachePath}} · återställningspost: {{manifestPath}}",
     "resume_failed": "Det gick inte att fortsätta ljudboken: {{message}}",
-    "open_cache_failed": "Det gick inte att öppna kapitelcachen",
+    "open_cache_failed": "Mappen med sparade kapitel kunde inte visas",
     "progress_summary": "Syntetiserar {{current}} av {{total}} kapitel",
     "eta": "~{{time}} kvar",
     "chapter_n": "Kapitel {{n}}",
@@ -2545,15 +2548,17 @@
     "seed_ph": "Auto",
     "vary_repeats": "Variera upprepade rader",
     "vary_repeats_help": "Ge identiska rader distinkta tagningar i stället för att återanvända en inspelning.",
-    "line_gap": "Paus mellan rader",
     "joins_help": "Radpausen läggs mellan rader utan egen [pause]; styckepausen vid tomma rader. Med trimning på klipps först varje rads egen inlednings- och avslutningstystnad bort, så att pausen du ställer in är den du hör.",
-    "paragraph_gap": "Paus mellan stycken",
-    "trim_edges": "Trimma motorns tystnad",
-    "trim_edges_help": "Klipp bort tystnaden som motorn lägger på varje rad innan de fogas samman. Stäng av för att behålla råa renderingar.",
+    "trim_edges_help": "Klipper bort tystnaden som varje motor lägger före och efter en rad och fogar sedan ihop. Stäng av för råa renderingar.",
     "emotion_help": "Graderad emotion — endast tillämpas av IndexTTS2-motorn.",
     "emotion_text": "Emotionsbeskrivning",
     "emotion_text_ph": "t.ex. låter uttömd och ledsen",
-    "emotion_alpha": "Emotionsstyrka"
+    "emotion_alpha": "Emotionsstyrka",
+    "recovery_load_failed": "Det gick inte att söka efter ofärdiga ljudböcker.",
+    "recovery_retry": "Försök igen",
+    "line_gap": "Tystnad mellan rader",
+    "paragraph_gap": "Tystnad mellan stycken",
+    "trim_edges": "Ta bort tystnad som motorn skapar"
   },
   "voicePanel": {
     "title": "Röst",
@@ -2749,13 +2754,6 @@
     "progress": "{{done}} / {{total}} segment validerade",
     "cancelled": "Avbruten",
     "fitting": "Justerar tidsplacering"
-  },
-  "sponsorSlot": {
-    "book": "Boka din plats",
-    "preview": "Förhandsvisning för sponsorer",
-    "message": "Ditt varumärke, webbplats och meddelande",
-    "email_app": "Öppna e-postappen",
-    "copy_email": "Kopiera e-postadress"
   },
   "supportPlans": {
     "remove": "Ta bort sponsorfältet",

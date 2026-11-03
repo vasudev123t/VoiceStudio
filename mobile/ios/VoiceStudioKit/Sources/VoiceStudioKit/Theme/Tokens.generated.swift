@@ -517,9 +517,9 @@ public enum VSTokens {
             "accentSurfaceForeground": RGBA(0.1412, 0.0824, 0.1373, 1.0000),
             "messageSurface": RGBA(0.9216, 0.8549, 0.8196, 1.0000),
             "messageForeground": RGBA(0.1412, 0.0824, 0.1373, 1.0000),
-            "messageAction": RGBA(0.6980, 0.2078, 0.2078, 1.0000),
+            "messageAction": RGBA(0.2784, 0.4275, 0.1843, 1.0000),
             "messageActionForeground": RGBA(1.0000, 0.9804, 1.0000, 1.0000),
-            "messageActionHover": RGBA(0.6157, 0.1843, 0.1843, 1.0000),
+            "messageActionHover": RGBA(0.2353, 0.3647, 0.1529, 1.0000),
             "codeBackground": RGBA(0.9529, 0.9451, 0.9412, 1.0000),
             "codeForeground": RGBA(0.1412, 0.0824, 0.1373, 1.0000),
             "sidebar": RGBA(0.9529, 0.9176, 0.8980, 1.0000),
@@ -575,9 +575,9 @@ public enum VSTokens {
             "accentSurfaceForeground": RGBA(1.0000, 0.9804, 1.0000, 1.0000),
             "messageSurface": RGBA(0.4392, 0.2941, 0.2039, 1.0000),
             "messageForeground": RGBA(1.0000, 0.9804, 1.0000, 1.0000),
-            "messageAction": RGBA(0.9686, 0.5412, 0.4784, 1.0000),
+            "messageAction": RGBA(0.6000, 0.7804, 0.4980, 1.0000),
             "messageActionForeground": RGBA(0.1412, 0.0824, 0.1373, 1.0000),
-            "messageActionHover": RGBA(0.9725, 0.5961, 0.5412, 1.0000),
+            "messageActionHover": RGBA(0.6471, 0.8157, 0.5569, 1.0000),
             "codeBackground": RGBA(0.2118, 0.1686, 0.1529, 1.0000),
             "codeForeground": RGBA(1.0000, 0.9804, 1.0000, 1.0000),
             "sidebar": RGBA(0.2235, 0.1569, 0.1216, 1.0000),
@@ -843,4 +843,7 @@ public enum VSTokens {
     public static let radiusControl: Double = 8.00
     public static let spacingGap: Double = 16.00
     public static let spacingInset: Double = 24.00
+    public static let iosCardRadius: Double = 24.00
+    public static let iosFieldRadius: Double = 16.00
+    public static let iosHomeWordmarkSize: Double = 28.00
 }

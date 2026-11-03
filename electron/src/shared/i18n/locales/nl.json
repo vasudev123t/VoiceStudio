@@ -104,9 +104,7 @@
     "dub": "Vertaal en dub audio of video.",
     "stories": "Maak scènes met meerdere stemmen.",
     "audiobook": "Maak luisterboeken met hoofdstukken.",
-    "transcribe": "Zet opnamen om in tekst.",
-    "collapseFooter": "Voettekst inklappen",
-    "expandFooter": "Voettekst uitklappen"
+    "transcribe": "Zet opnamen om in tekst."
   },
   "longformPersistence": {
     "storage_unavailable_title": "Projecten konden niet worden geladen",
@@ -377,13 +375,13 @@
     "hf_source_app_label": "VoiceStudio (versleuteld, aanbevolen)",
     "hf_source_cli_label": "HuggingFace CLI",
     "hf_source_env_label": "Omgevingsvariabele",
-    "theme_auto": "Systeem auto",
+    "theme_auto": "Systeemstandaard",
     "theme_light": "Licht",
     "reduce_motion": "Beweging verminderen",
     "reduce_motion_desc": "Stopt achtergrondanimaties en overgangen. Je systeeminstelling blijft op zichzelf gelden; dit komt daarbij.",
     "perf_torch_compile": "torch.compile uitschakelen",
-    "perf_torch_compile_note": "Gebruikt directe uitvoering om Triton-geheugenfouten te voorkomen.",
-    "perf_torch_compile_hint": "Gebruikt directe uitvoering om Triton-geheugenfouten te voorkomen. <issueLink>#65</issueLink> · <crashLink>#2135</crashLink>",
+    "perf_torch_compile_note": "Voert het model zonder gecompileerde kernels uit als Triton instabiel is.",
+    "perf_torch_compile_hint": "Zet dit aan na een fout van Triton of <code>torch.compile</code>, ook als de backend stopt tijdens het maken van audio. VoiceStudio geeft dan <code>TORCH_COMPILE_DISABLE=1</code> door en kiest betrouwbaarheid boven compilatiesnelheid. <issueLink>#65</issueLink> behandelt Windows met minder dan 16 GB VRAM; <crashLink>#2135</crashLink> volgt CUDA-grafiekproblemen op oudere NVIDIA-kaarten.",
     "llmp_cli_help": "Gebruikt de geïnstalleerde CLI en aanmelding via dezelfde uitvoerder als agentreparatie. Laat Model leeg voor de CLI-standaard. Antwoorden kunnen trager zijn; kosten vallen onder je CLI-account.",
     "llmp_sdk_help": "Native providers gebruiken LiteLLM. Voer voor andere providers provider/model in. Bedrock gebruikt een API-sleutel of AWS-profiel; Vertex gebruikt Account-ID als project en Google-inloggegevens. Basis-URL is optioneel.",
     "llmp_cli_auth": "Toegang tot het CLI-account is geweigerd. Controleer je aanmelding, abonnement en gekozen model."
@@ -451,10 +449,10 @@
     "importFailed": "Kan dat bestand niet lezen.",
     "addLine": "Lijn toevoegen",
     "addChapter": "Hoofdstuk toevoegen",
-    "clearScript": "Script wissen",
-    "clearScriptHint": "Alle regels en hoofdstukken uit het script verwijderen (de cast blijft)",
     "clearConfirm": "Alle {{count}} scriptitems en nog niet verwerkte geïmporteerde tekst wissen? Dit kan niet ongedaan worden gemaakt.",
-    "cleared": "Script gewist",
+    "clearScript": "Script leegmaken",
+    "clearScriptHint": "Verwijdert alles uit het script: alle regels en alle hoofdstukken",
+    "cleared": "Script leeggemaakt",
     "chapterN": "Hoofdstuk {{n}}",
     "stems": "Stengels",
     "stemsDone": "Geëxporteerde {{count}} tekenstam(men)",
@@ -475,11 +473,8 @@
     "pasteAbove": "Plak de tekst hierboven",
     "cancel": "Annuleer",
     "splitIntoTracks": "Opgesplitst in lijnen",
-    "splitMode": "Splitsen op",
-    "split_sentences": "Zinnen",
-    "split_paragraphs": "Alinea's",
-    "split_chapters": "Hoofdstukken",
-    "splitModeHint": "Elke regel wordt als een eigen opname gelezen. Voor één verteller lopen alinea's of hele hoofdstukken beter dan zinnen.",
+    "split_paragraphs": "Alinea’s",
+    "splitModeHint": "Elke regel wordt als aparte opname voorgelezen. Met één verteller klinken Alinea’s of Hoofdstukken vloeiender.",
     "emptyText": "Begin je verhaal door dialoog- en verhaallijnen toe te voegen. Geef elk personage een stem in de cast.",
     "addFirst": "Eerste regel toevoegen",
     "linePlaceholder": "Voer een dialoog of verhaal in... gebruik [pauze 0,5s] voor een stille pauze",
@@ -510,7 +505,10 @@
     "exportFailed": "Exporteren mislukt. Controleer of de backend actief is.",
     "global_speed": "Snelheid",
     "global_speed_hint": "Leessnelheid voor alle lijnen zonder hun eigen snelheidsoverschrijving",
-    "deleteProjectConfirm": "Dit project permanent verwijderen?"
+    "deleteProjectConfirm": "Dit project permanent verwijderen?",
+    "splitMode": "Splitsen op",
+    "split_chapters": "Hoofdstukken",
+    "split_sentences": "Zinnen"
   },
   "common": {
     "stop": "Stop",
@@ -1760,8 +1758,8 @@
     "backend_shutting_down": "VoiceStudio wordt afgesloten. Open de app opnieuw en probeer het nog eens.",
     "crash_broken_env": "Hij stierf tijdens het laden van zijn eigen Python-afhankelijkheden, dus dit gaat niet over geheugen of je GPU — de omgeving is onvolledig of half bijgewerkt blijven staan. Gebruik \"Wissen & Opnieuw proberen\" bij Instellingen → Logs → Backend: dat bouwt hem helemaal opnieuw op en repareert hem ter plekke, zonder je stemmen of projecten aan te raken. Blijft het misgaan, dan noemen de crashdetails het pakket dat niet te importeren was.",
     "crash_vram_default": "Op kleinere GPU's is de gebruikelijke oorzaak dat het VRAM-geheugen opraakt bij het laden van het ASR-model bovenop het TTS-model: ontlaad eerst het TTS-model, of kies een kleiner ASR-model in Modelcatalogus → Modellen.",
-    "stream_cut_backend_alive": "De stream stopte te vroeg, maar de backend draait nog — hij is dus niet gecrasht. In een server- of containeropstelling is dit meestal een reverse proxy of load balancer die de verbinding buffert of door een time-out afbreekt: schakel responsbuffering voor deze route uit (nginx: proxy_buffering off; X-Accel-Buffering: no) en verhoog de leestime-out ervan. Draai je de desktopapp direct, of op localhost zonder proxy, dan bevestigt dat het.",
-    "stream_cut_backend_alive_local": "De stream is voortijdig beëindigd, maar de backend draait nog — hij is dus niet gecrasht. De app verloor halverwege de taak de verbinding met de backend; dat gebeurt als een lange stap minutenlang niets verstuurt, en meestal rondt de backend de taak toch af. Wacht een paar minuten en open de taak opnieuw vanuit de geschiedenis, of bekijk het backend-log (Instellingen → Logboeken → Achterkant) om te zien wat hij aan het doen was."
+    "stream_cut_backend_alive": "Controleer eerst de reverse proxy of load balancer vóór de app: zet responsbuffering voor deze route uit (proxy_buffering off; X-Accel-Buffering: no) en verhoog de leestime-out. De verbinding viel weg terwijl de backend bleef draaien, dus er is niets gecrasht; bij een aangeboden of gecontaineriseerde installatie is een proxy meestal de oorzaak, en de desktop-app rechtstreeks of via localhost starten bevestigt of sluit dat uit.",
+    "stream_cut_backend_alive_local": "Wacht een paar minuten en open de taak opnieuw vanuit de geschiedenis; staat hij er niet, lees dan het backendlogboek onder Instellingen → Logs → Backend. De verbinding viel halverwege de taak weg na een lange, stille stap, maar de backend draait nog en rondt het werk normaal af, dus dit was geen crash."
   },
   "keyboard": {
     "title": "Sneltoetsen",
@@ -2265,7 +2263,12 @@
     "other_ways": "Andere manieren om te helpen",
     "star_short": "Ster",
     "star_github": "Ster op GitHub",
-    "join_discord": "Sluit je aan bij Discord"
+    "join_discord": "Sluit je aan bij Discord",
+    "sponsors_tier_strategic": "Strategisch",
+    "sponsors_tier_company": "Bedrijf",
+    "sponsors_tier_development": "Ontwikkeling",
+    "sponsors_tier_community": "Community",
+    "sponsors_tier_supporter": "Supporter"
   },
   "updates": {
     "tab": "Updates",
@@ -2356,10 +2359,10 @@
     "hf_token_get": "Heeft u geen token? Ontvang er één gratis →",
     "hf_token_inline_prompt": "Versnel downloads met een gratis Hugging Face-token",
     "hf_token_inline_ph": "Plak het hf_…-token (optioneel)",
-    "hf_token_get_short": "Ontvang er één gratis →",
     "hf_token_active_using": "Hugging Face-token gevonden in {{source}} — {{masked}}",
-    "hf_token_replace": "Token vervangen…",
-    "hf_token_replace_warning": "Dit vervangt het token dat voor deze app is opgeslagen. Het oude token wordt niet ingetrokken."
+    "hf_token_replace": "Vervangen…",
+    "hf_token_replace_warning": "Dit vervangt het token dat voor deze app is opgeslagen. Het oude token wordt niet ingetrokken.",
+    "hf_token_get_short": "Gratis ophalen →"
   },
   "history": {
     "dub_meta": "{{segments}} segmenten · {{duration}} s",
@@ -2469,7 +2472,7 @@
     "warn_unknown_voice": "Onbekende stem ‘{{name}}’ — de standaardstem wordt gebruikt",
     "warn_empty_chapter": "Hoofdstuk “{{title}}” bevat geen gesproken tekst",
     "warn_unknown_tag": "Onbekende tag {{tag}} — deze wordt voorgelezen",
-    "untitled": "Luisterboek zonder titel",
+    "untitled": "Naamloos",
     "dismiss": "Sluiten",
     "output": "Uitvoer",
     "title": "Audioboek",
@@ -2484,14 +2487,14 @@
     "preview_plan": "Voorbeeldplan",
     "stop": "Stoppen",
     "stopped_note": "Gestopt — voltooide hoofdstukken staan in de cache; klik opnieuw op Maken om te hervatten.",
-    "recovery_title": "Onderbroken luisterboek",
-    "recovery_progress": "{{done}} van {{total}} hoofdstukken zijn gecachet",
-    "recovery_hint": "Hervatten gebruikt voltooide hoofdstukken opnieuw en synthetiseert alleen wat resteert.",
-    "resume": "Hervatten",
-    "open_chapter_cache": "Hoofdstukcache openen",
-    "cache_location_hint": "Hoofdstukaudiocache: {{cachePath}} · Hervattingsmanifest: {{manifestPath}}",
-    "resume_failed": "Het luisterboek kon niet worden hervat: {{message}}",
-    "open_cache_failed": "De hoofdstukcache kon niet worden geopend",
+    "recovery_title": "Een onafgemaakt luisterboek voltooien",
+    "recovery_progress": "Hoofdstukken gereed: {{done}} van {{total}}",
+    "recovery_hint": "Eerder gemaakte audio blijft bewaard; doorgaan maakt uitsluitend de ontbrekende delen.",
+    "resume": "Verder renderen",
+    "open_chapter_cache": "Opgeslagen hoofdstukken tonen",
+    "cache_location_hint": "Audiomap: {{cachePath}} · herstelbestand: {{manifestPath}}",
+    "resume_failed": "Dit luisterboek kon niet worden voortgezet: {{message}}",
+    "open_cache_failed": "De map met opgeslagen hoofdstukken kon niet worden getoond",
     "progress_summary": "{{current}} van {{total}} hoofdstukken aan het synthetiseren",
     "eta": "~{{time}} resterend",
     "chapter_n": "Hoofdstuk {{n}}",
@@ -2545,15 +2548,17 @@
     "seed_ph": "Automatisch",
     "vary_repeats": "Herhaal regels variëren",
     "vary_repeats_help": "Geef identieke regels verschillende takes in plaats van één opname opnieuw te gebruiken.",
-    "line_gap": "Pauze tussen regels",
     "joins_help": "De pauze tussen regels komt tussen regels zonder eigen [pause]; de pauze tussen alinea's bij lege regels. Met inkorten aan wordt eerst de eigen aanloop- en staartstilte van elke regel weggeknipt, zodat de ingestelde pauze ook de hoorbare is.",
-    "paragraph_gap": "Pauze tussen alinea's",
-    "trim_edges": "Enginestilte inkorten",
-    "trim_edges_help": "Knip de stilte weg die de engine aan elke regel toevoegt voordat ze worden samengevoegd. Zet uit om de ruwe opnames te behouden.",
+    "paragraph_gap": "Pauze tussen alinea’s",
+    "trim_edges": "Stilte van de engine wegknippen",
+    "trim_edges_help": "Knipt de stilte die elke engine voor en na een regel toevoegt weg en voegt daarna samen. Zet uit voor ruwe opnames.",
     "emotion_help": "Gegradueerde emotie — alleen toegepast door de IndexTTS2-engine.",
     "emotion_text": "Emotie beschrijving",
     "emotion_text_ph": "bijv. klinkt uitgeput en verdrietig",
-    "emotion_alpha": "Emotie sterkte"
+    "emotion_alpha": "Emotie sterkte",
+    "recovery_load_failed": "Kon niet controleren op onvoltooide audioboeken.",
+    "recovery_retry": "Opnieuw proberen",
+    "line_gap": "Stilte tussen regels"
   },
   "voicePanel": {
     "title": "Stem",
@@ -2749,13 +2754,6 @@
     "progress": "{{done}} / {{total}} segmenten gevalideerd",
     "cancelled": "Geannuleerd",
     "fitting": "Timing aanpassen"
-  },
-  "sponsorSlot": {
-    "book": "Reserveer je plek",
-    "preview": "Sponsorvoorbeeld",
-    "message": "Je merk, website en bericht",
-    "email_app": "E-mailapp openen",
-    "copy_email": "E-mailadres kopiëren"
   },
   "supportPlans": {
     "remove": "Sponsorbalk verwijderen",

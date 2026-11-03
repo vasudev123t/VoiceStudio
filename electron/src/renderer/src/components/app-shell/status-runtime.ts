@@ -39,3 +39,10 @@ export function resolveRuntimeHealth(
     return 'unavailable';
   return 'ready';
 }
+
+/** Loaded-model rows that hold a speech-to-text model in memory. */
+const RESIDENT_ASR_IDS = new Set(['asr', 'capture-asr', 'transcription-asr']);
+
+export function isResidentAsrModel(id: string) {
+  return RESIDENT_ASR_IDS.has(id);
+}

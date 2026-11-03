@@ -11,6 +11,7 @@ from engines.omnivoice_subprocess import main as sidecar  # noqa: E402
 
 
 def test_unused_heavy_imports_are_blocked_then_restored(monkeypatch):
+    monkeypatch.delitem(sys.modules, "transformers", raising=False)
     for name in ("sklearn", "torchvision"):
         monkeypatch.delitem(sys.modules, name, raising=False)
     with sidecar._skip_unused_heavy_imports():
@@ -25,6 +26,7 @@ def test_unused_heavy_imports_are_blocked_then_restored(monkeypatch):
 
 
 def test_an_already_imported_module_is_left_alone(monkeypatch):
+    monkeypatch.delitem(sys.modules, "transformers", raising=False)
     marker = object()
     monkeypatch.setitem(sys.modules, "sklearn", marker)
     monkeypatch.delitem(sys.modules, "torchvision", raising=False)
@@ -34,6 +36,7 @@ def test_an_already_imported_module_is_left_alone(monkeypatch):
 
 
 def test_blocked_modules_are_restored_when_the_import_fails(monkeypatch):
+    monkeypatch.delitem(sys.modules, "transformers", raising=False)
     monkeypatch.delitem(sys.modules, "sklearn", raising=False)
     monkeypatch.delitem(sys.modules, "torchvision", raising=False)
     try:
@@ -42,6 +45,45 @@ def test_blocked_modules_are_restored_when_the_import_fails(monkeypatch):
     except RuntimeError:
         pass
     assert "sklearn" not in sys.modules and "torchvision" not in sys.modules
+
+
+def test_nothing_is_blocked_once_transformers_is_imported(monkeypatch):
+    # transformers caches which optional packages exist on first import; a stub
+    # added afterwards breaks its torchvision import for the whole sidecar (#3551).
+    monkeypatch.setitem(sys.modules, "transformers", object())
+    monkeypatch.delitem(sys.modules, "sklearn", raising=False)
+    monkeypatch.delitem(sys.modules, "torchvision", raising=False)
+    with sidecar._skip_unused_heavy_imports():
+        assert "sklearn" not in sys.modules and "torchvision" not in sys.modules
+
+
+def test_transformers_imported_first_still_loads_omnivoice_dependencies():
+    """End to end in a fresh interpreter: import transformers, then its
+    torchvision-gated image utils inside the guard, as the omnivoice import does."""
+    import importlib.util
+    import subprocess
+
+    if importlib.util.find_spec("transformers") is None or importlib.util.find_spec("torchvision") is None:
+        import pytest
+
+        pytest.skip("needs transformers and torchvision installed")
+    backend = os.path.join(os.path.dirname(__file__), "..", "backend")
+    code = (
+        "import sys; sys.path.insert(0, sys.argv[1])\n"
+        "import transformers\n"
+        "from transformers.utils import is_torchvision_available\n"
+        "if not is_torchvision_available():\n"
+        "    sys.exit(3)\n"
+        "from engines.omnivoice_subprocess import main as sidecar\n"
+        "with sidecar._skip_unused_heavy_imports():\n"
+        "    import transformers.image_utils\n"
+    )
+    result = subprocess.run([sys.executable, "-c", code, backend], capture_output=True, text=True, timeout=300)
+    if result.returncode == 3:
+        import pytest
+
+        pytest.skip("transformers does not consider torchvision usable here")
+    assert result.returncode == 0, result.stderr[-2000:]
 
 
 def test_prefetch_reads_every_safetensors_file_and_nothing_else(tmp_path, monkeypatch):

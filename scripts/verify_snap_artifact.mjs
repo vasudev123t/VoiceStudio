@@ -91,7 +91,7 @@ function option(name, fallback) {
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const releaseDir = resolve(root, option("release-dir", "electron/release"));
   const candidates = readdirSync(releaseDir)
-    .filter((name) => /^VoiceStudio-Electron-.*-linux-x64\.snap$/.test(name))
+    .filter((name) => /^VoiceStudio-\d.*-linux-x64\.snap$/.test(name))
     .sort();
   if (candidates.length !== 1) {
     throw new Error(`Expected one x64 Snap artifact, found: ${candidates.join(", ")}`);
@@ -123,7 +123,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     root,
     option(
       "output",
-      `electron/release/VoiceStudio-Electron-${packageJson.version}-snap-verification.json`,
+      `electron/release/VoiceStudio-${packageJson.version}-snap-verification.json`,
     ),
   );
   writeFileSync(output, `${JSON.stringify(evidence, null, 2)}\n`);

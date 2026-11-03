@@ -59,6 +59,19 @@ def _ignored_fingerprints():
     return [ln.strip() for ln in text.splitlines() if ln.strip() and not ln.startswith("#")]
 
 
+# Reviewed false positives that are not the retired PostHog token. Each is one finding in
+# one commit; adding to this table is the review step for a new non-PostHog ignore entry.
+_REVIEWED_NON_SECRETS = {
+    "f6d634e19902c0fd0e64947e635359d5bc1f85de:electron/tests/fake-health-backend.test.mjs:generic-api-key:59":
+        "RFC 6455 sample Sec-WebSocket-Key in a test",
+    "97ee0f37079c06a8e2e80eb3625bc60885bc8a27:docs/mobile.md:curl-auth-header:114":
+        "curl docs use the literal YOUR_TOKEN placeholder",
+    "4dab817e78d54b055967860581687eeb5bb77472:mobile/android/core/network/src/main/kotlin/"
+    "com/voicestudio/mobile/network/ContentReports.kt:generic-api-key:38":
+        "Crockford base32 alphabet used to build the report idempotency key",
+}
+
+
 def test_gitleaks_ignores_only_commit_pinned_posthog_findings():
     """An ignore entry names one finding in one commit, never a path or a rule."""
     import subprocess
@@ -73,6 +86,8 @@ def test_gitleaks_ignores_only_commit_pinned_posthog_findings():
         match = _FINGERPRINT.fullmatch(entry)
         assert match, f"not a commit-pinned fingerprint: {entry}"
         commit, path, _rule, line = match.groups()
+        if entry in _REVIEWED_NON_SECRETS:
+            continue
         if shallow:
             continue
         shown = subprocess.run(
@@ -84,3 +99,8 @@ def test_gitleaks_ignores_only_commit_pinned_posthog_findings():
         token = re.search(r"phc_[A-Za-z0-9]{20,}", source_line)
         assert token, entry
         assert hashlib.sha256(token.group(0).encode()).hexdigest() in _RETIRED_TOKEN_SHA256, entry
+
+
+def test_every_reviewed_non_secret_is_still_ignored():
+    """A table row with no ignore entry is stale and would hide a removal."""
+    assert set(_REVIEWED_NON_SECRETS) <= set(_ignored_fingerprints())

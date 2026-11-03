@@ -11,7 +11,7 @@ import okhttp3.*
 import okio.ByteString.Companion.toByteString
 
 class DictationController(private val api:VoiceStudioApi,private val scope:CoroutineScope,private val failure:(Throwable)->Unit,
-    private val audio: DictationAudioSource = MicrophoneSource()) : AutoCloseable {
+    private val audio: DictationAudioSource = MicrophoneSource(), private val completed: (String)->Unit = {}) : AutoCloseable {
     private val mutableText=MutableStateFlow("")
     val text=mutableText.asStateFlow()
     private val mutableActive=MutableStateFlow(false)
@@ -88,18 +88,18 @@ class DictationController(private val api:VoiceStudioApi,private val scope:Corou
                 if(!ended.isCompleted) socket?.send("{\"type\":\"input_audio.end\"}")
                 withTimeout(60000) {ended.await()}
             } catch(e:TimeoutCancellationException) {failure(ClientFailure("mobile.errors.timeout"))} catch(e:CancellationException) {throw e} catch(e:Exception) {failure(e)}
-            finally {if(session==generation) {recording=false;socket?.close(1000,null);socket=null;mutableActive.value=false}}
+            finally {if(session==generation) {recording=false;socket?.close(1000,null);socket=null;completed(mutableText.value);mutableActive.value=false}}
         }
     }
     fun finish() {recording=false}
-    override fun close() {generation++;recording=false;capture?.cancel();socket?.cancel();socket=null;mutableActive.value=false}
+    override fun close() {if(mutableActive.value) completed(mutableText.value);generation++;recording=false;capture?.cancel();socket?.cancel();socket=null;mutableActive.value=false}
 }
 
 /** Capture is replaceable in protocol tests; production always uses AudioRecord. */
 fun interface DictationAudioSource {
     suspend fun record(keepRecording: () -> Boolean, send: (ByteArray, Int) -> Unit)
 }
-private class MicrophoneSource : DictationAudioSource {
+internal class MicrophoneSource : DictationAudioSource {
     @Suppress("MissingPermission")
     override suspend fun record(keepRecording: () -> Boolean, send: (ByteArray, Int) -> Unit) = withContext(Dispatchers.IO) {
         val size=AudioRecord.getMinBufferSize(16000,AudioFormat.CHANNEL_IN_MONO,AudioFormat.ENCODING_PCM_16BIT).coerceAtLeast(6400)

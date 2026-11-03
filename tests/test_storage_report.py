@@ -196,9 +196,8 @@ def test_warning_critical_below_min_free(roots, monkeypatch):
     assert low[0]["severity"] == "critical"
     assert low[0]["free_gb"] == 5.0
     assert low[0]["min_free_gb"] == 10
-    # >90% used volume holding data+hf also trips pressure
-    assert [w for w in r["warnings"] if w["kind"] == "volume_pressure"]
-    # critical sorts first
+    # The same full disk is reported once, not again as volume pressure.
+    assert not [w for w in r["warnings"] if w["kind"] == "volume_pressure"]
     assert r["warnings"][0]["severity"] == "critical"
 
 

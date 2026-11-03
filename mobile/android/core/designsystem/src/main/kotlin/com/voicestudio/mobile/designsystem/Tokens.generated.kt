@@ -514,9 +514,9 @@ object VSTokens {
             "accentSurfaceForeground" to 0xFF241523,
             "messageSurface" to 0xFFEBDAD1,
             "messageForeground" to 0xFF241523,
-            "messageAction" to 0xFFB23535,
+            "messageAction" to 0xFF476D2F,
             "messageActionForeground" to 0xFFFFFAFF,
-            "messageActionHover" to 0xFF9D2F2F,
+            "messageActionHover" to 0xFF3C5D27,
             "codeBackground" to 0xFFF3F1F0,
             "codeForeground" to 0xFF241523,
             "sidebar" to 0xFFF3EAE5,
@@ -572,9 +572,9 @@ object VSTokens {
             "accentSurfaceForeground" to 0xFFFFFAFF,
             "messageSurface" to 0xFF704B34,
             "messageForeground" to 0xFFFFFAFF,
-            "messageAction" to 0xFFF78A7A,
+            "messageAction" to 0xFF99C77F,
             "messageActionForeground" to 0xFF241523,
-            "messageActionHover" to 0xFFF8988A,
+            "messageActionHover" to 0xFFA5D08E,
             "codeBackground" to 0xFF362B27,
             "codeForeground" to 0xFFFFFAFF,
             "sidebar" to 0xFF39281F,
@@ -844,4 +844,7 @@ object VSTokens {
     const val RADIUS_CONTROL: Float = 8.00f
     const val SPACING_GAP: Float = 16.00f
     const val SPACING_INSET: Float = 24.00f
+    const val IOS_CARD_RADIUS: Float = 24.00f
+    const val IOS_FIELD_RADIUS: Float = 16.00f
+    const val IOS_HOME_WORDMARK_SIZE: Float = 28.00f
 }

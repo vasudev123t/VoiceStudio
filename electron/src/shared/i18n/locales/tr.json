@@ -104,9 +104,7 @@
     "dub": "Ses veya videoyu çevirip dublaj yapın.",
     "stories": "Birden fazla sesle sahneler oluşturun.",
     "audiobook": "Bölümlü sesli kitaplar oluşturun.",
-    "transcribe": "Kayıtları metne dönüştürün.",
-    "collapseFooter": "Alt çubuğu daralt",
-    "expandFooter": "Alt çubuğu genişlet"
+    "transcribe": "Kayıtları metne dönüştürün."
   },
   "longformPersistence": {
     "storage_unavailable_title": "Projeler yüklenemedi",
@@ -377,13 +375,13 @@
     "hf_source_app_label": "VoiceStudio (şifrelenmiş, önerilen)",
     "hf_source_cli_label": "HuggingFace CLI",
     "hf_source_env_label": "Ortam değişkeni",
-    "theme_auto": "Sistem Otomatik",
+    "theme_auto": "Sisteme uy",
     "theme_light": "Açık",
     "reduce_motion": "Hareketi azalt",
     "reduce_motion_desc": "Arka plan animasyonlarını ve geçişleri durdurur. Sistem ayarınız kendi başına geçerlidir; bu ona eklenir.",
-    "perf_torch_compile": "torch.compile devre dışı",
-    "perf_torch_compile_note": "Triton bellek hatalarını önlemek için doğrudan yürütme kullanır.",
-    "perf_torch_compile_hint": "Triton bellek hatalarını önlemek için doğrudan yürütme kullanır. <issueLink>#65</issueLink> · <crashLink>#2135</crashLink>",
+    "perf_torch_compile": "torch.compile'ı kapat",
+    "perf_torch_compile_note": "Triton kararsızsa modeli derlenmiş çekirdekler olmadan çalıştırır.",
+    "perf_torch_compile_hint": "Triton veya <code>torch.compile</code> arızasından sonra, ses hazırlanırken backend kapanırsa da bunu açın. VoiceStudio böylece <code>TORCH_COMPILE_DISABLE=1</code> iletir ve derleme hızından önce kararlılığı seçer. 16 GB altında VRAM bulunan Windows için <issueLink>#65</issueLink>, eski NVIDIA CUDA grafik sorunları için <crashLink>#2135</crashLink> bölümüne bakın.",
     "llmp_cli_help": "Yüklü CLI'yi ve oturumunu, aracıyla onarımla aynı çalıştırıcı üzerinden kullanır. CLI varsayılanı için Model'i boş bırakın. Yanıtlar yavaş olabilir; ücretler CLI hesabınıza yansır.",
     "llmp_sdk_help": "Yerel sağlayıcı bağdaştırıcıları LiteLLM kullanır. Diğerleri için provider/model girin. Bedrock API anahtarı veya AWS profili; Vertex ise proje olarak hesap kimliği ve Google kimlik bilgileri kullanır. Temel URL isteğe bağlıdır.",
     "llmp_cli_auth": "CLI hesabına erişim reddedildi. Oturumunuzu, aboneliğinizi ve seçilen modeli kontrol edin."
@@ -451,10 +449,10 @@
     "importFailed": "Bu dosya okunamadı.",
     "addLine": "Satır Ekle",
     "addChapter": "Bölüm Ekle",
-    "clearScript": "Senaryoyu temizle",
-    "clearScriptHint": "Senaryodaki tüm satırları ve bölümleri kaldır (kadro kalır)",
     "clearConfirm": "{{count}} senaryo girdisinin tamamı ve bekleyen içe aktarılmış metin silinsin mi? Bu işlem geri alınamaz.",
-    "cleared": "Senaryo temizlendi",
+    "clearScript": "Betiği boşalt",
+    "clearScriptHint": "Betiğin tamamını siler: tüm satırlar ve tüm bölümler",
+    "cleared": "Senaryo boşaltıldı",
     "chapterN": "Bölüm {{n}}",
     "stems": "Kaynaklanıyor",
     "stemsDone": "Dışa aktarılan {{count}} karakter kökü/kökleri",
@@ -475,11 +473,7 @@
     "pasteAbove": "Metni yukarıya yapıştır",
     "cancel": "İptal",
     "splitIntoTracks": "Çizgilere bölünmüş",
-    "splitMode": "Bölme ölçütü",
-    "split_sentences": "Cümleler",
-    "split_paragraphs": "Paragraflar",
-    "split_chapters": "Bölümler",
-    "splitModeHint": "Her satır ayrı bir çekim olarak okunur. Tek anlatıcı için paragraflar veya tüm bölümler cümlelerden daha akıcıdır.",
+    "splitModeHint": "Her satır ayrı bir kayıt olarak okunur. Tek anlatıcı için Paragraflar veya Bölümler daha akıcı olur.",
     "emptyText": "Hikayenize diyalog ve anlatım satırları ekleyerek başlayın. Cast'ta her karaktere bir ses atayın.",
     "addFirst": "İlk Satırı Ekle",
     "linePlaceholder": "Diyaloğa veya anlatıma girin… sessiz bir ara için [0,5 saniye duraklat] kullanın",
@@ -510,7 +504,11 @@
     "exportFailed": "Dışa aktarma başarısız oldu — arka ucun çalıştığını kontrol edin.",
     "global_speed": "Hız",
     "global_speed_hint": "Kendi hız geçersiz kılma özelliği olmadan tüm satırlar için okuma hızı",
-    "deleteProjectConfirm": "Bu proje kalıcı olarak silinsin mi?"
+    "deleteProjectConfirm": "Bu proje kalıcı olarak silinsin mi?",
+    "splitMode": "Şuna göre böl",
+    "split_chapters": "Bölümler",
+    "split_paragraphs": "Paragraflar",
+    "split_sentences": "Cümleler"
   },
   "common": {
     "stop": "Durdur",
@@ -1760,8 +1758,8 @@
     "backend_shutting_down": "VoiceStudio kapanıyor. Uygulamayı yeniden açıp tekrar dene.",
     "crash_broken_env": "Kendi Python bağımlılıklarını yüklerken sonlandı; yani sorun bellek ya da ekran kartınız değil — ortam eksik veya yarım güncellenmiş durumda. Ayarlar → Günlükler → Arka uç bölümündeki \"Temizle ve Yeniden Dene\" seçeneğini kullanın: ortamı sıfırdan yeniden kurar ve seslerinize ya da projelerinize dokunmadan yerinde onarır. Yine de başarısız olursa, çökme ayrıntıları içe aktarılamayan paketin adını verir.",
     "crash_vram_default": "Küçük GPU'larda en yaygın neden, TTS modeli yüklüyken ASR modelini de yüklerken VRAM'in tükenmesidir: önce TTS modelini bellekten kaldırın veya Model kataloğu → Modeller bölümünden daha küçük bir ASR modeli seçin.",
-    "stream_cut_backend_alive": "Akış erken sona erdi ama arka uç hâlâ çalışıyor — yani çökmedi. Sunucu veya konteyner kurulumlarında bunun nedeni genellikle bir ters vekilin (reverse proxy) ya da yük dengeleyicinin bağlantıyı arabelleğe alması veya zaman aşımına uğratmasıdır: bu yol için yanıt arabelleğe almayı kapatın (nginx: proxy_buffering off; X-Accel-Buffering: no) ve okuma zaman aşımını artırın. Masaüstü uygulamasını doğrudan ya da vekil olmadan localhost üzerinde çalıştırmak bunu doğrular.",
-    "stream_cut_backend_alive_local": "Akış erken sona erdi ancak arka uç hâlâ çalışıyor — yani çökmedi. Uygulama, iş sürerken arka uçla bağlantısını kaybetti; bu, uzun bir adım dakikalarca hiçbir şey göndermediğinde olur ve arka uç genellikle işi yine de tamamlar. Birkaç dakika bekleyip işi geçmişten yeniden açın veya arka ucun ne yaptığını görmek için arka uç günlüğüne (Ayarlar → Günlükler → Arka uç) bakın."
+    "stream_cut_backend_alive": "Önce uygulamanın önündeki ters vekil sunucuyu veya yük dengeleyiciyi kontrol edin: bu rota için yanıt tamponlamayı kapatın (proxy_buffering off; X-Accel-Buffering: no) ve okuma zaman aşımını artırın. Bağlantı, arka uç çalışmaya devam ederken koptu; yani bir çökme olmadı. Sunucu üzerinden veya konteynerde çalışan kurulumlarda genellikle bir vekil sorumludur; masaüstü uygulamasını doğrudan ya da localhost üzerinden açmak bunu doğrular veya eler.",
+    "stream_cut_backend_alive_local": "Birkaç dakika bekleyin, ardından işi geçmişten yeniden açın; orada yoksa Ayarlar → Günlükler → Arka uç bölümündeki arka uç günlüğünü okuyun. Uzun ve sessiz bir adımdan sonra bağlantı işin ortasında koptu, ancak arka uç hâlâ çalışıyor ve işi normalde tamamlar; yani bu bir çökme değildi."
   },
   "keyboard": {
     "title": "Klavye kısayolları",
@@ -2265,7 +2263,12 @@
     "other_ways": "Yardım etmenin diğer yolları",
     "star_short": "Yıldız",
     "star_github": "GitHub'da yıldız",
-    "join_discord": "Discord'a Katılın"
+    "join_discord": "Discord'a Katılın",
+    "sponsors_tier_strategic": "Stratejik",
+    "sponsors_tier_company": "Şirket",
+    "sponsors_tier_development": "Geliştirme",
+    "sponsors_tier_community": "Topluluk",
+    "sponsors_tier_supporter": "Destekçi"
   },
   "updates": {
     "tab": "Güncellemeler",
@@ -2356,10 +2359,10 @@
     "hf_token_get": "Jetonunuz yok mu? Ücretsiz bir tane alın →",
     "hf_token_inline_prompt": "Ücretsiz Hugging Face belirteci ile indirmeleri hızlandırın",
     "hf_token_inline_ph": "hf_… jetonunu yapıştırın (isteğe bağlı)",
-    "hf_token_get_short": "Ücretsiz bir tane alın →",
     "hf_token_active_using": "{{source}} içinde Hugging Face belirteci bulundu — {{masked}}",
-    "hf_token_replace": "Jetonu değiştir…",
-    "hf_token_replace_warning": "Bu uygulama için kaydedilen belirteci değiştirir. Eski belirteci iptal etmez."
+    "hf_token_replace": "Değiştir…",
+    "hf_token_replace_warning": "Bu uygulama için kaydedilen belirteci değiştirir. Eski belirteci iptal etmez.",
+    "hf_token_get_short": "Ücretsiz alın →"
   },
   "history": {
     "dub_meta": "{{segments}} segment · {{duration}} sn",
@@ -2469,7 +2472,7 @@
     "warn_unknown_voice": "Bilinmeyen ses ‘{{name}}’ — varsayılan kullanılacak",
     "warn_empty_chapter": "“{{title}}” bölümünde seslendirilecek metin yok",
     "warn_unknown_tag": "Tanınmayan etiket {{tag}} — sesli okunacak",
-    "untitled": "Adsız sesli kitap",
+    "untitled": "Başlıksız",
     "dismiss": "Kapat",
     "output": "Çıktı",
     "title": "Sesli kitap",
@@ -2484,14 +2487,14 @@
     "preview_plan": "Önizleme planı",
     "stop": "Durdur",
     "stopped_note": "Durduruldu — tamamlanan bölümler önbellekte; devam etmek için tekrar Oluştur'a basın.",
-    "recovery_title": "Kesintiye uğrayan sesli kitap",
-    "recovery_progress": "{{total}} bölümün {{done}} tanesi önbelleğe alındı",
-    "recovery_hint": "Devam et, tamamlanan bölümleri yeniden kullanır ve yalnızca kalanı sentezler.",
-    "resume": "Devam et",
-    "open_chapter_cache": "Bölüm önbelleğini aç",
-    "cache_location_hint": "Bölüm sesi önbelleği: {{cachePath}} · Devam bildirimi: {{manifestPath}}",
-    "resume_failed": "Sesli kitap sürdürülemedi: {{message}}",
-    "open_cache_failed": "Bölüm önbelleği açılamadı",
+    "recovery_title": "Yarım kalan sesli kitabı tamamla",
+    "recovery_progress": "Hazır bölümler: {{done}} / {{total}}",
+    "recovery_hint": "Daha önce üretilen ses korunur; devam edildiğinde yalnız eksik kısımlar hazırlanır.",
+    "resume": "İşlemeyi sürdür",
+    "open_chapter_cache": "Kaydedilen bölümleri göster",
+    "cache_location_hint": "Ses klasörü: {{cachePath}} · kurtarma kaydı: {{manifestPath}}",
+    "resume_failed": "Bu sesli kitap sürdürülemedi: {{message}}",
+    "open_cache_failed": "Kaydedilen bölüm klasörü gösterilemedi",
     "progress_summary": "{{total}} bölümden {{current}} tanesi sentezleniyor",
     "eta": "~{{time}} kaldı",
     "chapter_n": "Bölüm {{n}}",
@@ -2545,15 +2548,17 @@
     "seed_ph": "Otomatik",
     "vary_repeats": "Tekrarlanan satırları değiştirin",
     "vary_repeats_help": "Özdeş satırlara bir kaydı yeniden kullanmak yerine farklı çekişler verin.",
-    "line_gap": "Satırlar arası boşluk",
     "joins_help": "Satırlar arası boşluk, kendi [pause] etiketi olmayan satırların arasına; paragraflar arası boşluk ise boş satırlara eklenir. Kırpma açıkken önce her satırın kendi baş ve son sessizliği kesilir; böylece ayarladığınız boşluk, duyduğunuz boşluk olur.",
-    "paragraph_gap": "Paragraflar arası boşluk",
-    "trim_edges": "Motor sessizliğini kırp",
-    "trim_edges_help": "Motorun her satıra eklediği sessizliği birleştirmeden önce keser. Ham kayıtları korumak için kapatın.",
+    "trim_edges_help": "Her motorun satırdan önce ve sonra eklediği sessizliği keser, sonra birleştirir. Ham çıktı için kapatın.",
     "emotion_help": "Dereceli duygu — yalnızca IndexTTS2 motoru tarafından uygulanır.",
     "emotion_text": "Duygu açıklaması",
     "emotion_text_ph": "örn. tükenmiş ve üzgün geliyor",
-    "emotion_alpha": "Duygu gücü"
+    "emotion_alpha": "Duygu gücü",
+    "recovery_load_failed": "Tamamlanmamış sesli kitaplar denetlenemedi.",
+    "recovery_retry": "Yeniden dene",
+    "line_gap": "Satırların arasındaki duraklama",
+    "paragraph_gap": "Paragrafların arasındaki duraklama",
+    "trim_edges": "Motorun sessiz kısımlarını kes"
   },
   "voicePanel": {
     "title": "Ses",
@@ -2749,13 +2754,6 @@
     "progress": "{{done}} / {{total}} bölüm doğrulandı",
     "cancelled": "İptal edildi",
     "fitting": "Zamanlama ayarlanıyor"
-  },
-  "sponsorSlot": {
-    "book": "Yerinizi ayırtın",
-    "preview": "Sponsor önizlemesi",
-    "message": "Markanız, web siteniz ve mesajınız",
-    "email_app": "E-posta uygulamasını aç",
-    "copy_email": "E-postayı kopyala"
   },
   "supportPlans": {
     "remove": "Sponsor çubuğunu kaldır",

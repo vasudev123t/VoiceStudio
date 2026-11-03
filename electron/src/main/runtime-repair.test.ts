@@ -19,3 +19,6 @@ it('never auto-repairs where the runtime cannot resolve', () => {
 it('advises setup:api for a source checkout', () => {
   expect(decideMissingRuntime({ ...base, packaged: false })).toBe('setup_api');
 });
+it('asks before switching an existing runtime to Windows ROCm', () => {
+  expect(decideMissingRuntime({ ...base, rocmNotYetInstalled: true })).toBe('wizard');
+});

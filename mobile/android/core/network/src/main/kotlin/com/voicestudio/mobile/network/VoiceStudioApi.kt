@@ -85,6 +85,10 @@ class VoiceStudioApi(val address: PairingAddress, token: String? = null, private
     private suspend inline fun <reified T> post(path: String, body: JsonObject): T = withContext(Dispatchers.IO) {
         raw(path, "POST", body.toString().toRequestBody("application/json".toMediaType())).use { json.decodeFromString(it.body!!.string()) }
     }
+    suspend fun community(offset: Int = 0): CommunityPage {require(offset>=0);return get("/community/items?limit=100&offset=$offset")}
+    suspend fun useCommunity(id: String): CommunityVoice = withContext(Dispatchers.IO) {
+        raw("/community/items/${segment(id)}/use","POST",ByteArray(0).toRequestBody()).use {json.decodeFromString<CommunityVoice>(it.body!!.string())}
+    }
     suspend fun health(): Health = withContext(Dispatchers.IO) {
         raw("/health").use { r ->
             val health = runCatching { json.decodeFromString<Health>(r.body!!.string()) }.getOrNull()
@@ -180,7 +184,7 @@ class VoiceStudioApi(val address: PairingAddress, token: String? = null, private
         DubVoiceChoice.validate(voice)
         put("language_code", code); put("language", language)
         putJsonArray("segments") { segments.forEach { s -> add(buildJsonObject {
-            put("start", s.start); put("end", s.end); put("text", s.text); put("profile_id", voice); put("target_lang", code)
+            put("start", s.start); put("end", s.end); put("text", s.text); put("profile_id", voice); put("target_lang", code); putRenderSettings(s)
         }) } }
     })
     suspend fun abort(jobId: String) { raw("/dub/abort/${segment(jobId)}", "POST", ByteArray(0).toRequestBody()).close() }
@@ -220,3 +224,7 @@ private class RouteLookup(val route: LlmRoute?)
 /** Failures worth retrying: the host is slow, unreachable or temporarily overloaded. */
 fun ClientFailure.isTransient(): Boolean =
     key == "mobile.connect.error_unreachable" || key == "mobile.errors.timeout" || (status ?: 0) in setOf(429, 500, 502, 503, 504)
+
+@kotlinx.serialization.Serializable data class CommunityItem(val id: String,val name: String,val author: String? = null,val license: String? = null,val language: String? = null)
+@kotlinx.serialization.Serializable data class CommunityPage(val total: Int,val items: List<CommunityItem>)
+@kotlinx.serialization.Serializable data class CommunityVoice(val profile_id: String,val name: String)

@@ -21,14 +21,13 @@ import time
 
 import pytest
 
-sys.path.insert(
-    0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "backend")
-)
+_BACKEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "backend")
+sys.path.insert(0, os.path.normpath(_BACKEND_DIR))
 
 
-@pytest.fixture()
+@pytest.fixture
 def PollGuard():
-    # Imported at run time so collecting this file never imports backend code.
+    # Imported lazily so that collecting this module stays backend-free.
     from core.poll_guard import PollGuard as guard_cls
 
     return guard_cls

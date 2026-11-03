@@ -142,7 +142,8 @@ services:
       - OMNIVOICE_API_KEY=${OMNIVOICE_API_KEY:?export a long random OMNIVOICE_API_KEY before starting a Studio profile}
       # RDNA3 consumer cards (RX 7900 XTX/XT and friends, gfx1100): if the
       # GPU is not detected, uncomment the override below. The backend
-      # auto-sets it for known consumer GFX IDs, so try without it first.
+      # auto-sets a same-generation value when the build lacks your card, so
+      # try without it first. Never set it on RX 9000 (RDNA4) cards.
       # - HSA_OVERRIDE_GFX_VERSION=11.0.0
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:3900/health"]

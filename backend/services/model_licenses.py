@@ -28,7 +28,7 @@ from core.path_security import UnsafePath, resolve_within
 REGISTRY_PATH = Path(__file__).resolve().parents[1] / "config" / "model_licenses.json"
 _SHA = re.compile(r"[0-9a-f]{40}\Z")
 _DIGEST = re.compile(r"[0-9a-f]{64}\Z")
-_REPO = re.compile(r"[A-Za-z0-9][\w.-]*/[\w.-]+\Z")
+_REPO = re.compile(r"[A-Za-z0-9][\w.-]*/[\w.-]+(?::[\w.-]+)?\Z")
 PROMPT = {
     "prompt_id": "model-notices",
     "prompt_version": 1,
@@ -311,7 +311,8 @@ def build_plan(registry: dict, catalog: list[dict], repo_id: str, target: str,
         raise ModelTermsError("review_required", ["local_target_required"])
     if source not in {"https://huggingface.co", "https://hf-mirror.com"}:
         raise ModelTermsError("review_required", ["source_unverified"])
-    specs = {m["repo_id"]: m for m in catalog}
+    # Catalogue identity: a package entry's own id, else its repo id.
+    specs = {str(m.get("id") or m["repo_id"]): m for m in catalog}
     if len(specs) != len(catalog):
         raise ModelTermsError("registry_invalid", ["duplicate_catalogue_identity"])
     if repo_id not in specs:

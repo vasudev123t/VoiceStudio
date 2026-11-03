@@ -104,9 +104,7 @@
     "dub": "Traduce y dobla audio o vídeo.",
     "stories": "Crea escenas con varias voces.",
     "audiobook": "Crea audiolibros con capítulos.",
-    "transcribe": "Convierte grabaciones en texto.",
-    "collapseFooter": "Contraer pie de página",
-    "expandFooter": "Expandir pie de página"
+    "transcribe": "Convierte grabaciones en texto."
   },
   "longformPersistence": {
     "storage_unavailable_title": "No se pudieron cargar los proyectos",
@@ -377,13 +375,13 @@
     "hf_source_app_label": "VoiceStudio (cifrado, recomendado)",
     "hf_source_cli_label": "HuggingFace CLI",
     "hf_source_env_label": "Variable de entorno",
-    "theme_auto": "Automático del sistema",
+    "theme_auto": "Según el sistema",
     "theme_light": "Claro",
     "reduce_motion": "Reducir movimiento",
     "reduce_motion_desc": "Detiene las animaciones de fondo y las transiciones. Tu ajuste del sistema se respeta por sí solo; esto se suma.",
     "perf_torch_compile": "Desactivar torch.compile",
-    "perf_torch_compile_note": "Usa ejecución directa para evitar errores de memoria de Triton.",
-    "perf_torch_compile_hint": "Usa ejecución directa para evitar errores de memoria de Triton. <issueLink>#65</issueLink> · <crashLink>#2135</crashLink>",
+    "perf_torch_compile_note": "Ejecuta el modelo sin núcleos compilados si Triton resulta inestable.",
+    "perf_torch_compile_hint": "Activa esta opción tras un fallo de Triton o <code>torch.compile</code>, incluso si el backend se cierra al crear audio. VoiceStudio enviará <code>TORCH_COMPILE_DISABLE=1</code> y priorizará la estabilidad frente a la velocidad compilada. <issueLink>#65</issueLink> trata Windows con menos de 16 GB de VRAM; <crashLink>#2135</crashLink> recoge fallos de gráficos CUDA en NVIDIA antiguas.",
     "llmp_cli_help": "Usa la CLI instalada y su sesión mediante el mismo ejecutor que la reparación con agente. Deja Modelo vacío para usar el predeterminado. Puede ser más lento; el coste corresponde a tu cuenta de la CLI.",
     "llmp_sdk_help": "Los proveedores nativos usan LiteLLM. Para otros, introduce provider/model. Bedrock usa una clave API o perfil AWS; Vertex usa el ID de cuenta como proyecto y credenciales de Google. La URL base es opcional.",
     "llmp_cli_auth": "Se rechazó el acceso de la cuenta CLI. Revisa la sesión, la suscripción y el modelo seleccionado."
@@ -451,9 +449,9 @@
     "importFailed": "No se pudo leer ese archivo.",
     "addLine": "Agregar línea",
     "addChapter": "Agregar capítulo",
-    "clearScript": "Vaciar guion",
-    "clearScriptHint": "Quitar todas las líneas y capítulos del guion (el reparto se conserva)",
     "clearConfirm": "¿Borrar las {{count}} entradas del guion y cualquier texto importado pendiente? Esta acción no se puede deshacer.",
+    "clearScript": "Vaciar el guion",
+    "clearScriptHint": "Quita todo del guion: todas las líneas y todos los capítulos",
     "cleared": "Guion vaciado",
     "chapterN": "Capítulo {{n}}",
     "stems": "Tallos",
@@ -475,11 +473,7 @@
     "pasteAbove": "Pegar texto arriba",
     "cancel": "Cancelar",
     "splitIntoTracks": "Dividir en líneas",
-    "splitMode": "Dividir por",
-    "split_sentences": "Frases",
-    "split_paragraphs": "Párrafos",
-    "split_chapters": "Capítulos",
-    "splitModeHint": "Cada línea se lee como una toma independiente. Para un solo narrador, los párrafos o capítulos completos fluyen mejor que las frases.",
+    "splitModeHint": "Cada línea se lee como una toma independiente. Con un solo narrador, Párrafos o Capítulos suenan más fluidos.",
     "emptyText": "Comience su historia agregando diálogos y líneas de narración. Asigna a cada personaje una voz en el elenco.",
     "addFirst": "Agregar primera línea",
     "linePlaceholder": "Ingrese un diálogo o narración... use [pausa 0,5 s] para un descanso en silencio",
@@ -510,7 +504,11 @@
     "exportFailed": "Falló la exportación: verifique que el backend se esté ejecutando.",
     "global_speed": "Velocidad",
     "global_speed_hint": "Velocidad de lectura para todas las líneas sin su propia anulación de velocidad",
-    "deleteProjectConfirm": "¿Eliminar este proyecto permanentemente?"
+    "deleteProjectConfirm": "¿Eliminar este proyecto permanentemente?",
+    "splitMode": "Dividir por",
+    "split_chapters": "Capítulos",
+    "split_paragraphs": "Párrafos",
+    "split_sentences": "Oraciones"
   },
   "common": {
     "stop": "Detener",
@@ -1760,8 +1758,8 @@
     "backend_shutting_down": "VoiceStudio se está cerrando. Vuelve a abrir la aplicación e inténtalo de nuevo.",
     "crash_broken_env": "Murió mientras cargaba sus propias dependencias de Python, así que no es cuestión de memoria ni de tu GPU: el entorno está incompleto o quedó a medio actualizar. Usa «Limpiar y reintentar» en Configuración → Registros → Backend, que lo reconstruye desde cero y lo repara sin tocar tus voces ni tus proyectos. Si sigue fallando, los detalles del fallo indican el paquete exacto que no se pudo importar.",
     "crash_vram_default": "En GPU más pequeñas, la causa habitual es quedarse sin VRAM al cargar el modelo ASR junto con el modelo TTS: libera primero el modelo TTS de la memoria, o elige un modelo ASR más pequeño en Catálogo de modelos → Modelos.",
-    "stream_cut_backend_alive": "El stream terminó antes de tiempo, pero el backend sigue en ejecución — así que no se bloqueó. En una instalación servida o en contenedor, esto suele deberse a un proxy inverso o balanceador de carga que almacena en búfer la conexión o la corta por tiempo de espera: desactiva el almacenamiento en búfer de la respuesta para esta ruta (nginx: proxy_buffering off; X-Accel-Buffering: no) y aumenta su tiempo de espera de lectura. Ejecutar la aplicación de escritorio directamente, o en localhost sin proxy, lo confirmará.",
-    "stream_cut_backend_alive_local": "La transmisión terminó antes de tiempo, pero el backend sigue en ejecución, así que no se bloqueó. La app perdió la conexión con el backend a mitad del trabajo; ocurre cuando un paso largo pasa minutos sin enviar datos, y normalmente el backend termina el trabajo de todos modos. Espera unos minutos y vuelve a abrir el trabajo desde el historial, o revisa el registro del backend (Configuración → Registros → backend) para ver qué estaba haciendo."
+    "stream_cut_backend_alive": "Revisa primero el proxy inverso o balanceador de carga situado delante de la app: desactiva el búfer de respuestas para esta ruta (proxy_buffering off; X-Accel-Buffering: no) y sube su tiempo de espera de lectura. La conexión se cortó mientras el backend seguía activo, así que no hubo ningún fallo; en instalaciones servidas o en contenedor lo normal es que la causa sea un proxy, y ejecutar la app de escritorio directamente o en localhost lo confirmaría o lo descartaría.",
+    "stream_cut_backend_alive_local": "Espera unos minutos y vuelve a abrir el trabajo desde el historial; si no aparece, consulta el registro del backend en Configuración → Registros → Backend. La conexión se perdió a mitad del trabajo tras un paso largo y silencioso, pero el backend sigue en marcha y normalmente termina la tarea, así que no fue una caída."
   },
   "keyboard": {
     "title": "Atajos de teclado",
@@ -2265,7 +2263,12 @@
     "other_ways": "Otras formas de ayudar",
     "star_short": "Dar estrella",
     "star_github": "Estrella en GitHub",
-    "join_discord": "Únete a la discordia"
+    "join_discord": "Únete a la discordia",
+    "sponsors_tier_strategic": "Estratégico",
+    "sponsors_tier_company": "Empresa",
+    "sponsors_tier_development": "Desarrollo",
+    "sponsors_tier_community": "Comunidad",
+    "sponsors_tier_supporter": "Colaborador"
   },
   "updates": {
     "tab": "Actualizaciones",
@@ -2356,10 +2359,10 @@
     "hf_token_get": "¿No tienes una ficha? Consigue uno gratis →",
     "hf_token_inline_prompt": "Acelere las descargas con un token Hugging Face gratuito",
     "hf_token_inline_ph": "Pegue el token hf_… (opcional)",
-    "hf_token_get_short": "Consigue uno gratis →",
     "hf_token_active_using": "Token de Hugging Face encontrado en {{source}} — {{masked}}",
-    "hf_token_replace": "Reemplazar token…",
-    "hf_token_replace_warning": "Esto reemplaza el token guardado para esta aplicación. No revoca el token anterior."
+    "hf_token_replace": "Reemplazar…",
+    "hf_token_replace_warning": "Esto reemplaza el token guardado para esta aplicación. No revoca el token anterior.",
+    "hf_token_get_short": "Créalo gratis →"
   },
   "history": {
     "dub_meta": "{{segments}} segmentos · {{duration}} s",
@@ -2469,7 +2472,7 @@
     "warn_unknown_voice": "Voz desconocida «{{name}}»: se usará la predeterminada",
     "warn_empty_chapter": "El capítulo «{{title}}» no tiene texto hablado",
     "warn_unknown_tag": "Etiqueta no reconocida {{tag}}: se leerá en voz alta",
-    "untitled": "Audiolibro sin título",
+    "untitled": "Sin título",
     "dismiss": "Descartar",
     "output": "Salida",
     "title": "Audiolibro",
@@ -2484,14 +2487,14 @@
     "preview_plan": "Vista previa del plan",
     "stop": "Detener",
     "stopped_note": "Detenido — los capítulos terminados están en caché; pulsa Crear de nuevo para continuar.",
-    "recovery_title": "Audiolibro interrumpido",
-    "recovery_progress": "{{done}} de {{total}} capítulos están en caché",
-    "recovery_hint": "Al reanudar se reutilizan los capítulos terminados y solo se sintetiza lo que falta.",
-    "resume": "Reanudar",
-    "open_chapter_cache": "Abrir caché de capítulos",
-    "cache_location_hint": "Caché de audio de capítulos: {{cachePath}} · Manifiesto de reanudación: {{manifestPath}}",
-    "resume_failed": "No se pudo reanudar el audiolibro: {{message}}",
-    "open_cache_failed": "No se pudo abrir la caché de capítulos",
+    "recovery_title": "Continuar un audiolibro pendiente",
+    "recovery_progress": "Capítulos listos: {{done}} de {{total}}",
+    "recovery_hint": "El audio ya creado se conserva; al continuar solo se producen los capítulos que faltan.",
+    "resume": "Continuar renderizado",
+    "open_chapter_cache": "Mostrar capítulos guardados",
+    "cache_location_hint": "Carpeta de audio: {{cachePath}} · registro de recuperación: {{manifestPath}}",
+    "resume_failed": "No se pudo continuar este audiolibro: {{message}}",
+    "open_cache_failed": "No se pudo mostrar la carpeta de capítulos guardados",
     "progress_summary": "Sintetizando {{current}} de {{total}} capítulos",
     "eta": "~{{time}} restante",
     "chapter_n": "Capítulo {{n}}",
@@ -2545,15 +2548,17 @@
     "seed_ph": "Automático",
     "vary_repeats": "Variar líneas repetidas",
     "vary_repeats_help": "Proporcione tomas distintas a líneas idénticas en lugar de reutilizar una grabación.",
-    "line_gap": "Pausa entre líneas",
     "joins_help": "La pausa entre líneas va entre líneas sin su propio [pause]; la pausa entre párrafos, en las líneas en blanco. Con el recorte activado, primero se quita el silencio inicial y final de cada línea, así la pausa que eliges es la que se oye.",
-    "paragraph_gap": "Pausa entre párrafos",
-    "trim_edges": "Recortar silencio del motor",
-    "trim_edges_help": "Quita el silencio que el motor añade a cada línea antes de unirlas. Desactívalo para conservar las tomas sin recortar.",
+    "trim_edges": "Recortar el silencio del motor",
+    "trim_edges_help": "Elimina el silencio que cada motor añade antes y después de una línea y luego las une. Desactívalo para obtener audio sin procesar.",
     "emotion_help": "Emoción graduada — aplicada solo por el motor IndexTTS2.",
     "emotion_text": "Descripción de emoción",
     "emotion_text_ph": "p. ej. suena agotado y triste",
-    "emotion_alpha": "Intensidad emocional"
+    "emotion_alpha": "Intensidad emocional",
+    "recovery_load_failed": "No se pudo comprobar si hay audiolibros sin terminar.",
+    "recovery_retry": "Reintentar",
+    "line_gap": "Pausa al cambiar de línea",
+    "paragraph_gap": "Pausa al cambiar de párrafo"
   },
   "voicePanel": {
     "title": "Voz",
@@ -2749,13 +2754,6 @@
     "progress": "{{done}} / {{total}} segmentos validados",
     "cancelled": "Cancelado",
     "fitting": "Ajustando tiempos"
-  },
-  "sponsorSlot": {
-    "book": "Reserva tu espacio",
-    "preview": "Vista previa del patrocinador",
-    "message": "Tu marca, sitio web y mensaje",
-    "email_app": "Abrir correo",
-    "copy_email": "Copiar correo"
   },
   "supportPlans": {
     "remove": "Quitar barra de patrocinadores",

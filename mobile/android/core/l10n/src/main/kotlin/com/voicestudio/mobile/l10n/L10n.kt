@@ -35,7 +35,7 @@ class L10n(private val catalogs: Map<String, JsonObject>, val locale: String) {
         // Escape both braces: Android's ICU regex rejects a bare `}` that the
         // JVM (and so Robolectric) accepts, which crashed the app on launch.
         private val PLACEHOLDER = Regex("""\{\{\s*([^{}]+?)\s*\}\}""")
-        val languages = listOf("en", "zh-CN", "es", "fr", "de", "ja", "pt", "it", "ru", "ko", "hi", "tr", "pl", "nl", "sv", "th", "vi", "id", "uk", "ar", "zh-TW")
+        val languages = listOf("en", "zh-CN", "es", "fr", "de", "ja", "pt", "it", "ru", "ko", "hi", "tr", "pl", "nl", "sv", "th", "vi", "id", "uk", "ar", "zh-TW", "gl")
         private fun lookup(obj: JsonObject?, key: String): String? {
             var node: JsonElement? = obj
             for(part in key.split('.')) node = (node as? JsonObject)?.get(part) ?: return null

@@ -67,27 +67,21 @@ export const CRASH_RESTART_LIMIT = 3;
 export const CRASH_RESTART_WINDOW_MS = 60_000;
 export const SOURCE_RELOAD_DEBOUNCE_MS = 250;
 
-/**
- * Stop a spawned backend and everything it started.
- *
- * We spawn `uv`, which spawns uvicorn as its own child. Windows has no signals:
- * `child.kill()` maps to TerminateProcess on the DIRECT child only, so killing
- * `uv` orphaned the uvicorn grandchild — which kept holding port 3900. The next
- * spawn then failed to bind ([Errno 10048]), which the supervisor counted as a
- * crash, and three of those tore the whole dev stack down. `taskkill /T` walks
- * the tree; POSIX keeps plain signal delivery.
- */
-export function killProcessTree(child, sig, { platform = process.platform, run = spawnSync } = {}) {
-  if (platform !== "win32") {
+export function killProcessTree(
+  child,
+  sig,
+  { platform = process.platform, run = spawnSync } = {},
+) {
+  if (platform === "win32") {
+    const taskkillArgs = ["/pid", `${child.pid}`, "/T", "/F"];
+    const attempt = run("taskkill", taskkillArgs, { stdio: "ignore" });
+    const treeWasStopped = attempt != null && attempt.error == null && attempt.status === 0;
+    if (treeWasStopped) return "taskkill";
     child.kill(sig);
-    return "signal";
-  }
-  const result = run("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore" });
-  if (!result || result.error || result.status !== 0) {
-    child.kill(sig); // taskkill unavailable or the process already exited
     return "fallback";
   }
-  return "taskkill";
+  child.kill(sig);
+  return "signal";
 }
 
 export function isBackendSourceChange(filename) {
@@ -151,6 +145,8 @@ export function buildExitBanner({ code, signal, logTail, logPath, platform = pro
 
 // Setup is explicit and chooses the CPU/CUDA wheel graph. Never let launch or
 // restart silently restore the default CUDA group (or undo a ROCm swap).
+
+/** `uv run` argv for launching the backend: same as uvicornArgs, minus any dependency re-sync. */
 export function uvRunArgs(env = process.env) {
   const args = uvicornArgs(env);
   return [args[0], "--no-sync", ...args.slice(1)];
@@ -177,10 +173,7 @@ export function createBackendSupervisor({
   let restartTimer = null;
   let reloadTimer = null;
   let reloadRequested = false;
-  // True when the reload we asked for was served by a forced tree-kill, which
-  // reports a non-zero exit and no signal. Only then may such an exit be read
-  // as "the reload we asked for" instead of "it crashed mid-reload".
-  let reloadKillForced = false;
+  let forcedReloadKill = false;
   let watcher = null;
   let crashTimes = [];
   let requestedExitCode = null;
@@ -226,9 +219,10 @@ export function createBackendSupervisor({
       reloadRequested = true;
       report(`[dev-backend] ${filename} changed; reloading backend…`);
       try {
-        reloadKillForced = killBackend(child, "SIGTERM") === "taskkill";
+        forcedReloadKill = killBackend(child, "SIGTERM") === "taskkill";
       } catch {
         reloadRequested = false;
+        forcedReloadKill = false;
       }
     }, SOURCE_RELOAD_DEBOUNCE_MS);
   }
@@ -282,9 +276,8 @@ export function createBackendSupervisor({
 
       if (reloadRequested) {
         reloadRequested = false;
-        const expectedReloadExit =
-          code === 0 || signal === "SIGTERM" || reloadKillForced;
-        reloadKillForced = false;
+        const expectedReloadExit = code === 0 || signal === "SIGTERM" || forcedReloadKill;
+        forcedReloadKill = false;
         if (expectedReloadExit) {
           start();
           return;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { EnginesResponse } from '@/lib/api/types';
 import { engineFamilyState } from '@/hooks/use-engines';
-import { resolveRuntimeHealth, sidebarToolState } from './status-runtime';
+import { isResidentAsrModel, resolveRuntimeHealth, sidebarToolState } from './status-runtime';
 
 describe('plain-language tool status', () => {
   it('never reports cached readiness when the backend is offline', () => {
@@ -75,5 +75,14 @@ describe('sidebar runtime health', () => {
         undefined,
       ),
     ).toBe('unavailable');
+  });
+});
+
+describe('resident speech-to-text rows', () => {
+  it('counts the warm transcription model alongside dictation', () => {
+    expect(isResidentAsrModel('transcription-asr')).toBe(true);
+    expect(isResidentAsrModel('capture-asr')).toBe(true);
+    expect(isResidentAsrModel('asr')).toBe(true);
+    expect(isResidentAsrModel('diarization')).toBe(false);
   });
 });

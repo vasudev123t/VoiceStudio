@@ -1,3 +1,4 @@
+import importlib
 import os
 import sys
 
@@ -9,14 +10,10 @@ _backend_dir = os.path.dirname(os.path.abspath(__file__))
 if _backend_dir not in sys.path:
     sys.path.insert(0, _backend_dir)
 
-# #2135: arm fatal-signal tracebacks before anything heavy is imported, so a
-# native crash inside torch/CUDA leaves a named frame in backend_err.log
-# instead of a silently vanished process. See core/crash_diagnostics.py.
 from core.crash_diagnostics import enable_fault_handler  # noqa: E402
 from core.app_config import PRODUCT_NAME  # noqa: E402
-
+# Arm native-crash tracebacks before model or GPU libraries can be imported.
 enable_fault_handler()
-
 # PyInstaller re-executes this entry module when the frozen backend binary is
 # launched. Nested operation supervisors therefore dispatch here, before math,
 # logging, FastAPI, torch, or any application initialization. Source launches
@@ -79,15 +76,16 @@ _install_accept_guard()
 from core.omnivoice_path import ensure_omnivoice_importable
 ensure_omnivoice_importable(_backend_dir)
 
-# Triton is unavailable on Windows — disable torch.compile / dynamo / inductor
-# to prevent TritonMissing errors at inference time. Must be set before torch
-# is imported (it is lazily imported in services/model_manager.py). Uses
-# setdefault so an explicit user-set value is never overridden, and is guarded
-# to win32 so cross-platform default behavior is unchanged.
+# Windows builds have no Triton, so torch compilation would fail only when
+# inference begins. Set the opt-outs before model_manager can import torch,
+# while preserving any values the user already supplied.
 if sys.platform == "win32":
-    os.environ.setdefault("TORCH_COMPILE_DISABLE", "1")
-    os.environ.setdefault("TORCHDYNAMO_DISABLE", "1")
-    os.environ.setdefault("TORCHINDUCTOR_DISABLE", "1")
+    for _compile_opt_out in (
+        "TORCH_COMPILE_DISABLE",
+        "TORCHDYNAMO_DISABLE",
+        "TORCHINDUCTOR_DISABLE",
+    ):
+        os.environ.setdefault(_compile_opt_out, "1")
 
 # The Intel Fortran runtime bundled with MKL (under numpy/scipy) installs a
 # console CTRL handler that aborts the whole process with `forrtl: error
@@ -135,18 +133,16 @@ if not getattr(sys.stderr, "_is_safe_wrapper", False):
 try:
     import dotenv
 
-    dotenv.load_dotenv()
+    _discovered_env = dotenv.find_dotenv()
     # Also load .env from the project root (parent of backend/)
     _project_env = os.path.join(os.path.dirname(_backend_dir), ".env")
-    if os.path.isfile(_project_env):
-        dotenv.load_dotenv(_project_env, override=False)
+    from core.env_startup import load_startup_env as _load_startup_env
     # Load the durable per-user config (the in-app Settings source of truth) so
     # env vars set once survive Tauri/Finder launches that don't inherit a shell
     # environment. This OVERRIDES launcher-injected defaults: the desktop app
     # injects a stale OMNIVOICE_CACHE_DIR from its own config before startup, so
     # without override a models dir changed in Settings was ignored forever (#480).
-    from core.user_env import load_into_environ as _load_user_env
-    _load_user_env()
+    _load_startup_env(_discovered_env, _project_env)
 except ImportError:
     pass
 
@@ -155,6 +151,10 @@ except ImportError:
 from services.hf_auth import apply_process_token_policy as _apply_hf_token_policy  # noqa: E402
 
 _apply_hf_token_policy()
+
+# Importing it removes Electron's account-bridge capability from os.environ, so
+# engine and tool subprocesses never inherit it.
+importlib.import_module("services.cloud_account")
 
 # ── cuDNN 8 library preload ─────────────────────────────────────────────
 # Moved into _phase_a_build (`native_preload` step, early-bind refactor): the
@@ -233,6 +233,7 @@ sys.modules.setdefault("torchcodec", None)
 import warnings
 import logging
 from logging.handlers import RotatingFileHandler
+from utils.fsops import safe_replace
 
 # The heavy tail that used to run here at module scope — prefs.json env
 # restore, the legacy-translate migration (#963), the yt-dlp overlay, the
@@ -244,38 +245,49 @@ from logging.handlers import RotatingFileHandler
 # at the bottom of this module — same order, same side effects, so the
 # ~100 lifespan-less TestClient call sites see today's fully-built app.
 
+class _LockTolerantRotatingFileHandler(RotatingFileHandler):
+    """Keep file logging alive when Windows temporarily locks a log file."""
 
-class _WindowsSafeRotatingFileHandler(RotatingFileHandler):
-    def doRollover(self):
-        _log = logging.getLogger("omnivoice.api")
+    def doRollover(self) -> None:
         try:
             super().doRollover()
+            return
         except PermissionError:
-            for i in range(self.backupCount - 1, 0, -1):
-                sfn = self.rotation_filename("%s.%d" % (self.baseFilename, i))
-                dfn = self.rotation_filename("%s.%d" % (self.baseFilename, i + 1))
-                if os.path.exists(sfn):
-                    try:
-                        from utils.fsops import safe_replace
-                        safe_replace(sfn, dfn)
-                    except OSError as e:
-                        _log.warning("log rotation rename failed: %s", e)
-            dfn = self.rotation_filename(self.baseFilename + ".1")
-            if os.path.exists(dfn):
+            pass
+
+        rollover_logger = logging.getLogger("omnivoice.api")
+        for index in range(self.backupCount - 1, 0, -1):
+            source = self.rotation_filename(f"{self.baseFilename}.{index}")
+            target = self.rotation_filename(f"{self.baseFilename}.{index + 1}")
+            if os.path.exists(source):
                 try:
-                    os.remove(dfn)
-                except OSError as e:
-                    _log.warning("log rotation remove failed: %s", e)
+                    safe_replace(source, target)
+                except Exception as exc:
+                    rollover_logger.warning("Could not shift log backup %s: %s", index, exc)
+
+        first_backup = self.rotation_filename(f"{self.baseFilename}.1")
+        if os.path.exists(first_backup):
             try:
-                self.rotate(self.baseFilename, dfn)
-            except PermissionError:
-                _log.warning("log rotation rotate failed (PermissionError)")
-            if self.stream:
-                try:
-                    self.stream.close()
-                except Exception:
-                    pass
+                os.remove(first_backup)
+            except Exception as exc:
+                rollover_logger.warning("Could not remove the oldest active log backup: %s", exc)
+
+        try:
+            self.rotate(self.baseFilename, first_backup)
+        except PermissionError as exc:
+            rollover_logger.warning("Log rotation is delayed because the file is locked: %s", exc)
+
+        if self.stream is not None:
+            try:
+                self.stream.close()
+            except Exception:
+                pass
+            try:
                 self.stream = self._open()
+            except PermissionError as exc:
+                self.stream = None
+                rollover_logger.warning("Could not reopen the locked log file: %s", exc)
+
 
 _LOG_FMT = "%(asctime)s %(levelname)s [%(name)s] %(message)s"
 
@@ -322,7 +334,7 @@ install_redaction_filter()
 install_access_log_filter()
 install_asyncio_transport_filter()
 
-# Silence HF Hub unauthenticated warnings unless specifically requested.
+# Anonymous Hub requests can produce noisy advisory messages during startup.
 logging.getLogger("huggingface_hub.utils._http").setLevel(logging.ERROR)
 # Silence httpx INFO — every HF Hub API call logs a line; the SSE stream
 # already surfaces download progress to the UI.
@@ -341,7 +353,7 @@ if not os.environ.get("OMNIVOICE_DISABLE_FILE_LOG"):
     )  # local import — avoids circular import at module top
 
     try:
-        _file_handler = _WindowsSafeRotatingFileHandler(
+        _file_handler = _LockTolerantRotatingFileHandler(
             _LOG_PATH,
             maxBytes=2 * 1024 * 1024,
             backupCount=3,
@@ -403,6 +415,7 @@ from core.auth import (
     PrincipalKind,
     credential_matches,
     is_local_host,
+    is_trusted_host_loopback,
     principal_for,
     remote_api_key,
 )
@@ -416,10 +429,12 @@ from core.csrf import SAFE_HTTP_METHODS, cookie_csrf_allowed, origin_allowed
 
 
 def _env_flag(name: str, default: bool = False) -> bool:
-    value = os.environ.get(name)
-    if value is None:
+    missing = object()
+    configured = os.environ.get(name, missing)
+    if configured is missing:
         return default
-    return value.strip().lower() in {"1", "true", "yes", "on"}
+    accepted = {word: True for word in ("1", "true", "yes", "on")}
+    return accepted.get(configured.strip().casefold(), False)
 
 
 # Eager mode runs the heavy phases inline at module import — today's exact
@@ -627,11 +642,12 @@ def _phase_a_build_inner() -> None:
     # already provided, so a Settings control can tell the user their saved
     # value is being shadowed instead of silently promising it will apply
     # (core.prefs.is_env_shadowed — #1787 review fix).
+    # Preference damage must not prevent the backend from starting.
     try:
         from core.prefs import _load as _load_all_prefs, restore_env
         restore_env(_load_all_prefs())
     except Exception:
-        pass  # prefs.json missing or broken — fine on first run
+        pass
     # MIOpen's default find mode runs an exhaustive algorithm search the first
     # time it sees each convolution *shape*, and shape-varying vocoders pay it
     # again on nearly every call — ~18 s per new BigVGAN input shape on an
@@ -663,13 +679,44 @@ def _phase_a_build_inner() -> None:
     # dlopen/LoadLibrary, and the one hard ordering invariant of this phase —
     # it must run before any ctranslate2/torch import (#1371).
     try:
+        from core.windows_rocm.runtime import initialize_dll_search
+
+        initialize_dll_search()
+    except Exception:  # noqa: BLE001 — the opt-in ROCm path must not cost CUDA its preload
+        pass
+    try:
         from core.cudnn8 import preload as _preload_cudnn8
         _preload_cudnn8()
     except Exception:  # noqa: BLE001 — never block startup on a preload
         pass
 
     _startup_progress.begin_step("ml_imports")
-    import torchaudio
+    try:
+        # The opt-in Windows ROCm runtime must pin its DLL search path before
+        # torchaudio loads; a no-op on every other runtime.
+        from core.windows_rocm.pipelines import prepare_audio_imports
+
+        prepare_audio_imports()
+    except Exception:  # noqa: BLE001 — the torchaudio import below reports
+        pass
+    try:
+        import torchaudio  # noqa: F401
+    except Exception as exc:  # noqa: BLE001
+        # Sanitized summary only, never a traceback-bearing log call: an
+        # import traceback embeds absolute user-home paths (C:\Users\<name>\…, /Users/<name>/…)
+        # and lands in backend.log, which goes into diagnostic bundles and
+        # prefilled bug reports (CWE-532; CodeRabbit #3150).
+        try:
+            from core.failure import sanitize as _sanitize
+            _detail = _sanitize(f"{type(exc).__name__}: {exc}")
+        except Exception:  # noqa: BLE001 — never lose the signal to this
+            _detail = type(exc).__name__
+        logging.getLogger("omnivoice.model").warning(
+            "torchaudio import failed during ml_imports (startup will "
+            "continue degraded): %s",
+            _detail,
+        )
+        torchaudio = None  # type: ignore[assignment]
     warnings.filterwarnings("ignore", category=UserWarning)
     # torchaudio 2.9 REMOVED set_audio_backend(); soundfile has been the only
     # backend since 2.0, so the call was already a no-op there and is simply
@@ -677,18 +724,25 @@ def _phase_a_build_inner() -> None:
     # failure in that phase takes the whole backend down — the desktop app sits
     # on "starting backend" forever and /health stays 503.
     #
-    # That is not a hypothetical version: #1931 came from an sm_120 (Blackwell)
-    # user whose torch import crashed on Windows and who fixed it by moving to
-    # torch 2.9.1, which brings torchaudio 2.9 with it. Someone already working
-    # around one problem then hit a hard startup crash on a line that does
-    # nothing (#1931).
-    #
-    # The pin is not missing sm_120 kernels: torch 2.8.0 from the cu128 index
-    # lists sm_120 in get_arch_list(). CU128_ARCHS in
-    # tests/test_cuda_arch_compat.py records the same list, captured verbatim
-    # from a real cu128 build in #1285.
-    if hasattr(torchaudio, "set_audio_backend"):
-        torchaudio.set_audio_backend("soundfile")
+    # The pinned torch cu128 build lists sm_120 in its arch list, so this call is
+    # not about GPU support; it is guarded because newer torchaudio releases no
+    # longer define the function at all.
+    # The bare hasattr guard (no `torchaudio is not None` prefix) is what
+    # tests/test_torchaudio_legacy_backend_1931.py asserts, and it is safe
+    # either way: hasattr(None, ...) is False, so the call is skipped when
+    # the import above failed too.
+    try:
+        if hasattr(torchaudio, "set_audio_backend"):
+            torchaudio.set_audio_backend("soundfile")
+    except Exception:  # noqa: BLE001
+        pass
+    # Intel Arc on Windows: torch.xpu.mem_get_info() raises, and transformers
+    # calls it on every from_pretrained. Patch before any model can load.
+    try:
+        from core import xpu_compat
+        xpu_compat.install()
+    except Exception:  # noqa: BLE001 — never block startup on a compat shim
+        pass
     from utils import hf_progress
     # HF tqdm patch before any library import that can trigger
     # hf_hub_download (transformers, mlx_whisper, …).
@@ -759,6 +813,7 @@ def _phase_a_build_inner() -> None:
     from api.routers import mcp_bindings as _mcp_bindings_router  # noqa: E402
     from api.routers import telephony_twilio as _telephony_twilio_router  # noqa: E402
     from api.routers import calls as _calls_router  # noqa: E402
+    from api.routers import cloud_sync as _cloud_sync_router  # noqa: E402
     _router_modules.extend([
         system, profiles, profile_images, exports, generation, voice_convert, voice_conversion,
         voice_lab,
@@ -770,7 +825,7 @@ def _phase_a_build_inner() -> None:
         openai_compat, tts_stream, marketplace, personas, sonitranslate,
         audiobook, longform_jobs, pronunciation, settings_router,
         media_tools_router, auth_router, _mcp_bindings_router,
-        _telephony_twilio_router, _calls_router,
+        _telephony_twilio_router, _calls_router, _cloud_sync_router,
     ])
     # Download-acceleration state, once, for triage-from-logs (FDL-03).
     try:
@@ -868,10 +923,16 @@ def _phase_a_finalize() -> None:
         def _no_web_ui(request: Request):
             # Only a local browser may be sent to the local dev UI; a LAN
             # device redirected to localhost reaches itself, not us (#2599).
+            # The PIN query survives the hop so the gate still sees it, and
+            # a request already aimed at the UI port is answered terminally
+            # instead of bouncing onto itself forever (#2680: with default
+            # ports the share listener sits on the UI port).
             client = request.client.host if request.client else None
-            target = dev_ui_redirect(client, request.headers.get("host", ""), _ui_port())
-            if target:
-                return RedirectResponse(url=target)
+            ui_port = _ui_port()
+            target = dev_ui_redirect(client, request.headers.get("host", ""), ui_port)
+            if target and request.url.port != ui_port:
+                query = request.url.query
+                return RedirectResponse(url=target + (f"/?{query}" if query else ""))
             media_type, body = web_ui_missing_body(request.headers.get("accept", ""))
             return Response(body, status_code=503, media_type=media_type)
 
@@ -1074,7 +1135,15 @@ async def _phase_b(app: FastAPI) -> None:
     # Dictation v2: capture ASR warms in the background BY DEFAULT (~30s
     # post-boot, skipped under 4 GB free RAM at warm time).
     app.state.capture_preload_task = None  # only assigned when it runs (#1000 class)
-    if _env_flag("OMNIVOICE_PRELOAD_CAPTURE_ASR", default=True):
+    capture_warmup_requested = _env_flag(
+        "OMNIVOICE_PRELOAD_CAPTURE_ASR", default=True
+    )
+    if not capture_warmup_requested:
+        logger.info(
+            "Background capture recognition is off; dictation will initialise "
+            "its recogniser when it is first used."
+        )
+    if capture_warmup_requested:
         async def _preload_capture_asr():
             await asyncio.sleep(_capture_preload_delay_s())
             await _await_profile_reconcile(app)
@@ -1106,8 +1175,6 @@ async def _phase_b(app: FastAPI) -> None:
             except Exception as e:
                 logger.warning("Capture ASR preload skipped: %s", e)
         app.state.capture_preload_task = asyncio.create_task(_preload_capture_asr())
-    else:
-        logger.info("Capture ASR preload disabled; dictation ASR will load on first use.")
 
     # Watermark: warm the AudioSeal generator in the background so the first
     # mark_synthetic doesn't serialize the audioseal import + model load
@@ -1163,6 +1230,18 @@ async def _phase_b(app: FastAPI) -> None:
     )
     app.state.mcp_task = mcp_task
     app.state.mcp_stop = mcp_stop
+
+    # VoiceStudio Cloud settings sync: idles (no Cloud call) unless main hands
+    # out a token, i.e. the user is signed in with sync switched on.
+    from services.cloud_sync.service import get_service as _cloud_sync
+
+    async def _start_cloud_sync() -> None:
+        try:
+            await _cloud_sync().start()
+        except Exception:  # noqa: BLE001 — optional feature: never blocks start-up
+            logger.exception("cloud sync did not start")
+
+    app.state.cloud_sync_task = asyncio.create_task(_start_cloud_sync())
     if mcp_mounted:
         logger.info("MCP server mounted at /mcp")
     # Phone calls (opt-in): the separate loopback telephony listener resumes
@@ -1247,26 +1326,17 @@ async def lifespan(app: FastAPI):
     if _loop_stall_stop is not None:
         _loop_stall_stop.set()
     # ── Graceful shutdown (SIGTERM from Tauri, Ctrl+C, etc.) ────────────
-    # Retire the run sentinel FIRST, before any bounded wait below (#1895):
-    # once uvicorn has begun graceful shutdown the exit is deliberate by
-    # definition, so the sentinel has already done its job. This is one
-    # os.remove, against a ~50s worst-case tail of bounded waits plus model
-    # unload / free_vram() / gc.collect() below. Measured on macOS: a normal
-    # shutdown takes 5.25s end to end, while the desktop shell allows 2s
-    # (bootstrap.rs terminate_process_tree) before SIGKILL — so the old
-    # placement at the very end was killed every time on any run that had
-    # reached a working state. Doing the deadline-sensitive step first makes
-    # correctness independent of how much of that tail runs, instead of
-    # depending on the shell-side deadline being long enough to cover it.
-    #
+    # Retire the run sentinel BEFORE any teardown work. Once graceful shutdown
+    # starts, the exit is intentional. The desktop shell only allows a short
+    # grace period (~2 s) before SIGKILL, yet a normal teardown takes several
+    # seconds; clearing the sentinel last meant a clean quit that got killed
+    # mid-teardown looked like a crash on the next launch (#1895).
     # Desktop shells that must hard-kill a Windows process tree retire the
     # sentinel through /system/shutdown-intent before termination. This
     # remains the graceful-path fallback for every platform and direct server
     # runs.
-    #
-    # sentinel_cleared feeds the truthful "Shutdown: done."/degraded log at
-    # the end of this function; nothing below re-clears the sentinel, so a
-    # later failure can't mask this result.
+    # The result is only consumed by the final log line below; nothing later
+    # re-checks the sentinel, so a late failure cannot undo this.
     try:
         sentinel_cleared = run_sentinel.clear_sentinel()
     except Exception:
@@ -1325,6 +1395,13 @@ async def lifespan(app: FastAPI):
             logger.debug("RVC training shutdown failed", exc_info=True)
     # Stop MCP first — signal its task to exit its own anyio context (correct
     # task-affinity), then bound the wait so a wedged manager can't hang exit.
+    if getattr(app.state, "cloud_sync_task", None) is not None:
+        from services.cloud_sync.service import get_service as _cloud_sync
+
+        try:
+            await asyncio.wait_for(_cloud_sync().stop(), timeout=5.0)
+        except Exception:  # noqa: BLE001
+            pass
     mcp_stop = getattr(app.state, "mcp_stop", None)
     mcp_task = getattr(app.state, "mcp_task", None)
     if mcp_stop is not None:
@@ -1348,18 +1425,11 @@ async def lifespan(app: FastAPI):
     # (still importing, not yet mid weight-download) finish cleanly before we
     # report done; a load that's genuinely deep into a multi-GB download still
     # times out — _reset_gpu_pool() below abandons it either way.
-    #
-    # 20s, not the original 3s (code-review finding post-merge): a cold
-    # transformers import alone can take longer than 3s on a slow disk or a
-    # first-ever launch, so the original bound left a real residual window —
-    # cancellation detaches the asyncio task, but the underlying OS thread
-    # keeps running past it, and shutdown could still report "done" while
-    # that thread was alive. Python cannot forcibly kill a running thread, so
-    # no finite bound eliminates this outright — 20s just shrinks the window
-    # from "any preload" to "an unusually slow cold-import," which is the
-    # practical ceiling before a longer shutdown itself becomes the
-    # complaint. A thread that's still running past 20s was never going to
-    # finish in a shutdown-appropriate timeframe regardless.
+    # Why 20 s: a cold `transformers` import on a slow disk or a first launch
+    # can take longer than a few seconds. Cancelling the asyncio task leaves the
+    # OS thread running, so a short bound would print "done" while that thread
+    # is still alive. Threads can't be killed, so no finite bound removes this;
+    # 20 s just narrows the window.
     await _cancel_and_await_tasks(
         getattr(app.state, "idle_task", None),
         getattr(app.state, "worker_task", None),
@@ -1412,9 +1482,7 @@ async def lifespan(app: FastAPI):
         await close_http_client()
     except Exception:
         pass
-    # Sentinel was already retired at the TOP of this block (#1895) — report
-    # truthfully using that result rather than clearing (or re-checking) it
-    # again here, so a failure in the steps above can't mask it as "done."
+    # The sentinel was retired at the top of shutdown; report that outcome here.
     if sentinel_cleared:
         logger.info("Shutdown: done.")
     else:
@@ -1512,6 +1580,10 @@ def _safe_validation_input(value):
     """
     if isinstance(value, (bytes, bytearray, memoryview)):
         return f"<{len(bytes(value))} bytes of binary data>"
+    # JSON number overflow (e.g. 1e309) and accepted NaN/Infinity tokens can
+    # reach Pydantic as floats, but cannot be echoed in a JSONResponse.
+    if isinstance(value, float) and not math.isfinite(value):
+        return str(value)
     if isinstance(value, str) and len(value) > _VALIDATION_INPUT_MAX:
         return value[:_VALIDATION_INPUT_MAX] + f"… (+{len(value) - _VALIDATION_INPUT_MAX} chars)"
     return value
@@ -1775,7 +1847,7 @@ class NetworkAccessMiddleware:
         if not pin:
             return await self.app(scope, receive, send)
         client = scope["client"][0] if scope.get("client") else None
-        if is_local_host(client):
+        if is_local_host(client) or is_trusted_host_loopback(request):
             return await self.app(scope, receive, send)
         if _is_public_path(scope["path"]):
             return await self.app(scope, receive, send)
@@ -2262,16 +2334,15 @@ if __name__ == "__main__":
             self.denied_error: "OSError | None" = None
 
         def filter(self, record: logging.LogRecord) -> bool:
-            msg = record.msg
-            if isinstance(msg, OSError) and (
-                msg.errno in (48, 98, 10048)
-                or getattr(msg, "winerror", None) == 10048
-            ):
-                self.bind_error = msg
-            elif isinstance(msg, OSError) and (
-                msg.errno == 13 or getattr(msg, "winerror", None) == 10013
-            ):
-                self.denied_error = msg
+            message = record.msg
+            if not isinstance(message, OSError):
+                return True
+            errno = getattr(message, "errno", None)
+            windows_error = getattr(message, "winerror", None)
+            if errno in (48, 98, 10048) or windows_error == 10048:
+                self.bind_error = message
+            elif errno == 13 or windows_error == 10013:
+                self.denied_error = message
             return True
 
     # #1223: uvicorn does NOT let a bind failure reach the caller — it logs the

@@ -104,9 +104,7 @@
     "dub": "Traduci e doppia audio o video.",
     "stories": "Crea scene con più voci.",
     "audiobook": "Crea audiolibri con capitoli.",
-    "transcribe": "Trasforma le registrazioni in testo.",
-    "collapseFooter": "Comprimi piè di pagina",
-    "expandFooter": "Espandi piè di pagina"
+    "transcribe": "Trasforma le registrazioni in testo."
   },
   "longformPersistence": {
     "storage_unavailable_title": "Impossibile caricare i progetti",
@@ -377,13 +375,13 @@
     "hf_source_app_label": "VoiceStudio (crittografato, consigliato)",
     "hf_source_cli_label": "HuggingFace CLI",
     "hf_source_env_label": "Variabile d’ambiente",
-    "theme_auto": "Automatico di sistema",
+    "theme_auto": "Come il sistema",
     "theme_light": "Chiaro",
     "reduce_motion": "Riduci le animazioni",
     "reduce_motion_desc": "Ferma le animazioni di sfondo e le transizioni. L’impostazione di sistema resta valida da sola; questa si aggiunge.",
-    "perf_torch_compile": "Disabilita torch.compile",
-    "perf_torch_compile_note": "Usa l’esecuzione diretta per evitare errori di memoria di Triton.",
-    "perf_torch_compile_hint": "Usa l’esecuzione diretta per evitare errori di memoria di Triton. <issueLink>#65</issueLink> · <crashLink>#2135</crashLink>",
+    "perf_torch_compile": "Disattiva torch.compile",
+    "perf_torch_compile_note": "Esegue il modello senza kernel compilati quando Triton è instabile.",
+    "perf_torch_compile_hint": "Attiva l’opzione dopo un errore Triton o <code>torch.compile</code>, anche se il backend si chiude mentre crea l’audio. VoiceStudio passerà <code>TORCH_COMPILE_DISABLE=1</code>, privilegiando l’affidabilità rispetto alla velocità compilata. <issueLink>#65</issueLink> riguarda Windows con meno di 16 GB di VRAM; <crashLink>#2135</crashLink> segue i guasti dei grafi CUDA su NVIDIA meno recenti.",
     "llmp_cli_help": "Usa la CLI installata e il suo accesso tramite lo stesso esecutore della riparazione con agente. Lascia Modello vuoto per il valore predefinito. Le risposte possono essere più lente; i costi dipendono dall’account CLI.",
     "llmp_sdk_help": "I provider nativi usano LiteLLM. Per gli altri inserisci provider/model. Bedrock usa una chiave API o un profilo AWS; Vertex usa l’ID account come progetto e le credenziali Google. L’URL di base è facoltativo.",
     "llmp_cli_auth": "Accesso all’account CLI rifiutato. Controlla accesso, abbonamento e modello selezionato."
@@ -451,10 +449,9 @@
     "importFailed": "Impossibile leggere quel file.",
     "addLine": "Aggiungi linea",
     "addChapter": "Aggiungi capitolo",
-    "clearScript": "Svuota copione",
-    "clearScriptHint": "Rimuovi tutte le righe e i capitoli dal copione (il cast resta)",
     "clearConfirm": "Cancellare tutte le {{count}} voci del copione e il testo importato in sospeso? Questa azione non può essere annullata.",
-    "cleared": "Copione svuotato",
+    "clearScriptHint": "Elimina tutto dallo script: ogni riga e ogni capitolo",
+    "cleared": "Script svuotato",
     "chapterN": "Capitolo {{n}}",
     "stems": "Steli",
     "stemsDone": "Gambo/i di carattere {{count}} esportato/i",
@@ -475,11 +472,7 @@
     "pasteAbove": "Incolla il testo sopra",
     "cancel": "Annulla",
     "splitIntoTracks": "Diviso in linee",
-    "splitMode": "Dividi per",
-    "split_sentences": "Frasi",
-    "split_paragraphs": "Paragrafi",
-    "split_chapters": "Capitoli",
-    "splitModeHint": "Ogni riga viene letta come una presa a sé. Per un solo narratore, paragrafi o interi capitoli scorrono meglio delle frasi.",
+    "splitModeHint": "Ogni riga viene letta come una ripresa a sé. Con un solo narratore, Paragrafi o Capitoli scorrono meglio.",
     "emptyText": "Inizia la tua storia aggiungendo linee di dialogo e narrazione. Assegna a ogni personaggio una voce nel cast.",
     "addFirst": "Aggiungi la prima riga",
     "linePlaceholder": "Inserisci un dialogo o una narrazione... usa [pausa 0,5 s] per una pausa silenziosa",
@@ -510,7 +503,12 @@
     "exportFailed": "Esportazione non riuscita: controlla che il backend sia in esecuzione.",
     "global_speed": "Velocità",
     "global_speed_hint": "Velocità di lettura per tutte le linee senza il proprio override di velocità",
-    "deleteProjectConfirm": "Eliminare definitivamente questo progetto?"
+    "deleteProjectConfirm": "Eliminare definitivamente questo progetto?",
+    "clearScript": "Svuota script",
+    "splitMode": "Dividi per",
+    "split_chapters": "Capitoli",
+    "split_paragraphs": "Paragrafi",
+    "split_sentences": "Frasi"
   },
   "common": {
     "stop": "Fermati",
@@ -1760,8 +1758,8 @@
     "backend_shutting_down": "VoiceStudio si sta chiudendo. Riapri l’app e riprova.",
     "crash_broken_env": "È morto mentre caricava le proprie dipendenze Python, quindi non c'entrano né la memoria né la GPU: l'ambiente è incompleto o è rimasto aggiornato a metà. Usa «Pulisci e riprova» in Impostazioni → Log → Backend, che lo ricostruisce da zero e lo ripara sul posto, senza toccare le tue voci o i tuoi progetti. Se continua a fallire, i dettagli del crash indicano il pacchetto che non si importava.",
     "crash_vram_default": "Sulle GPU più piccole la causa più comune è l'esaurimento della VRAM quando il modello ASR viene caricato insieme al modello TTS: scarica prima il modello TTS, oppure scegli un modello ASR più piccolo in Catalogo modelli → Modelli.",
-    "stream_cut_backend_alive": "Lo stream è terminato in anticipo, ma il backend è ancora in esecuzione — quindi non è andato in crash. In una configurazione servita o containerizzata di solito è un reverse proxy o un load balancer che bufferizza la connessione o la interrompe per timeout: disattiva il buffering delle risposte per questa route (nginx: proxy_buffering off; X-Accel-Buffering: no) e aumenta il suo timeout di lettura. Eseguire l'app desktop direttamente, o su localhost senza proxy, lo confermerà.",
-    "stream_cut_backend_alive_local": "Lo stream è terminato in anticipo, ma il backend è ancora in esecuzione — quindi non si è bloccato. L'app ha perso la connessione al backend a metà lavoro; succede quando un passaggio lungo resta in silenzio per minuti, e di solito il backend porta comunque a termine il lavoro. Attendi qualche minuto e riapri il lavoro dalla cronologia, oppure controlla il log del backend (Impostazioni → Registri → Backend) per vedere cosa stava facendo."
+    "stream_cut_backend_alive": "Controlla prima il reverse proxy o il load balancer davanti all'app: disattiva il buffering delle risposte per questa route (proxy_buffering off; X-Accel-Buffering: no) e aumenta il suo timeout di lettura. La connessione è caduta mentre il backend restava attivo, quindi non c'è stato nessun crash; in un'installazione servita o in container la causa abituale è un proxy, e avviare direttamente l'app desktop o usare localhost lo confermerebbe o lo escluderebbe.",
+    "stream_cut_backend_alive_local": "Attendi qualche minuto e riapri il lavoro dalla cronologia; se non c'è, leggi il log del backend in Impostazioni → Log → Backend. La connessione è caduta a metà lavoro dopo un passaggio lungo e silenzioso, ma il backend è ancora in esecuzione e di norma porta a termine il compito, quindi non è stato un crash."
   },
   "keyboard": {
     "title": "Scorciatoie da tastiera",
@@ -2265,7 +2263,12 @@
     "other_ways": "Altri modi per aiutare",
     "star_short": "Stella",
     "star_github": "Stella su GitHub",
-    "join_discord": "Unisciti a Discord"
+    "join_discord": "Unisciti a Discord",
+    "sponsors_tier_strategic": "Strategico",
+    "sponsors_tier_company": "Azienda",
+    "sponsors_tier_development": "Sviluppo",
+    "sponsors_tier_community": "Community",
+    "sponsors_tier_supporter": "Sostenitore"
   },
   "updates": {
     "tab": "Aggiornamenti",
@@ -2356,10 +2359,10 @@
     "hf_token_get": "Non hai un gettone? Ottienine uno gratis →",
     "hf_token_inline_prompt": "Velocizza i download con un token Hugging Face gratuito",
     "hf_token_inline_ph": "Incolla il token hf_… (facoltativo)",
-    "hf_token_get_short": "Ottienine uno gratis →",
     "hf_token_active_using": "Token Hugging Face trovato in {{source}} — {{masked}}",
-    "hf_token_replace": "Sostituisci token…",
-    "hf_token_replace_warning": "Questo sostituisce il token salvato per questa app. Non revoca il vecchio token."
+    "hf_token_replace": "Sostituisci…",
+    "hf_token_replace_warning": "Questo sostituisce il token salvato per questa app. Non revoca il vecchio token.",
+    "hf_token_get_short": "Creane uno gratis →"
   },
   "history": {
     "dub_meta": "{{segments}} segmenti · {{duration}} s",
@@ -2469,7 +2472,7 @@
     "warn_unknown_voice": "Voce sconosciuta «{{name}}» — verrà usata quella predefinita",
     "warn_empty_chapter": "Il capitolo «{{title}}» non contiene testo parlato",
     "warn_unknown_tag": "Tag non riconosciuto {{tag}} — verrà letto ad alta voce",
-    "untitled": "Audiolibro senza titolo",
+    "untitled": "Senza titolo",
     "dismiss": "Ignora",
     "output": "Uscita",
     "title": "Audiolibro",
@@ -2484,14 +2487,14 @@
     "preview_plan": "Piano in anteprima",
     "stop": "Ferma",
     "stopped_note": "Interrotto — i capitoli completati sono in cache; premi di nuovo Crea per riprendere.",
-    "recovery_title": "Audiolibro interrotto",
-    "recovery_progress": "{{done}} capitoli su {{total}} sono nella cache",
-    "recovery_hint": "La ripresa riutilizza i capitoli completati e sintetizza solo ciò che resta.",
-    "resume": "Riprendi",
-    "open_chapter_cache": "Apri cache dei capitoli",
-    "cache_location_hint": "Cache audio dei capitoli: {{cachePath}} · Manifest di ripresa: {{manifestPath}}",
-    "resume_failed": "Impossibile riprendere l'audiolibro: {{message}}",
-    "open_cache_failed": "Impossibile aprire la cache dei capitoli",
+    "recovery_title": "Completa un audiolibro rimasto in sospeso",
+    "recovery_progress": "Capitoli pronti: {{done}} su {{total}}",
+    "recovery_hint": "L’audio già prodotto viene mantenuto; continuando si creano soltanto le parti mancanti.",
+    "resume": "Continua rendering",
+    "open_chapter_cache": "Mostra capitoli salvati",
+    "cache_location_hint": "Cartella audio: {{cachePath}} · registro di recupero: {{manifestPath}}",
+    "resume_failed": "Impossibile continuare questo audiolibro: {{message}}",
+    "open_cache_failed": "Impossibile mostrare la cartella dei capitoli salvati",
     "progress_summary": "Sintesi di {{current}} di {{total}} capitoli",
     "eta": "~{{time}} rimanenti",
     "chapter_n": "Capitolo {{n}}",
@@ -2545,15 +2548,17 @@
     "seed_ph": "Auto",
     "vary_repeats": "Varare le linee ripetute",
     "vary_repeats_help": "Fornisci riprese distinte alle linee identiche invece di riutilizzare una registrazione.",
-    "line_gap": "Pausa tra le righe",
     "joins_help": "La pausa tra le righe va tra righe senza un proprio [pause]; la pausa tra i paragrafi va alle righe vuote. Con il taglio attivo, prima si rimuove il silenzio iniziale e finale di ogni riga, così la pausa impostata è quella che si sente.",
-    "paragraph_gap": "Pausa tra i paragrafi",
-    "trim_edges": "Taglia il silenzio del motore",
-    "trim_edges_help": "Rimuove il silenzio che il motore aggiunge a ogni riga prima dell'unione. Disattiva per mantenere le rese grezze.",
+    "trim_edges_help": "Elimina il silenzio che ogni motore aggiunge prima e dopo una riga, poi unisce. Disattiva per ottenere l’audio grezzo.",
     "emotion_help": "Emozione graduata — applicata solo dal motore IndexTTS2.",
     "emotion_text": "Descrizione dell'emozione",
     "emotion_text_ph": "es. suona stanco e triste",
-    "emotion_alpha": "Forza emotiva"
+    "emotion_alpha": "Forza emotiva",
+    "recovery_load_failed": "Impossibile verificare gli audiolibri non completati.",
+    "recovery_retry": "Riprova",
+    "line_gap": "Intervallo tra le righe",
+    "paragraph_gap": "Intervallo tra i paragrafi",
+    "trim_edges": "Taglia i silenzi del motore"
   },
   "voicePanel": {
     "title": "Voce",
@@ -2749,13 +2754,6 @@
     "progress": "{{done}} / {{total}} segmenti convalidati",
     "cancelled": "Annullato",
     "fitting": "Regolazione dei tempi"
-  },
-  "sponsorSlot": {
-    "book": "Prenota il tuo spazio",
-    "preview": "Anteprima sponsor",
-    "message": "Il tuo marchio, sito e messaggio",
-    "email_app": "Apri l’app email",
-    "copy_email": "Copia email"
   },
   "supportPlans": {
     "remove": "Rimuovi barra sponsor",

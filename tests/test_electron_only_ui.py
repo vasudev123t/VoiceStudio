@@ -19,6 +19,8 @@ def test_tauri_shell_and_legacy_ui_entrypoints_are_removed():
         "scripts/desktop-prod.sh",
         "scripts/desktop-prod.mjs",
         "scripts/desktop-fresh.mjs",
+        "scripts/capture-screenshots.cjs",
+        "scripts/package_for_friend.sh",
     ):
         assert not (ROOT / path).exists(), f"retired Tauri entrypoint remains: {path}"
 

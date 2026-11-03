@@ -26,6 +26,7 @@ const mock = vi.hoisted(() => ({
   open: vi.fn().mockResolvedValue(undefined),
   updateState: vi.fn(),
   backendStatus: vi.fn(),
+  hostSnapshot: vi.fn(),
   navigate: vi.fn(),
 }));
 vi.mock('@/lib/api/client', () => ({ apiJson: mock.api }));
@@ -35,7 +36,7 @@ vi.mock('./bridge', () => ({
       ? {
           files: { openExternal: mock.open },
           updates: { getState: mock.updateState },
-          backend: { getStatus: mock.backendStatus },
+          backend: { getStatus: mock.backendStatus, getHostSnapshot: mock.hostSnapshot },
         }
       : null,
 }));
@@ -52,6 +53,7 @@ beforeEach(() => {
     progress: 0,
   });
   mock.backendStatus.mockResolvedValue(null);
+  mock.hostSnapshot.mockResolvedValue(null);
 });
 afterEach(() => {
   cleanup();
@@ -62,6 +64,13 @@ afterEach(() => {
   clearBreadcrumbs();
   _resetBackendContactForTests();
 });
+async function submitReport(summary = 'Dubbing stops at 40%') {
+  fireEvent.click(screen.getByRole('button', { name: 'reportBug.label' }));
+  fireEvent.change(await screen.findByRole('textbox', { name: 'reportBug.summary_label' }), {
+    target: { value: summary },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'reportBug.submit' }));
+}
 it.each([true, false])(
   'opens a reviewable report with redacted or unavailable context (%s)',
   async (online) => {
@@ -78,7 +87,7 @@ it.each([true, false])(
     );
     render(<ReportBug />);
     expect(mock.api).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'reportBug.label' }));
+    await submitReport();
     await waitFor(() => expect(mock.open).toHaveBeenCalledTimes(1));
     const url = new URL(mock.open.mock.calls[0]![0]);
     expect(url.origin).toBe('https://github.com');
@@ -95,7 +104,7 @@ it('opens browser context before awaiting diagnostics and reports blocked popups
   mock.native = false;
   const open = vi.spyOn(window, 'open').mockReturnValue(null);
   render(<ReportBug />);
-  fireEvent.click(screen.getByRole('button', { name: 'reportBug.label' }));
+  await submitReport();
   await screen.findByRole('alert');
   expect(open).toHaveBeenCalledWith('about:blank', '_blank');
   expect(mock.api).not.toHaveBeenCalled();
@@ -107,7 +116,7 @@ it('navigates the reserved browser window after diagnostics resolve', async () =
   vi.spyOn(window, 'open').mockReturnValue(popup as unknown as Window);
   mock.api.mockResolvedValue({});
   render(<ReportBug />);
-  fireEvent.click(screen.getByRole('button', { name: 'reportBug.label' }));
+  await submitReport();
   expect(popup.opener).toBeNull();
   await waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
   expect(replace.mock.calls[0]![0]).toContain('https://github.com/');
@@ -117,7 +126,7 @@ it('preserves the scrubbed current crash and original chained cause when the API
   mock.crashed = true;
   mock.api.mockRejectedValue(new Error('offline'));
   render(<ReportBug />);
-  fireEvent.click(screen.getByRole('button', { name: 'reportBug.label' }));
+  await submitReport();
   await waitFor(() => expect(mock.open).toHaveBeenCalledTimes(1));
   const body = new URL(mock.open.mock.calls[0]![0]).searchParams.get('body')!;
   expect(body).toContain('## Current backend failure');
@@ -146,7 +155,7 @@ it('includes the durable native crash journal when the backend API is unavailabl
     },
   });
   render(<ReportBug />);
-  fireEvent.click(screen.getByRole('button', { name: 'reportBug.label' }));
+  await submitReport();
   await waitFor(() => expect(mock.open).toHaveBeenCalledTimes(1));
   const body = new URL(mock.open.mock.calls[0]![0]).searchParams.get('body')!;
   expect(body).toContain('## Last native backend exit');
@@ -155,6 +164,46 @@ it('includes the durable native crash journal when the backend API is unavailabl
   expect(body).toContain('durable native failure');
 });
 
+it('names the exact build, not just the version', async () => {
+  mock.api.mockRejectedValue(new Error('offline'));
+  render(<ReportBug />);
+  await submitReport();
+  await waitFor(() => expect(mock.open).toHaveBeenCalledTimes(1));
+  const body = new URL(mock.open.mock.calls[0]![0]).searchParams.get('body')!;
+  expect(body).toMatch(/\*\*App:\*\* VoiceStudio \S+ \(build [0-9a-f]{9}\)/);
+});
+it('describes the machine and runtime from the app when the backend never started (#3156)', async () => {
+  mock.api.mockRejectedValue(new Error('offline'));
+  mock.hostSnapshot.mockResolvedValue({
+    os: 'win32 Windows 11 Pro (10.0.26100)',
+    arch: 'x64',
+    ramGb: 32,
+    diskFreeGb: 12.5,
+    runtime: { pythonPresent: false, uvPresent: true, pathFlags: ['onedrive', 'non-ascii'] },
+  });
+  render(<ReportBug />);
+  await submitReport();
+  await waitFor(() => expect(mock.open).toHaveBeenCalledTimes(1));
+  const body = new URL(mock.open.mock.calls[0]![0]).searchParams.get('body')!;
+  expect(body).toContain('os (app): win32 Windows 11 Pro (10.0.26100)');
+  expect(body).toContain('runtime python: MISSING');
+  expect(body).toContain('runtime path flags: onedrive, non-ascii');
+});
+it('does not repeat machine facts the backend already reported', async () => {
+  mock.api.mockImplementation((path: string) =>
+    Promise.resolve(path === '/system/info' ? { platform: 'linux' } : {}),
+  );
+  mock.hostSnapshot.mockResolvedValue({
+    os: 'linux 6.1',
+    runtime: { pythonPresent: true, uvPresent: true, pathFlags: [] },
+  });
+  render(<ReportBug />);
+  await submitReport();
+  await waitFor(() => expect(mock.open).toHaveBeenCalledTimes(1));
+  const body = new URL(mock.open.mock.calls[0]![0]).searchParams.get('body')!;
+  expect(body).not.toContain('os (app)');
+  expect(body).toContain('runtime python: present');
+});
 it('labels the previous unclean shutdown separately and does not acknowledge it', async () => {
   mock.api.mockImplementation((path: string) =>
     Promise.resolve(
@@ -173,7 +222,7 @@ it('labels the previous unclean shutdown separately and does not acknowledge it'
     ),
   );
   render(<ReportBug />);
-  fireEvent.click(screen.getByRole('button', { name: 'reportBug.label' }));
+  await submitReport();
   await waitFor(() => expect(mock.open).toHaveBeenCalledTimes(1));
   const body = new URL(mock.open.mock.calls[0]![0]).searchParams.get('body')!;
   expect(body).toContain('## Previous unclean shutdown');
@@ -194,7 +243,7 @@ it('offers the known update before gathering diagnostics and opens Updates', asy
   });
   render(<ReportBug />);
 
-  fireEvent.click(screen.getByRole('button', { name: 'reportBug.label' }));
+  await submitReport();
   await screen.findByText('reportBug.staleTitle');
   expect(mock.api).not.toHaveBeenCalled();
   expect(mock.open).not.toHaveBeenCalled();
@@ -215,7 +264,7 @@ it('files anyway after the stale-build warning and records that context', async 
   mock.api.mockResolvedValue({});
   render(<ReportBug />);
 
-  fireEvent.click(screen.getByRole('button', { name: 'reportBug.label' }));
+  await submitReport();
   await screen.findByText('reportBug.staleTitle');
   fireEvent.click(screen.getByRole('button', { name: 'reportBug.staleFileAnyway' }));
 
@@ -230,7 +279,7 @@ it('still opens a report when the updater state is unavailable', async () => {
   mock.api.mockResolvedValue({});
   render(<ReportBug />);
 
-  fireEvent.click(screen.getByRole('button', { name: 'reportBug.label' }));
+  await submitReport();
 
   await waitFor(() => expect(mock.open).toHaveBeenCalledTimes(1));
   expect(screen.queryByText('reportBug.staleTitle')).not.toBeInTheDocument();
@@ -257,7 +306,7 @@ it('includes privacy-safe route history and pre-report backend reachability', as
     />,
   );
 
-  fireEvent.click(screen.getByRole('button', { name: 'reportBug.label' }));
+  await submitReport();
 
   await waitFor(() => expect(mock.open).toHaveBeenCalledTimes(1));
   const body = new URL(mock.open.mock.calls[0]![0]).searchParams.get('body')!;
@@ -283,7 +332,7 @@ it('attaches the scrubbed current backend log when a live operation fails', asyn
   });
   render(<ReportBug error={new Error('generation failed')} />);
 
-  fireEvent.click(screen.getByRole('button', { name: 'reportBug.label' }));
+  await submitReport();
 
   await waitFor(() => expect(mock.open).toHaveBeenCalledTimes(1));
   const body = new URL(mock.open.mock.calls[0]![0]).searchParams.get('body')!;
@@ -303,7 +352,7 @@ it('includes arch, disk free and active ASR engine when the backend answers (#24
   });
   render(<ReportBug />);
 
-  fireEvent.click(screen.getByRole('button', { name: 'reportBug.label' }));
+  await submitReport();
 
   await waitFor(() => expect(mock.open).toHaveBeenCalledTimes(1));
   const body = new URL(mock.open.mock.calls[0]![0]).searchParams.get('body')!;
@@ -330,7 +379,7 @@ it.each([
     lastCrash: { timestamp: 1000000, version: '0.5.4', exitCode, signal, uptimeMs: 1000, logTail: [] },
   });
   render(<ReportBug />);
-  fireEvent.click(screen.getByRole('button', { name: 'reportBug.label' }));
+  await submitReport();
   await waitFor(() => expect(mock.open).toHaveBeenCalledTimes(1));
   const body = new URL(mock.open.mock.calls[0]![0]).searchParams.get('body')!;
   expect(body.split('reportBug.native_fault_cause').length - 1).toBe(nativeFault ? 2 : 0);
@@ -346,10 +395,53 @@ it('does not label an unreachable backend using a previous run’s signal', asyn
     lastCrash: { timestamp: 1000000, version: '0.5.4', exitCode: null, signal: 'SIGSEGV', uptimeMs: 1000, logTail: [] },
   });
   render(<ReportBug />);
-  fireEvent.click(screen.getByRole('button', { name: 'reportBug.label' }));
+  await submitReport();
   await waitFor(() => expect(mock.open).toHaveBeenCalledTimes(1));
   const body = new URL(mock.open.mock.calls[0]![0]).searchParams.get('body')!;
   const [current, recorded] = body.split('## Last native backend exit');
   expect(current).not.toContain('reportBug.native_fault_cause');
   expect(recorded).toContain('reportBug.native_fault_cause');
+});
+
+it('requires a one-line description before opening anything', async () => {
+  render(<ReportBug />);
+  fireEvent.click(screen.getByRole('button', { name: 'reportBug.label' }));
+  await screen.findByRole('textbox', { name: 'reportBug.summary_label' });
+  fireEvent.click(screen.getByRole('button', { name: 'reportBug.submit' }));
+  expect(await screen.findByText('reportBug.summary_required')).toBeInTheDocument();
+  expect(mock.open).not.toHaveBeenCalled();
+  expect(mock.api).not.toHaveBeenCalled();
+});
+
+it('lists what will be sent and puts the description in the issue title and body', async () => {
+  mock.api.mockResolvedValue({});
+  render(<ReportBug />);
+  fireEvent.click(screen.getByRole('button', { name: 'reportBug.label' }));
+  expect(await screen.findByText('reportBug.sent_title')).toBeInTheDocument();
+  expect(screen.getByText('reportBug.sent_logs')).toBeInTheDocument();
+  fireEvent.change(screen.getByRole('textbox', { name: 'reportBug.summary_label' }), {
+    target: { value: 'Dubbing stops at 40% in /home/private-user/x' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'reportBug.submit' }));
+  await waitFor(() => expect(mock.open).toHaveBeenCalledTimes(1));
+  const url = new URL(mock.open.mock.calls[0]![0]);
+  expect(url.searchParams.get('title')).toMatch(/^\[Bug\] Dubbing stops at 40%/);
+  expect(url.searchParams.get('title')).not.toContain('private-user');
+  expect(url.searchParams.get('body')).toContain('**Summary:** Dubbing stops at 40%');
+});
+
+it('never splits an emoji when truncating the description for the title', async () => {
+  mock.api.mockResolvedValue({});
+  render(<ReportBug />);
+  await submitReport('a'.repeat(99) + '😀 tail');
+  await waitFor(() => expect(mock.open).toHaveBeenCalledTimes(1));
+  const title = new URL(mock.open.mock.calls[0]![0]).searchParams.get('title')!;
+  expect(title).toBe('[Bug] ' + 'a'.repeat(99) + '😀');
+});
+
+it('survives a lone surrogate in the description', async () => {
+  mock.api.mockResolvedValue({});
+  render(<ReportBug />);
+  await submitReport('broken \ud83d text');
+  await waitFor(() => expect(mock.open).toHaveBeenCalledTimes(1));
 });

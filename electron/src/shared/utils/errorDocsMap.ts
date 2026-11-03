@@ -20,6 +20,9 @@ export const ERROR_DOCS: Record<string, string> = {
   // #2462 — the host ran out of system RAM (the only memory class a
   // CPU-only machine can produce).
   HOST_MEMORY_EXHAUSTED: `${BASE}/docs/install/troubleshooting.md#generation-failure-diagnosis`,
+  // The volume holding data / model cache / temp is full (ENOSPC, EDQUOT,
+  // WinError 112/39).
+  DISK_FULL: `${BASE}/docs/install/troubleshooting.md#generation-failure-diagnosis`,
   WINDOWS_APP_CONTROL_BLOCKED: `${BASE}/docs/install/troubleshooting.md#generation-failure-diagnosis`,
   AUDIO_IO_FAILED: `${BASE}/docs/install/troubleshooting.md#generation-failure-diagnosis`,
   INVALID_MEDIA_FILE: `${BASE}/docs/electron-dubbing.md#unreadable-source-file`,
@@ -48,6 +51,7 @@ export const TRANSLATION_ENGINES_DOCS = `${BASE}/docs/dubbing/translation-engine
 export const ERROR_CLASS_KEYS = [
   'GPU_ARCH_UNSUPPORTED',
   'HOST_MEMORY_EXHAUSTED',
+  'DISK_FULL',
   'WINDOWS_APP_CONTROL_BLOCKED',
   'AUDIO_IO_FAILED',
   'INVALID_MEDIA_FILE',
@@ -73,6 +77,15 @@ export function classifyError(error: unknown): ErrorClass | null {
     (error as { message?: string } | null | undefined)?.message ?? String(error ?? '');
   const lower = message.toLowerCase();
   if (/media file is damaged or incomplete/.test(lower)) return 'INVALID_MEDIA_FILE';
+  // Same signatures as backend/core/failure.py `is_disk_full_error`.
+  if (
+    /no space left|disk quota exceeded|disc quota exceeded|not enough space on the disk/.test(
+      lower,
+    ) ||
+    /\berrno 28\b|\bwinerror (?:112|39)\b/.test(lower)
+  ) {
+    return 'DISK_FULL';
+  }
   if (/pkg_resources/.test(lower)) return 'PKG_RESOURCES_MISSING';
   if (
     /pocket(?:tts|[-_ ]tts)|kyutai/.test(lower) &&

@@ -14,16 +14,22 @@ final class ScreenshotTour: XCTestCase {
         XCTAssertTrue(app.buttons["consent.yes"].exists)
         XCTAssertFalse(app.buttons["consent.dismiss"].exists)
         shot(app, "01-consent")
-        app.buttons["consent.no"].tap()
+        app.declineConsent()
 
+        XCTAssertTrue(app.navigationBars["Home"].waitForExistence(timeout: 5))
+        shot(app, "02-home")
+        app.tabBars.buttons["Settings"].tap()
+        app.buttons["settings.connect"].tap()
+        app.buttons["Enter address"].tap()
         let address = app.textFields["connect.url"]
         XCTAssertTrue(address.waitForExistence(timeout: 5))
-        shot(app, "02-connect")
+        shot(app, "03-connect")
         address.tap(); address.typeText("http://127.0.0.1:3900")
-        shot(app, "03-connect-keyboard")
+        shot(app, "03a-connect-keyboard")
         if app.buttons["keyboard.done"].waitForExistence(timeout: 3) { app.buttons["keyboard.done"].tap() }
         app.swipeUp()
         app.buttons["connect.submit"].tap()
+        app.openSpeak()
 
         let editor = app.textViews["speak.text"]
         XCTAssertTrue(editor.waitForExistence(timeout: 10))

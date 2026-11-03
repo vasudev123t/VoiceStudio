@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import datetime
 import hashlib
 import json
 import logging
@@ -59,6 +60,8 @@ _SOURCE_RE = re.compile(
 )  # owner/repo only
 _ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_MAX_CREDIT_CHARS = 120
 
 # A gallery open may touch this loader several times (grid, preview, use). Keep
 # a successful response for six hours, then revalidate it once. On a network
@@ -232,6 +235,18 @@ def validate_item(raw: dict) -> Optional[dict]:
         facets.setdefault("whisper", False)
         facets.setdefault("lang", it["language"])
     it["facets"] = facets
+    # Credit fields are rendered and string-matched by every client; a remote
+    # number or object here must not reach them as anything but absent.
+    for key in ("author", "license"):
+        value = it.pop(key, None)
+        if isinstance(value, str) and value.strip():
+            it[key] = value.strip()[:_MAX_CREDIT_CHARS]
+    # ``added_at`` drives the gallery's "new" badge. It is remote text, so it
+    # survives only as a real ISO date; anything else is dropped, not guessed.
+    added_at = it.pop("added_at", None)
+    if isinstance(added_at, str) and _DATE_RE.fullmatch(added_at):
+        with contextlib.suppress(ValueError):
+            it["added_at"] = datetime.date.fromisoformat(added_at).isoformat()
     it.setdefault("icon", archetypes._USE_ICON.get(it["use_case"], "Sparkles"))
     it["is_community"] = it.get("source") != "starter"
     it["preview_url"] = f"/community/items/{it['id']}/preview"
@@ -371,6 +386,32 @@ def _fetch_manifest(
         return None
 
 
+def _pack_index(packs: list) -> dict[str, dict]:
+    """Packs the gallery can offer as filters, keyed by pack id.
+
+    Manifest packs are remote and unvalidated: only a string id and name
+    survive, membership is ``(source repo, item id)`` so a pack can only claim
+    items from its own repo, and a pack id two sources share stays one choice.
+    """
+    out: dict[str, dict] = {}
+    for p in packs:
+        pid, name = p.get("id"), p.get("name")
+        if not (isinstance(pid, str) and _ITEM_ID_RE.fullmatch(pid)):
+            continue
+        if not (isinstance(name, str) and name.strip()):
+            continue
+        entry = out.setdefault(pid, {"id": pid, "name": name.strip()[:80], "members": set()})
+        refs = p.get("item_ids")
+        if isinstance(refs, list):
+            entry["members"].update(
+                (p.get("_source_repo"), ref) for ref in refs if isinstance(ref, str)
+            )
+        description = p.get("description")
+        if isinstance(description, str) and description.strip():
+            entry.setdefault("description", description.strip()[:300])
+    return out
+
+
 def _load(refresh: bool) -> tuple[list[str], list, list, bool]:
     srcs = configured_sources()
     manifests = [(s, _fetch_manifest(s, refresh)) for s in srcs]
@@ -399,14 +440,30 @@ def community_items(
     item_type: Optional[str] = Query(None, alias="type"),
     lang: Optional[str] = None,
     q: Optional[str] = None,
+    pack: Optional[str] = None,
     limit: int = Query(60, ge=1, le=500),
     offset: int = Query(0, ge=0),
     refresh: bool = Query(False),
 ):
-    _, items, _, _ = _load(refresh)
+    _, items, raw_packs, _ = _load(refresh)
+    loaded = {(it.get("_source_repo"), it["id"]) for it in items}
+    packs = _pack_index(raw_packs)
+    for entry in packs.values():
+        entry["members"] &= loaded
+    # Facets describe the whole catalogue, not the filtered page, so the
+    # filter controls never lose their own options.
+    pack_options = [
+        {key: value for key, value in entry.items() if key != "members"}
+        | {"count": len(entry["members"])}
+        for entry in packs.values() if entry["members"]
+    ]
+    languages = sorted({it["language"] for it in items if it.get("language")})
+    members = packs[pack]["members"] if pack in packs else set()
 
     def keep(it: dict) -> bool:
         f = it.get("facets", {})
+        if pack and (it.get("_source_repo"), it["id"]) not in members:
+            return False
         if use_case and it.get("use_case") != use_case:
             return False
         if gender and f.get("gender") != gender:
@@ -420,7 +477,11 @@ def community_items(
         return True
 
     items = [it for it in items if keep(it)]
-    return {"total": len(items), "limit": limit, "offset": offset, "items": items[offset:offset + limit]}
+    return {
+        "total": len(items), "limit": limit, "offset": offset,
+        "items": items[offset:offset + limit],
+        "packs": pack_options, "languages": languages,
+    }
 
 
 @router.get("/community/submit-url")

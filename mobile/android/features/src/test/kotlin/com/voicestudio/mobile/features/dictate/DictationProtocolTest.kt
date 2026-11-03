@@ -23,8 +23,9 @@ class DictationProtocolTest {
         val scope=CoroutineScope(SupervisorJob()+Dispatchers.Default)
         val errors=java.util.concurrent.CopyOnWriteArrayList<Throwable>()
         val captureCycles=java.util.concurrent.atomic.AtomicInteger()
+        val saved=java.util.concurrent.CopyOnWriteArrayList<String>()
         val controller=DictationController(VoiceStudioApi(PairingAddress.parse(server.url("/").toString())),scope,{errors.add(it)},
-            DictationAudioSource {keepRecording,_ -> while(keepRecording()) {captureCycles.incrementAndGet();delay(5)}})
+            DictationAudioSource {keepRecording,_ -> while(keepRecording()) {captureCycles.incrementAndGet();delay(5)}},completed={saved.add(it)})
         try {
             controller.start()
             val socket=withTimeout(2000) {opened.await()}
@@ -45,6 +46,7 @@ class DictationProtocolTest {
             socket.send("""{"type":"final","text":"First phrase. Second phrase.","final_kind":"summary","refined_text":"First phrase; second phrase."}""")
             awaitCondition {!controller.active.value}
             assertEquals("First phrase; second phrase.",controller.text.value)
+            controller.close();assertEquals(listOf("First phrase; second phrase."),saved)
             assertTrue(errors.toString(),errors.isEmpty())
         } finally {controller.close();scope.cancel();server.shutdown()}
     }

@@ -79,6 +79,7 @@ _ACTIONABLE_LOG_MARKERS = (
     "critical",
     "fatal error",
     "out of memory",
+    "out_of_device_memory",  # Intel XPU driver OOM (UR_RESULT_ERROR_...)
     "memoryerror",
     "segmentation fault",
     "access violation",
@@ -376,9 +377,7 @@ def detect_unclean_shutdown(now: float | None = None) -> Optional[dict]:
                 # volume). Its sentinel is not evidence of anything — leave
                 # it alone and don't write ours over it.
                 logger.info(
-                    "run_sentinel.json belongs to a live process (pid %s) — "
-                    "another instance shares this data dir; skipping crash "
-                    "detection and sentinel ownership for this run.",
+                    "run_sentinel.json belongs to a live process (pid %s) — another instance shares this data dir; skipping crash detection and sentinel ownership for this run.",
                     pid,
                 )
                 _state["foreign_live"] = True

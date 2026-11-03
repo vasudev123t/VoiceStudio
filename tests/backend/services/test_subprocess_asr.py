@@ -133,7 +133,8 @@ def test_isolated_backend_listed_in_settings_with_explanatory_hint():
         assert entry["reason"]  # unavailable must always say why
     # Wraps the same CTranslate2 engine as faster-whisper → same device support
     # (the registry default ("cpu",) would dishonestly hide CUDA routing).
-    assert entry["gpu_compat"] == ["cuda", "cpu"]
+    # Lists and tuples serialise to the same JSON array; compare the contents.
+    assert list(entry["gpu_compat"]) == ["cuda", "cpu"]
 
 
 def test_get_active_asr_backend_caches_isolated_singleton(monkeypatch):
@@ -182,7 +183,8 @@ def test_sidecar_accepts_max_profile_decode_width(monkeypatch):
     assert calls == [
         (
             "/max.wav",
-            {"word_timestamps": False, "beam_size": 8, "best_of": 8},
+            {"word_timestamps": False, "condition_on_previous_text": False,
+             "beam_size": 8, "best_of": 8},
         )
     ]
     assert result["text"] == "heard"

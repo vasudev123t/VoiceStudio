@@ -84,7 +84,51 @@ def test_500_body_carries_exception_type_and_topic(client, monkeypatch):
     assert "pytorch_model_bin" not in str(body)
 
 
-def test_missing_stt_400_is_structured_for_localization(client, monkeypatch):
+@pytest.mark.parametrize(
+    "message, topic",
+    [
+        (
+            "Automatic reference transcription needs an installed speech-to-text model.",
+            "REFERENCE_STT_MISSING",
+        ),
+        (
+            "No conditionals available. Either provide audio_prompt/audio_prompt_sr "
+            "for voice cloning, or ensure conds.safetensors is in the model directory.",
+            "CLONE_REFERENCE_MISSING",
+        ),
+    ],
+)
+def test_classified_request_detail_names_the_class_with_owned_text(message, topic):
+    from core.public_errors import classified_request_detail
+
+    detail = classified_request_detail(message)
+    assert detail is not None and detail["docs_topic"] == topic
+    assert detail["message"] == detail["hint"] and message not in str(detail)
+
+
+def test_unclassified_validation_text_passes_through():
+    from core.public_errors import classified_request_detail
+
+    assert classified_request_detail("Text is required.") is None
+
+
+@pytest.mark.parametrize(
+    "message, topic",
+    [
+        (
+            "Automatic reference transcription needs an installed speech-to-text model.",
+            "REFERENCE_STT_MISSING",
+        ),
+        # Any classified class, not only the one first reported: the client
+        # localizes and offers the fix from docs_topic alone.
+        (
+            "No conditionals available. Either provide audio_prompt/audio_prompt_sr "
+            "for voice cloning, or ensure conds.safetensors is in the model directory.",
+            "CLONE_REFERENCE_MISSING",
+        ),
+    ],
+)
+def test_classified_400_is_structured_for_localization(client, monkeypatch, message, topic):
     import api.routers.generation as gen
 
     class _Model:
@@ -93,18 +137,23 @@ def test_missing_stt_400_is_structured_for_localization(client, monkeypatch):
     async def fake_model():
         return _Model()
 
+    reached = []
+
     def reject(*_a, **_k):
-        raise ValueError(
-            "Automatic reference transcription needs an installed speech-to-text model."
-        )
+        reached.append(True)
+        raise ValueError(message)
 
     monkeypatch.setattr(gen, "get_model", fake_model)
     monkeypatch.setattr(gen, "_run_inference", reject)
     r = client.post("/generate", data={"text": "hello", "engine": "omnivoice"})
-    if r.status_code == 400 and isinstance(r.json().get("detail"), dict):
-        assert r.json()["detail"]["docs_topic"] == "REFERENCE_STT_MISSING"
-    else:  # the route short-circuited before inference on this host
+    if not reached:  # the route short-circuited before inference on this host
         pytest.skip(f"route answered {r.status_code} before reaching inference")
+    # Inference ran and failed: a plain-text 400 here is a regression.
+    assert r.status_code == 400, r.text
+    detail = r.json().get("detail")
+    assert isinstance(detail, dict), detail
+    assert detail["docs_topic"] == topic
+    assert detail["hint"] and detail["message"]
 
 
 def test_prepare_reference_passage_ranks_once_and_cleans_up(tmp_path, monkeypatch):

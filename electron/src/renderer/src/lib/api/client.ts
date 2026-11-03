@@ -46,6 +46,11 @@ export function absoluteApiBase(): string {
 }
 
 const BACKEND_MARKER = "x-omnivoice-backend";
+// nginx's 502/503/504 and Cloudflare's 520-527/530: a proxy answering for a slow
+// or unreachable backend.
+const PROXY_GATEWAY_STATUSES = new Set([
+  502, 503, 504, 520, 521, 522, 523, 524, 525, 526, 527, 530,
+]);
 
 export class ApiError extends Error {
   readonly status: number;
@@ -108,6 +113,13 @@ function detailToString(detail: unknown): string {
     detail.code === "dub_background_unavailable"
   )
     return tr("dubIntegrity.backgroundUnavailable");
+  if (
+    detail &&
+    typeof detail === "object" &&
+    "code" in detail &&
+    detail.code === "source_language_required"
+  )
+    return tr("workflowRun.invalid_language");
   if (typeof detail === "string") return detail;
   if (detail == null) return "";
   if (
@@ -143,14 +155,14 @@ export async function errorFromResponse(res: Response): Promise<ApiError> {
       // Plain-text body.
     }
   }
-  // A 502/503/504 that is not JSON did not come from VoiceStudio: a reverse
-  // proxy (nginx, Caddy, a tunnel) gave up waiting and answered with its own
-  // HTML page (#2781). Echoing that page told the user nothing about the real
+  // A gateway status that is not JSON did not come from VoiceStudio: a reverse
+  // proxy (nginx, Caddy, a tunnel, Cloudflare) gave up waiting and answered with
+  // its own HTML page (#2781, #3219). Echoing that page told the user nothing about the real
   // situation, which is that the backend may well still be rendering.
   if (
     !payload &&
     text.trim() &&
-    [502, 503, 504].includes(res.status) &&
+    PROXY_GATEWAY_STATUSES.has(res.status) &&
     !res.headers?.get?.(BACKEND_MARKER)
   ) {
     return new ApiError(

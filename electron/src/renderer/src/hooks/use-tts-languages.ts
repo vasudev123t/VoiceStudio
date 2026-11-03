@@ -6,6 +6,8 @@ export function useTtsLanguages(_operation = 'clone') {
   const names = engines.isError ? null : engines.activeTts?.supported_language_names;
   return {
     names,
+    /** Regional accents the active model renders itself (#3143). */
+    dialects: engines.isError ? null : (engines.activeTts?.rendered_dialects ?? null),
     modelLabel:
       engines.data?.tts?.active_model?.split('/').pop() ||
       engines.activeTts?.display_name?.split(' (')[0],

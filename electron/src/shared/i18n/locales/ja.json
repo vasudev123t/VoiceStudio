@@ -104,9 +104,7 @@
     "dub": "音声や動画を翻訳・吹き替え。",
     "stories": "複数の声でシーンを作成。",
     "audiobook": "章立てのオーディオブックを作成。",
-    "transcribe": "録音を文字に起こす。",
-    "collapseFooter": "フッターを折りたたむ",
-    "expandFooter": "フッターを展開"
+    "transcribe": "録音を文字に起こす。"
   },
   "longformPersistence": {
     "storage_unavailable_title": "プロジェクトを読み込めませんでした",
@@ -377,13 +375,13 @@
     "hf_source_app_label": "VoiceStudio（暗号化済み、推奨）",
     "hf_source_cli_label": "HuggingFace CLI",
     "hf_source_env_label": "環境変数",
-    "theme_auto": "システム自動",
+    "theme_auto": "システムに合わせる",
     "theme_light": "ライト",
     "reduce_motion": "視差効果を減らす",
     "reduce_motion_desc": "背景アニメーションとトランジションを停止します。システム設定は単独で有効なままで、これはそれに加わります。",
     "perf_torch_compile": "torch.compile を無効にする",
-    "perf_torch_compile_note": "直接実行を使用して Triton のメモリエラーを回避します。",
-    "perf_torch_compile_hint": "直接実行を使用して Triton のメモリエラーを回避します。 <issueLink>#65</issueLink> · <crashLink>#2135</crashLink>",
+    "perf_torch_compile_note": "Triton が不安定な場合、コンパイル済みカーネルを使わず実行します。",
+    "perf_torch_compile_hint": "Triton または <code>torch.compile</code> が失敗したときや、音声作成中にバックエンドが終了したときにオンにします。VoiceStudio は <code>TORCH_COMPILE_DISABLE=1</code> を渡し、コンパイル速度より安定性を優先します。VRAM 16 GB 未満の Windows は <issueLink>#65</issueLink>、旧型 NVIDIA の CUDA グラフ問題は <crashLink>#2135</crashLink> を確認してください。",
     "llmp_cli_help": "インストール済みCLIとそのログインを、エージェント修復と同じ実行機能で使用します。モデルを空欄にするとCLIの既定値を使います。応答が遅くなる場合があり、料金はCLIアカウントに従います。",
     "llmp_sdk_help": "ネイティブプロバイダーにはLiteLLMを使います。その他はprovider/modelを入力してください。BedrockはAPIキーまたはAWSプロファイル、VertexはアカウントIDをプロジェクトとしてGoogle認証情報を使用します。ベースURLは任意です。",
     "llmp_cli_auth": "CLIアカウントのアクセスが拒否されました。ログイン、契約、選択したモデルを確認してください。"
@@ -451,10 +449,10 @@
     "importFailed": "そのファイルを読み取れませんでした。",
     "addLine": "行を追加",
     "addChapter": "章を追加",
-    "clearScript": "台本をクリア",
-    "clearScriptHint": "台本からすべての行と章を削除します（キャストは残ります）",
     "clearConfirm": "台本の全{{count}}項目と未処理のインポート済みテキストを削除しますか？この操作は取り消せません。",
-    "cleared": "台本をクリアしました",
+    "clearScript": "台本を空にする",
+    "clearScriptHint": "スクリプトの中身をすべて削除します (全行と全章)",
+    "cleared": "台本を空にしました",
     "chapterN": "第 {{n}} 章",
     "stems": "茎",
     "stemsDone": "エクスポートされた {{count}} 文字ステム",
@@ -475,11 +473,8 @@
     "pasteAbove": "上にテキストを貼り付けます",
     "cancel": "キャンセル",
     "splitIntoTracks": "行に分割",
-    "splitMode": "分割単位",
-    "split_sentences": "文",
-    "split_paragraphs": "段落",
-    "split_chapters": "章",
-    "splitModeHint": "各行は独立したテイクとして読み上げられます。語り手が一人なら、文より段落や章全体のほうが自然につながります。",
+    "splitMode": "分割の単位",
+    "splitModeHint": "各行は個別のテイクとして読み上げられます。語り手が一人なら、段落や章のほうが自然につながります。",
     "emptyText": "会話やナレーションを追加してストーリーを開始します。各キャラクターにキャストの声を割り当てます。",
     "addFirst": "最初の行を追加",
     "linePlaceholder": "ダイアログまたはナレーションを入力します...無音の休憩には [一時停止 0.5 秒] を使用してください",
@@ -510,7 +505,10 @@
     "exportFailed": "エクスポートに失敗しました — バックエンドが実行中であることを確認してください。",
     "global_speed": "速度",
     "global_speed_hint": "独自の速度オーバーライドを行わないすべての行の読み取り速度",
-    "deleteProjectConfirm": "このプロジェクトを完全に削除しますか？"
+    "deleteProjectConfirm": "このプロジェクトを完全に削除しますか？",
+    "split_chapters": "章",
+    "split_paragraphs": "段落",
+    "split_sentences": "文"
   },
   "common": {
     "stop": "停止",
@@ -1760,8 +1758,8 @@
     "backend_shutting_down": "VoiceStudio を終了しています。アプリを開き直してからもう一度お試しください。",
     "crash_broken_env": "自身の Python 依存関係を読み込んでいる最中に停止しました。メモリや GPU の問題ではなく、環境が不完全か、更新が中途半端なまま残っています。設定 → ログ → バックエンド の「クリーンアップして再試行」を実行してください。環境をゼロから作り直してその場で修復し、音声やプロジェクトには手を触れません。それでも失敗する場合は、クラッシュ詳細に読み込めなかったパッケージ名が出ています。",
     "crash_vram_default": "小さめの GPU では、TTS モデルを読み込んだまま ASR モデルを読み込む際に VRAM が不足するのがよくある原因です。先に TTS モデルをアンロードするか、モデルカタログ → モデル でより小さい ASR モデルを選んでください。",
-    "stream_cut_backend_alive": "ストリームは途中で終了しましたが、バックエンドはまだ動作しています。つまりクラッシュではありません。サーバー経由やコンテナ環境では、リバースプロキシやロードバランサーが接続をバッファリングまたはタイムアウトさせているのがよくある原因です。このルートのレスポンスバッファリングを無効にし（nginx: proxy_buffering off; X-Accel-Buffering: no）、読み取りタイムアウトを延ばしてください。デスクトップアプリを直接実行するか、プロキシなしの localhost で実行すれば確認できます。",
-    "stream_cut_backend_alive_local": "ストリームは途中で終了しましたが、バックエンドはまだ動作しています。つまりクラッシュではありません。処理の途中でアプリとバックエンドの接続が切れました。時間のかかる工程が数分間無応答になると起こることがあり、多くの場合バックエンドは処理を最後まで続けています。数分待ってから履歴からジョブを開き直すか、バックエンドのログ（設定 → ログ → バックエンド）で直前の処理内容を確認してください。"
+    "stream_cut_backend_alive": "まず、アプリの前段にあるリバースプロキシやロードバランサーを確認してください。このルートの応答バッファリングを無効にし（proxy_buffering off; X-Accel-Buffering: no）、読み取りタイムアウトを延ばします。接続が切れた間もバックエンドは動き続けていたため、クラッシュではありません。サーバー配信やコンテナ構成ではプロキシが原因のことが多く、デスクトップアプリを直接、または localhost で使えば原因かどうか切り分けられます。",
+    "stream_cut_backend_alive_local": "数分待ってから、履歴でジョブを開き直してください。見当たらない場合は 設定 → ログ → バックエンド でバックエンドのログを確認します。長く無反応な処理のあとジョブの途中で接続が切れましたが、バックエンドは動作中で、通常は処理を完了させるため、クラッシュではありません。"
   },
   "keyboard": {
     "title": "キーボードショートカット",
@@ -2265,7 +2263,12 @@
     "other_ways": "その他の支援方法",
     "star_short": "スター",
     "star_github": "GitHub でスターを付ける",
-    "join_discord": "Discordに参加する"
+    "join_discord": "Discordに参加する",
+    "sponsors_tier_strategic": "戦略",
+    "sponsors_tier_company": "企業",
+    "sponsors_tier_development": "開発",
+    "sponsors_tier_community": "コミュニティ",
+    "sponsors_tier_supporter": "サポーター"
   },
   "updates": {
     "tab": "アップデート",
@@ -2356,10 +2359,10 @@
     "hf_token_get": "トークンをお持ちでない場合は、 1 つ無料で入手 →",
     "hf_token_inline_prompt": "無料の Hugging Face トークンでダウンロードを高速化",
     "hf_token_inline_ph": "hf_… トークンを貼り付けます (オプション)",
-    "hf_token_get_short": "1 つ無料で入手 →",
     "hf_token_active_using": "{{source}} に Hugging Face トークンがあります — {{masked}}",
-    "hf_token_replace": "トークンを置き換える…",
-    "hf_token_replace_warning": "このアプリに保存されたトークンを置き換えます。古いトークンは失効しません。"
+    "hf_token_replace": "置き換える…",
+    "hf_token_replace_warning": "このアプリに保存されたトークンを置き換えます。古いトークンは失効しません。",
+    "hf_token_get_short": "無料で取得 →"
   },
   "history": {
     "dub_meta": "{{segments}} セグメント · {{duration}} 秒",
@@ -2469,7 +2472,7 @@
     "warn_unknown_voice": "不明な声 ‘{{name}}’ — デフォルトを使用します",
     "warn_empty_chapter": "章「{{title}}」に読み上げるテキストがありません",
     "warn_unknown_tag": "不明なタグ {{tag}} — そのまま読み上げられます",
-    "untitled": "無題のオーディオブック",
+    "untitled": "無題",
     "dismiss": "閉じる",
     "output": "出力",
     "title": "オーディオブック",
@@ -2484,14 +2487,14 @@
     "preview_plan": "プレビュープラン",
     "stop": "停止",
     "stopped_note": "停止しました — 完了した章はキャッシュ済みです。再度「作成」で再開できます。",
-    "recovery_title": "中断されたオーディオブック",
-    "recovery_progress": "{{total}}章中{{done}}章がキャッシュされています",
-    "recovery_hint": "再開すると完了済みの章を再利用し、残りだけを合成します。",
-    "resume": "再開",
-    "open_chapter_cache": "章のキャッシュを開く",
-    "cache_location_hint": "章の音声キャッシュ: {{cachePath}} · 再開マニフェスト: {{manifestPath}}",
-    "resume_failed": "オーディオブックを再開できませんでした: {{message}}",
-    "open_cache_failed": "章のキャッシュを開けませんでした",
+    "recovery_title": "未完了のオーディオブックを続ける",
+    "recovery_progress": "準備済みの章: {{done}} / {{total}}",
+    "recovery_hint": "作成済みの音声はそのまま残し、続行時は不足分だけを生成します。",
+    "resume": "レンダリングを続行",
+    "open_chapter_cache": "保存済みの章を表示",
+    "cache_location_hint": "保存音声: {{cachePath}} · 復旧記録: {{manifestPath}}",
+    "resume_failed": "このオーディオブックを続行できません: {{message}}",
+    "open_cache_failed": "保存済み章のフォルダーを表示できません",
     "progress_summary": "{{total}} 章中 {{current}} 章を合成中",
     "eta": "残り約 {{time}}",
     "chapter_n": "第 {{n}} 章",
@@ -2545,15 +2548,17 @@
     "seed_ph": "自動",
     "vary_repeats": "繰り返される行を変更",
     "vary_repeats_help": "1つの録音を再利用する代わりに、同一の行に異なるテイクを与えます。",
-    "line_gap": "行間の間",
+    "line_gap": "行間の間隔",
     "joins_help": "行間の間は独自の [pause] を持たない行の間に、段落間の間は空行に入ります。切り詰めがオンのときは、先に各行の冒頭と末尾の無音が除去されるため、設定した間がそのまま聞こえる間になります。",
-    "paragraph_gap": "段落間の間",
-    "trim_edges": "エンジンの無音を切り詰める",
-    "trim_edges_help": "結合前に、エンジンが各行に付加する無音を除去します。生の出力を残すにはオフにします。",
+    "paragraph_gap": "段落間の間隔",
+    "trim_edges": "エンジンの無音をカット",
+    "trim_edges_help": "各エンジンが行の前後に付ける無音を切り取ってから結合します。未加工の出力が必要なときはオフにしてください。",
     "emotion_help": "段階的な感情 — IndexTTS2 エンジンによってのみ適用されます。",
     "emotion_text": "感情の説明",
     "emotion_text_ph": "例 疲れているように聞こえ、悲しい",
-    "emotion_alpha": "感情の強さ"
+    "emotion_alpha": "感情の強さ",
+    "recovery_load_failed": "未完了のオーディオブックを確認できませんでした。",
+    "recovery_retry": "再試行"
   },
   "voicePanel": {
     "title": "声",
@@ -2749,13 +2754,6 @@
     "progress": "{{done}} / {{total}} セグメントを検証済み",
     "cancelled": "キャンセル済み",
     "fitting": "タイミングを調整中"
-  },
-  "sponsorSlot": {
-    "book": "掲載枠を申し込む",
-    "preview": "スポンサーの表示例",
-    "message": "ブランド名・ウェブサイト・メッセージ",
-    "email_app": "メールアプリを開く",
-    "copy_email": "メールアドレスをコピー"
   },
   "supportPlans": {
     "remove": "スポンサー欄を非表示にする",

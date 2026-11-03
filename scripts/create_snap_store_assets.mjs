@@ -48,6 +48,22 @@ function validateScreenshot(path) {
   return dimensions;
 }
 
+// Snapcraft listing banner: 3:1, 720x240 to 4320x1440, at most 2 MB.
+function validateBanner(path) {
+  const dimensions = pngDimensions(path);
+  if (
+    dimensions.width < 720 ||
+    dimensions.width > 4320 ||
+    dimensions.width !== 3 * dimensions.height
+  ) {
+    throw new RangeError(`Snap Store banner must be 3:1, 720x240 to 4320x1440: ${path}`);
+  }
+  if (statSync(path).size > 2 * 1024 * 1024) {
+    throw new RangeError(`Snap Store banner exceeds 2 MiB: ${path}`);
+  }
+  return dimensions;
+}
+
 export function createSnapStoreAssets({
   assetsPath = resolve(root, "store/assets.json"),
   outputDir = resolve(root, "electron/release/snap-store-assets"),
@@ -62,6 +78,20 @@ export function createSnapStoreAssets({
   const iconDimensions = validateIcon(iconSource);
   const iconFile = "icon.png";
   copyFileSync(iconSource, resolve(outputDir, iconFile));
+
+  let banner;
+  if (assets.snapBannerSource) {
+    const bannerSource = resolve(sourceRoot, assets.snapBannerSource);
+    const bannerDimensions = validateBanner(bannerSource);
+    copyFileSync(bannerSource, resolve(outputDir, "banner.png"));
+    banner = {
+      file: "banner.png",
+      source: assets.snapBannerSource,
+      ...bannerDimensions,
+      bytes: statSync(bannerSource).size,
+      sha256: sha256(bannerSource),
+    };
+  }
 
   const generatedScreenshots = screenshots.map((entry, index) => {
     const source = resolve(sourceRoot, entry.source);
@@ -91,6 +121,7 @@ export function createSnapStoreAssets({
       bytes: statSync(iconSource).size,
       sha256: sha256(iconSource),
     },
+    ...(banner ? { banner } : {}),
     screenshots: generatedScreenshots,
   };
   writeFileSync(resolve(outputDir, "listing-assets.json"), `${JSON.stringify(manifest, null, 2)}\n`);
@@ -105,5 +136,7 @@ function option(name, fallback) {
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const outputDir = resolve(root, option("output-dir", "electron/release/snap-store-assets"));
   const manifest = createSnapStoreAssets({ outputDir });
-  console.log(`Wrote ${manifest.screenshots.length} screenshots and icon to ${outputDir}`);
+  console.log(
+    `Wrote ${manifest.screenshots.length} screenshots, icon${manifest.banner ? " and banner" : ""} to ${outputDir}`,
+  );
 }

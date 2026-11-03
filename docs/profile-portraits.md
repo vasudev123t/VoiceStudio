@@ -18,6 +18,8 @@ Optional JPEG, PNG and WebP uploads are limited to 5 MB and 16 megapixels,
 cropped to 256 × 256, and re-encoded without source metadata. Portraits live next
 to profile audio as `<id>.portrait.jpg`; deleting a profile removes its portrait.
 The reference pane and saved-profile editor allow replacing a portrait through either upload or the same explicit five-result image search used while creating a profile.
+While a replacement is saving, both upload and existing search-result buttons
+are disabled; the results remain available when the save finishes.
 
 After a new clone profile is saved, Electron releases the temporary upload and
 switches the composer to the returned profile as one atomic state change. The

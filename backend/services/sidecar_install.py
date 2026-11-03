@@ -258,13 +258,40 @@ def _host_family() -> str:
         return "cpu"
 
 
+def _host_machine() -> str:
+    """This host's CPU architecture, lower-cased (``x86_64``, ``aarch64``…)."""
+    import platform
+    return platform.machine().lower()
+
+
+def _local_build_pins(spec: "SidecarSpec", suffix: str) -> list[str]:
+    """The spec's torch pins forced to one local build (``+cu128``/``+cpu``).
+
+    On Linux ARM64 only torch is forced: PyTorch's cu128 and CPU indexes ship
+    aarch64 torchaudio 2.7.0 without a local label, so a forced ``+cu128`` or
+    ``+cpu`` torchaudio pin cannot resolve. An unlabelled pin is still
+    satisfied by the labelled torch under PEP 440, but which index its wheel
+    comes from is not guaranteed: on a version tie uv may take PyPI's build.
+
+    This covers the cu128 and CPU branches only. The ROCm path forces its own
+    local tags in ``_rocm_pin_args`` and is not handled here.
+    """
+    arm_linux = sys.platform == "linux" and _host_machine() in ("aarch64", "arm64")
+    # Matches exact ``torch==`` pins only, the format every spec uses today; a
+    # looser specifier (``torch>=…``) would be left unlabelled on ARM64.
+    return [
+        pin if arm_linux and not pin.startswith("torch==") else f"{pin}{suffix}"
+        for pin in spec.torch_pins
+    ]
+
+
 def _torch_pin_args(spec: "SidecarSpec") -> list[str]:
     from core.torch_indexes import UV_PIP_CPU_ARGS, UV_PIP_CU128_ARGS
 
     if _host_family() == "cuda":
-        return [f"{pin}+cu128" for pin in spec.torch_pins] + list(UV_PIP_CU128_ARGS)
+        return _local_build_pins(spec, "+cu128") + list(UV_PIP_CU128_ARGS)
     if sys.platform in ("win32", "linux"):
-        return [f"{pin}+cpu" for pin in spec.torch_pins] + list(UV_PIP_CPU_ARGS)
+        return _local_build_pins(spec, "+cpu") + list(UV_PIP_CPU_ARGS)
     return list(spec.torch_pins)
 
 
@@ -330,6 +357,10 @@ def venv_torch_hip(venv_dir: Path) -> Optional[bool]:
     is safe on every engine-list refresh."""
     matches = sorted((venv_dir / "lib").glob("python*/site-packages/torch/version.py"))
     if not matches:
+        win_version = venv_dir / "Lib" / "site-packages" / "torch" / "version.py"
+        if win_version.is_file():
+            matches = [win_version]
+    if not matches:
         return None
     try:
         text = matches[0].read_text(encoding="utf-8", errors="replace")
@@ -365,8 +396,8 @@ def _dots_host() -> tuple[bool, str]:
     if sys.platform != "win32":
         return True, ""
     return False, (
-        "dots.tts publishes no Windows install. Run VoiceStudio on Linux or "
-        "macOS, or under WSL2, to use it."
+        "dots.tts publishes no Windows install. Use the audio.cpp dots.tts "
+        "engine instead, which runs natively on Windows."
     )
 
 
@@ -821,7 +852,7 @@ SPECS: dict[str, SidecarSpec] = {
         ),
         venv_args=("--python", "3.10"),
         install_args=("-r", _COSYVOICE_REQUIREMENTS, "{checkout}/third_party/PyWorld"),
-        install_revision="security-floors-v3",
+        install_revision="security-floors-v4",
         torch_pins=("torch==2.7.0", "torchaudio==2.7.0"),
         weights_repo_id="FunAudioLLM/Fun-CosyVoice3-0.5B-2512",
         weights_revision="29e01c4e8d000f4bcd70751be16fa94bf3d85a18",
@@ -1209,6 +1240,54 @@ def _output_shows_disk_full(lines: Iterable[str]) -> bool:
     from core.failure import is_disk_full_error
 
     return is_disk_full_error("\n".join(lines))
+
+
+# Output a source build prints when no C/C++ compiler is installed. CosyVoice
+# builds PyWORLD from source and dots.tts builds pynini, so on a machine
+# without build tools the one-click install died with only "a network hiccup,
+# re-run" (#3423). Lower-cased substrings from setuptools/distutils, MSVC
+# detection, Xcode's stub tools and meson/CMake.
+_MISSING_COMPILER_MARKERS = (
+    "microsoft visual c++ 14.0 or greater is required",
+    "unable to find vcvarsall.bat",
+    "xcrun: error: invalid active developer path",
+    "no developer tools were found",
+    "unable to execute 'gcc'",
+    "unable to execute 'g++'",
+    "unable to execute 'c++'",
+    "command 'gcc' failed: no such file",
+    "command 'g++' failed: no such file",
+    "command 'c++' failed: no such file",
+    "unknown compiler(s)",
+    "no cmake_cxx_compiler could be found",
+    "no cmake_c_compiler could be found",
+)
+
+
+def _output_shows_missing_compiler(lines: Iterable[str]) -> bool:
+    """True when a failing build's own output says no compiler is installed."""
+    text = "\n".join(lines).lower()
+    return any(marker in text for marker in _MISSING_COMPILER_MARKERS)
+
+
+def _missing_compiler_remediation(platform: str = sys.platform) -> str:
+    if platform == "win32":
+        tools = (
+            "install Visual Studio Build Tools with the \"Desktop development "
+            "with C++\" workload (free from Microsoft)"
+        )
+    elif platform == "darwin":
+        tools = "run `xcode-select --install` to add Apple's Command Line Tools"
+    else:
+        tools = (
+            "install your distribution's C++ build tools (for example "
+            "`sudo apt install build-essential`)"
+        )
+    return (
+        "This engine builds part of its code on your machine and no C++ "
+        f"compiler was found. To fix it, {tools}, then re-run the install. It "
+        "resumes from where it stopped."
+    )
 
 
 def _log(job: dict, line: str) -> None:
@@ -1697,7 +1776,7 @@ def _existing_venv_compatible(spec: SidecarSpec, py: Path) -> bool:
     try:
         result = subprocess.run(
             [str(py), "-I", "-c", "import sys; print('%s.%s' % sys.version_info[:2])"],
-            capture_output=True, text=True, timeout=15,
+            capture_output=True, text=True, errors="replace", timeout=15,
         )
         version = result.stdout.strip()
         if result.returncode != 0 or not version or not all(
@@ -1801,6 +1880,11 @@ def _step_install_deps(spec: SidecarSpec, job: dict) -> None:
         if _output_shows_disk_full(job.get("_last_run_output") or ()):
             raise _StepError(f"uv pip install failed (exit {rc}): no space left on device.",
                              _DISK_FULL_REMEDIATION)
+        if _output_shows_missing_compiler(job.get("_last_run_output") or ()):
+            raise _StepError(
+                f"uv pip install failed (exit {rc}): no C++ compiler found.",
+                _missing_compiler_remediation(),
+            )
         hint = (
             "Usually a network hiccup — re-run the install to resume. Behind a "
             "proxy, set HTTPS_PROXY in Settings → Environment first."
@@ -1993,17 +2077,14 @@ def _step_fetch_weights(spec: SidecarSpec, job: dict) -> None:
         # other model download in the app — see setup/download.py): the
         # source checkout is unpinned upstream `main` anyway, and hf_hub
         # checksum-verifies each artifact. Hence the B615 waiver below.
-        # Unwrap to the bearer string: snapshot_download takes `token: str |
-        # None`, and a ResolvedToken record is ignored in favour of ambient
-        # discovery, so gated engine weights 401 for a user whose token lives
-        # in VoiceStudio's settings rather than HF's own cache (#2163).
-        _resolved = resolve_token()
+        # resolve() returns a record (or None); huggingface_hub needs the string.
+        _record = resolve_token()
+        _bearer = getattr(_record, "token", None) if _record else None
         endpoint = endpoint_race.effective_endpoint()
         kwargs: dict = {
             "repo_id": spec.weights_repo_id,
             "local_dir": str(wdir),
-            # Hugging Face hosts only — a mirror never receives the token.
-            "token": token_for_endpoint(endpoint, _resolved.token if _resolved else None),
+            "token": token_for_endpoint(endpoint, _bearer),
         }
         if spec.weights_revision:
             kwargs["revision"] = spec.weights_revision
@@ -2014,16 +2095,30 @@ def _step_fetch_weights(spec: SidecarSpec, job: dict) -> None:
         tqdm_cls = hf_progress.tracked_tqdm_class()
         if tqdm_cls is not None:
             kwargs["tqdm_class"] = tqdm_cls
-        try:
-            snapshot_download(**kwargs)  # nosec B615 — deliberate default-branch policy, see above
-        except Exception as exc:
-            if _is_disk_full(exc):
-                raise _StepError(f"Model weight download failed: {_redact(exc)}", _DISK_FULL_REMEDIATION) from exc
-            raise _StepError(
-                f"Model weight download failed: {_redact(exc)}",
-                "Re-run the install — the download resumes where it stopped. "
-                "Check Settings → Network (HF endpoint / proxy) if it keeps failing.",
-            ) from exc
+        for attempt in range(2):
+            try:
+                snapshot_download(**kwargs)  # nosec B615 — deliberate default-branch policy, see above
+                break
+            except Exception as exc:
+                if _is_disk_full(exc):
+                    raise _StepError(f"Model weight download failed: {_redact(exc)}", _DISK_FULL_REMEDIATION) from exc
+                # A public probe cannot prove that this repository's files
+                # work. Match setup/cache repair: only an automatic, network-
+                # classified failure that changes the winner gets one retry.
+                if attempt == 0 and endpoint_race.reselect_after_failure(spec.weights_repo_id, str(exc)):
+                    endpoint = endpoint_race.effective_endpoint()
+                    if endpoint:
+                        kwargs["endpoint"] = endpoint
+                    else:
+                        kwargs.pop("endpoint", None)
+                    kwargs["token"] = token_for_endpoint(endpoint, _bearer)
+                    _log(job, "Download endpoint changed — retrying model weights once.")
+                    continue
+                raise _StepError(
+                    f"Model weight download failed: {_redact(exc)}",
+                    "Re-run the install — the download resumes where it stopped. "
+                    "Check Settings → Network (HF endpoint / proxy) if it keeps failing.",
+                ) from exc
     finally:
         hf_progress.unregister_listener(listener_id)
         hf_progress.current_repo_id.reset(repo_token)

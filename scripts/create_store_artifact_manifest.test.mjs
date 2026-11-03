@@ -15,7 +15,7 @@ test("records only Mac App Store artifacts and their signing evidence", () => {
   try {
     const pkg = "VoiceStudio-MacAppStore-0.5.6-mac-arm64.pkg";
     writeFileSync(join(directory, pkg), "signed package");
-    writeFileSync(join(directory, "VoiceStudio-Electron-0.5.6-mac-arm64.dmg"), "direct package");
+    writeFileSync(join(directory, "VoiceStudio-0.5.6-mac-arm64.dmg"), "direct package");
     writeFileSync(join(directory, "apple-signing-arm64.json"), "{}");
     const output = join(directory, "manifest.json");
     const manifest = createArtifactManifest({

@@ -65,8 +65,6 @@ export default function useTTS({ selectedProfile, setSelectedProfile, loadHistor
   const [pendingTrimFile, setPendingTrimFile] = useState(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationTime, setGenerationTime] = useState(0);
-  // Real 0–100 progress when the active delivery path can measure it.
-  // null means the backend has not supplied a meaningful fraction yet.
   const [generationProgress, setGenerationProgress] = useState(null);
   const timerRef = useRef(null);
   const textAreaRef = useRef(null);
@@ -125,10 +123,9 @@ export default function useTTS({ selectedProfile, setSelectedProfile, loadHistor
     setIsGenerating(true);
     setGenerationTime(0);
     setGenerationProgress(null);
-    const st = Date.now();
+    const startedAt = Date.now();
     timerRef.current = setInterval(() => {
-      const elapsed = ((Date.now() - st) / 1000).toFixed(1);
-      setGenerationTime(elapsed);
+      setGenerationTime(((Date.now() - startedAt) / 1000).toFixed(1));
     }, 100);
     let abortTimer = null;
     try {

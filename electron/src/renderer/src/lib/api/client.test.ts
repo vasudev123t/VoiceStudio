@@ -44,6 +44,22 @@ describe("errorFromResponse", () => {
     expect(translate).toHaveBeenCalledWith("engines.argosRuntimeUnavailable");
     expect(err.payload?.detail).toEqual(detail);
   });
+  it("localizes the unknown source language gate and retains diagnostics", async () => {
+    const translate = vi
+      .spyOn(i18next, "t")
+      .mockReturnValue("Choose source and target languages.");
+    const detail = {
+      code: "source_language_required",
+      message:
+        "Source language is unknown. Select the source language before checking or installing its language pack.",
+    };
+    const err = await errorFromResponse(
+      new Response(JSON.stringify({ detail }), { status: 422 }),
+    );
+    expect(err.detail).toBe("Choose source and target languages.");
+    expect(translate).toHaveBeenCalledWith("workflowRun.invalid_language");
+    expect(err.payload?.detail).toEqual(detail);
+  });
   it("announces unaccepted model licences so the app can ask for acceptance", async () => {
     const translate = vi
       .spyOn(i18next, "t")
@@ -365,6 +381,21 @@ it("replaces a proxy gateway page with a localized explanation (#2781)", async (
     expect(error.message).not.toContain("<html>");
     expect(translate).toHaveBeenCalledWith("tts_errors.proxy_gateway_error", {
       status: 504,
+    });
+  } finally {
+    translate.mockRestore();
+  }
+});
+
+it("explains a Cloudflare 524 timeout page the same way (#3219)", async () => {
+  const translate = vi.spyOn(i18next, "t").mockReturnValue("Proxy gave up");
+  try {
+    const html =
+      "<!DOCTYPE html><html><head><title>example.com | 524: A timeout occurred</title></head></html>";
+    const error = await errorFromResponse(new Response(html, { status: 524 }));
+    expect(error.message).toBe("Proxy gave up");
+    expect(translate).toHaveBeenCalledWith("tts_errors.proxy_gateway_error", {
+      status: 524,
     });
   } finally {
     translate.mockRestore();

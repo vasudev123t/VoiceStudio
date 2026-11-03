@@ -1,7 +1,7 @@
 import Foundation
 
 public struct L10n: Sendable {
-    public static let languages = ["en", "zh-CN", "es", "fr", "de", "ja", "pt", "it", "ru", "ko", "hi", "tr", "pl", "nl", "sv", "th", "vi", "id", "uk", "ar", "zh-TW"]
+    public static let languages = ["en", "zh-CN", "es", "fr", "de", "ja", "pt", "it", "ru", "ko", "hi", "tr", "pl", "nl", "sv", "th", "vi", "id", "uk", "ar", "zh-TW", "gl"]
     public var locale: String
     private let catalogs: [String: [String: String]]
     public init(locale: String = Locale.current.identifier, catalogs: [String: Data]) throws {

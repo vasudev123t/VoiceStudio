@@ -23,6 +23,7 @@ import {
   canAcknowledgeModelPlan,
   modelLicenseCategory,
   modelLicenseCategoryKey,
+  modelLicenseShortKey,
   modelLicenseUrl,
   type ModelLicenceAcceptance,
   type ModelLicenseInfo,
@@ -295,8 +296,8 @@ export function ModelLicense({
         title={summary}
         aria-label={`${t('modelLicense.label')}: ${summary}; ${label}`}
       >
-        <span aria-hidden="true">{t('modelLicense.label')}:</span>
         <ModelLicenseIcon category={modelLicenseCategory(currentInfo?.license_category)} />
+        <span aria-hidden="true">{t(modelLicenseShortKey(currentInfo?.license_category))}</span>
       </Button>
       <Dialog open={open} onOpenChange={(next) => (next ? setOpen(true) : close())}>
         <DialogContent
@@ -313,19 +314,24 @@ export function ModelLicense({
             </DialogTitle>
             <DialogDescription className="break-all">{repoId}</DialogDescription>
           </DialogHeader>
-          <div className="min-h-0 flex-1 overflow-y-auto p-4">
-            <ModelLicenceView details={details.data} infoFallback={info} extra={verifiedInstall} />
-            {details.isError && (
-              <p role="alert" className="mt-3 text-sm text-destructive">
-                {t('modelLicense.detailsFailed')}
-              </p>
-            )}
-          </div>
           <LicenceAcceptanceFooter
             models={currentAcceptance ? [toAcceptable(label, currentAcceptance)] : []}
             onClose={close}
             closeDisabled={busy === 'commit'}
-          />
+          >
+            <div className="p-4">
+              <ModelLicenceView
+                details={details.data}
+                infoFallback={info}
+                extra={verifiedInstall}
+              />
+              {details.isError && (
+                <p role="alert" className="mt-3 text-sm text-destructive">
+                  {t('modelLicense.detailsFailed')}
+                </p>
+              )}
+            </div>
+          </LicenceAcceptanceFooter>
         </DialogContent>
       </Dialog>
     </>

@@ -104,9 +104,7 @@
     "dub": "Traduisez et doublez des fichiers audio ou vidéo.",
     "stories": "Créez des scènes avec plusieurs voix.",
     "audiobook": "Créez des livres audio avec des chapitres.",
-    "transcribe": "Transformez des enregistrements en texte.",
-    "collapseFooter": "Réduire le pied de page",
-    "expandFooter": "Développer le pied de page"
+    "transcribe": "Transformez des enregistrements en texte."
   },
   "longformPersistence": {
     "storage_unavailable_title": "Impossible de charger les projets",
@@ -377,13 +375,13 @@
     "hf_source_app_label": "VoiceStudio (chiffré, recommandé)",
     "hf_source_cli_label": "HuggingFace CLI",
     "hf_source_env_label": "Variable d’environnement",
-    "theme_auto": "Auto (Système)",
+    "theme_auto": "Suivre le système",
     "theme_light": "Clair",
     "reduce_motion": "Réduire les animations",
     "reduce_motion_desc": "Arrête les animations d’arrière-plan et les transitions. Le réglage système reste actif de son côté ; ceci s’y ajoute.",
     "perf_torch_compile": "Désactiver torch.compile",
-    "perf_torch_compile_note": "Utilise l’exécution directe pour éviter les erreurs de mémoire de Triton.",
-    "perf_torch_compile_hint": "Utilise l’exécution directe pour éviter les erreurs de mémoire de Triton. <issueLink>#65</issueLink> · <crashLink>#2135</crashLink>",
+    "perf_torch_compile_note": "Exécute le modèle sans noyaux compilés lorsque Triton est instable.",
+    "perf_torch_compile_hint": "Activez cette option après un échec Triton ou <code>torch.compile</code>, y compris si le backend quitte pendant la création audio. VoiceStudio fournit alors <code>TORCH_COMPILE_DISABLE=1</code> et privilégie la fiabilité à la vitesse compilée. <issueLink>#65</issueLink> concerne Windows avec moins de 16 Go de VRAM ; <crashLink>#2135</crashLink> suit les pannes de graphes CUDA des anciennes NVIDIA.",
     "llmp_cli_help": "Utilise la CLI installée et sa connexion via le même exécuteur que la réparation par agent. Laissez Modèle vide pour la valeur par défaut. Les réponses peuvent être plus lentes ; les frais dépendent du compte CLI.",
     "llmp_sdk_help": "Les fournisseurs natifs utilisent LiteLLM. Pour les autres, saisissez provider/model. Bedrock utilise une clé API ou un profil AWS ; Vertex utilise l’ID de compte comme projet et les identifiants Google. L’URL de base est facultative.",
     "llmp_cli_auth": "L’accès au compte CLI a été refusé. Vérifiez la connexion, l’abonnement et le modèle choisi."
@@ -451,9 +449,9 @@
     "importFailed": "Impossible de lire ce fichier.",
     "addLine": "Ajouter une ligne",
     "addChapter": "Ajouter un chapitre",
-    "clearScript": "Vider le script",
-    "clearScriptHint": "Supprimer toutes les lignes et tous les chapitres du script (la distribution est conservée)",
     "clearConfirm": "Effacer les {{count}} entrées du script et tout texte importé en attente ? Cette action est irréversible.",
+    "clearScript": "Effacer le script",
+    "clearScriptHint": "Supprime tout le script : toutes les lignes et tous les chapitres",
     "cleared": "Script vidé",
     "chapterN": "Chapitre {{n}}",
     "stems": "Tiges",
@@ -475,11 +473,7 @@
     "pasteAbove": "Coller le texte ci-dessus",
     "cancel": "Annuler",
     "splitIntoTracks": "Divisé en lignes",
-    "splitMode": "Découper par",
-    "split_sentences": "Phrases",
-    "split_paragraphs": "Paragraphes",
-    "split_chapters": "Chapitres",
-    "splitModeHint": "Chaque ligne est lue comme une prise à part. Pour un seul narrateur, les paragraphes ou les chapitres entiers s'enchaînent mieux que les phrases.",
+    "splitModeHint": "Chaque ligne est lue comme une prise distincte. Avec un seul narrateur, Paragraphes ou Chapitres sonnent plus naturellement.",
     "emptyText": "Commencez votre histoire en ajoutant des lignes de dialogue et de narration. Attribuez à chaque personnage une voix dans le casting.",
     "addFirst": "Ajouter la première ligne",
     "linePlaceholder": "Entrez un dialogue ou une narration… utilisez [pause 0,5 s] pour une pause silencieuse",
@@ -510,7 +504,11 @@
     "exportFailed": "Échec de l'exportation : vérifiez que le backend est en cours d'exécution.",
     "global_speed": "Vitesse",
     "global_speed_hint": "Vitesse de lecture pour toutes les lignes sans leur propre priorité de vitesse",
-    "deleteProjectConfirm": "Supprimer définitivement ce projet ?"
+    "deleteProjectConfirm": "Supprimer définitivement ce projet ?",
+    "splitMode": "Découper par",
+    "split_chapters": "Chapitres",
+    "split_paragraphs": "Paragraphes",
+    "split_sentences": "Phrases"
   },
   "common": {
     "stop": "Arrêter",
@@ -1760,8 +1758,8 @@
     "backend_shutting_down": "VoiceStudio est en cours de fermeture. Rouvrez l’application et réessayez.",
     "crash_broken_env": "Il est mort en chargeant ses propres dépendances Python : ce n'est donc ni la mémoire ni votre GPU, mais un environnement incomplet ou à moitié mis à jour. Utilisez « Nettoyer et réessayer » dans Paramètres → Journaux → Backend, qui le reconstruit de zéro et le répare sur place, sans toucher à vos voix ni à vos projets. Si l'échec persiste, les détails du plantage nomment le paquet qui refusait de s'importer.",
     "crash_vram_default": "Sur les GPU plus modestes, la cause habituelle est un manque de VRAM lors du chargement du modèle ASR en plus du modèle TTS : déchargez d'abord le modèle TTS, ou choisissez un modèle ASR plus petit dans Catalogue de modèles → Modèles.",
-    "stream_cut_backend_alive": "Le flux s'est terminé prématurément, mais le backend tourne toujours — il n'a donc pas planté. Dans une installation servie ou conteneurisée, c'est généralement un reverse proxy ou un répartiteur de charge qui met la connexion en tampon ou la coupe par timeout : désactivez la mise en tampon des réponses pour cette route (nginx: proxy_buffering off; X-Accel-Buffering: no) et augmentez son délai de lecture. Lancer l'application de bureau directement, ou sur localhost sans proxy, permettra de le confirmer.",
-    "stream_cut_backend_alive_local": "Le flux s'est terminé prématurément, mais le backend fonctionne toujours — il n'a donc pas planté. L'application a perdu sa connexion au backend en cours de tâche ; cela arrive quand une étape longue reste silencieuse plusieurs minutes, et le backend termine généralement la tâche malgré tout. Patientez quelques minutes puis rouvrez la tâche depuis l'historique, ou consultez le journal du backend (Paramètres → Journaux → Back-end) pour voir ce qu'il faisait."
+    "stream_cut_backend_alive": "Vérifiez d'abord le proxy inverse ou l'équilibreur de charge placé devant l'application : désactivez la mise en tampon des réponses pour cette route (proxy_buffering off; X-Accel-Buffering: no) et augmentez son délai de lecture. La connexion a été coupée alors que le backend restait actif ; rien n'a donc planté. Sur une installation servie ou en conteneur, la cause est généralement un proxy, et lancer l'application de bureau directement ou via localhost permettrait de le confirmer ou de l'écarter.",
+    "stream_cut_backend_alive_local": "Patientez quelques minutes, puis rouvrez la tâche depuis l'historique ; si elle n'y figure pas, consultez le journal du backend dans Paramètres → Journaux → Backend. La connexion s'est interrompue en cours de tâche après une longue étape silencieuse, mais le backend tourne toujours et mène normalement le travail à terme : ce n'était pas un plantage."
   },
   "keyboard": {
     "title": "Raccourcis clavier",
@@ -2265,7 +2263,12 @@
     "other_ways": "Autres moyens d'aider",
     "star_short": "Étoile",
     "star_github": "Étoile sur GitHub",
-    "join_discord": "Rejoignez Discorde"
+    "join_discord": "Rejoignez Discorde",
+    "sponsors_tier_strategic": "Stratégique",
+    "sponsors_tier_company": "Entreprise",
+    "sponsors_tier_development": "Développement",
+    "sponsors_tier_community": "Communauté",
+    "sponsors_tier_supporter": "Soutien"
   },
   "updates": {
     "tab": "Mises à jour",
@@ -2356,10 +2359,10 @@
     "hf_token_get": "Vous n'avez pas de jeton ? Obtenez-en un gratuitement →",
     "hf_token_inline_prompt": "Accélérez les téléchargements avec un jeton Hugging Face gratuit",
     "hf_token_inline_ph": "Coller le jeton hf_… (facultatif)",
-    "hf_token_get_short": "Obtenez-en un gratuitement →",
     "hf_token_active_using": "Jeton Hugging Face trouvé dans {{source}} — {{masked}}",
-    "hf_token_replace": "Remplacer le jeton…",
-    "hf_token_replace_warning": "Cela remplace le jeton enregistré pour cette application, sans révoquer l’ancien jeton."
+    "hf_token_replace": "Remplacer…",
+    "hf_token_replace_warning": "Cela remplace le jeton enregistré pour cette application, sans révoquer l’ancien jeton.",
+    "hf_token_get_short": "Obtenir gratuitement →"
   },
   "history": {
     "dub_meta": "{{segments}} segments · {{duration}} s",
@@ -2469,7 +2472,7 @@
     "warn_unknown_voice": "Voix inconnue « {{name}} » — la voix par défaut sera utilisée",
     "warn_empty_chapter": "Le chapitre « {{title}} » ne contient aucun texte parlé",
     "warn_unknown_tag": "Balise non reconnue {{tag}} — elle sera lue à voix haute",
-    "untitled": "Livre audio sans titre",
+    "untitled": "Sans titre",
     "dismiss": "Ignorer",
     "output": "Sortie",
     "title": "Livre audio",
@@ -2484,14 +2487,14 @@
     "preview_plan": "Aperçu du plan",
     "stop": "Arrêter",
     "stopped_note": "Arrêté — les chapitres terminés sont en cache ; relancez Créer pour reprendre.",
-    "recovery_title": "Livre audio interrompu",
-    "recovery_progress": "{{done}} chapitres sur {{total}} sont mis en cache",
-    "recovery_hint": "Reprendre réutilise les chapitres terminés et ne synthétise que ce qui reste.",
-    "resume": "Reprendre",
-    "open_chapter_cache": "Ouvrir le cache des chapitres",
-    "cache_location_hint": "Cache audio des chapitres : {{cachePath}} · Manifeste de reprise : {{manifestPath}}",
-    "resume_failed": "Impossible de reprendre le livre audio : {{message}}",
-    "open_cache_failed": "Impossible d'ouvrir le cache des chapitres",
+    "recovery_title": "Poursuivre un livre audio inachevé",
+    "recovery_progress": "Chapitres prêts : {{done}} sur {{total}}",
+    "recovery_hint": "Les chapitres déjà produits sont conservés ; seuls les éléments manquants seront créés.",
+    "resume": "Continuer le rendu",
+    "open_chapter_cache": "Afficher les chapitres enregistrés",
+    "cache_location_hint": "Dossier audio : {{cachePath}} · fiche de récupération : {{manifestPath}}",
+    "resume_failed": "Ce livre audio n’a pas pu continuer : {{message}}",
+    "open_cache_failed": "Le dossier des chapitres enregistrés n’a pas pu être affiché",
     "progress_summary": "Synthèse de {{current}} sur {{total}} chapitres",
     "eta": "~{{time}} restant",
     "chapter_n": "Chapitre {{n}}",
@@ -2545,15 +2548,17 @@
     "seed_ph": "Auto",
     "vary_repeats": "Varier les lignes répétées",
     "vary_repeats_help": "Donnez des prises distinctes aux lignes identiques au lieu de réutiliser un enregistrement.",
-    "line_gap": "Pause entre les lignes",
     "joins_help": "La pause entre les lignes s'insère entre les lignes sans [pause] propre ; la pause entre les paragraphes, aux lignes vides. Quand la coupe est activée, le silence d'attaque et de fin de chaque ligne est d'abord supprimé : la pause réglée est celle que l'on entend.",
-    "paragraph_gap": "Pause entre les paragraphes",
-    "trim_edges": "Couper le silence du moteur",
-    "trim_edges_help": "Supprime le silence que le moteur ajoute à chaque ligne avant l'assemblage. Désactivez pour garder les rendus bruts.",
+    "trim_edges": "Supprimer le silence du moteur",
+    "trim_edges_help": "Retire le silence ajouté par chaque moteur avant et après une ligne, puis assemble. Désactivez pour des rendus bruts.",
     "emotion_help": "Émotion graduée — appliquée par le moteur IndexTTS2 uniquement.",
     "emotion_text": "Description de l'émotion",
     "emotion_text_ph": "p. ex. sonne épuisé et triste",
-    "emotion_alpha": "Force de l'émotion"
+    "emotion_alpha": "Force de l'émotion",
+    "recovery_load_failed": "Impossible de vérifier les livres audio inachevés.",
+    "recovery_retry": "Réessayer",
+    "line_gap": "Silence entre chaque ligne",
+    "paragraph_gap": "Silence entre chaque paragraphe"
   },
   "voicePanel": {
     "title": "Voix",
@@ -2749,13 +2754,6 @@
     "progress": "{{done}} / {{total}} segments validés",
     "cancelled": "Annulé",
     "fitting": "Ajustement du minutage"
-  },
-  "sponsorSlot": {
-    "book": "Réservez votre emplacement",
-    "preview": "Aperçu du sponsor",
-    "message": "Votre marque, site web et message",
-    "email_app": "Ouvrir la messagerie",
-    "copy_email": "Copier l’adresse e-mail"
   },
   "supportPlans": {
     "remove": "Retirer la barre des sponsors",

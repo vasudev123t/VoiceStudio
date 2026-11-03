@@ -15,6 +15,7 @@ const routes = [
   '/gallery',
   '/transcriptions',
   '/calls',
+  '/workflows',
   '/design',
   '/audiobook',
   '/projects',

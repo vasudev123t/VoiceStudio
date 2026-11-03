@@ -20,6 +20,8 @@ vi.mock('react-i18next', () => ({
 }));
 import { ModelLibrary, PerformanceModelPacks, SystemRecommendations } from './model-library';
 import { modelFamilies } from './model-family';
+import { EngineFamilyList } from './model-list/engine-family-list';
+import { DiarisationSettings } from './model-list/diarisation-list';
 import { performancePackRepos } from './performance-model-packs';
 afterEach(() => {
   cleanup();
@@ -64,7 +66,7 @@ it('prioritizes required and curated models across families, with optional downl
   const invalidate = vi.spyOn(client, 'invalidateQueries');
   render(
     <QueryClientProvider client={client}>
-      <ModelLibrary setup />
+      <ModelLibrary />
     </QueryClientProvider>,
   );
   const required = await screen.findByText('Required');
@@ -93,156 +95,115 @@ it('prioritizes required and curated models across families, with optional downl
   );
 });
 
-it('names each model in the compact setup pack, even two of the same family', async () => {
+const makeBalancedCatalogue = (present: boolean) => [
+  {
+    repo_id: performancePackRepos.balanced[0],
+    label: 'Studio synthesizer',
+    role: 'TTS',
+    size_gb: 2.1,
+    installed: present,
+    supported: true,
+  },
+  {
+    repo_id: performancePackRepos.balanced[1],
+    label: 'Rapid recognizer',
+    role: 'ASR',
+    size_gb: 1.4,
+    installed: present,
+    supported: true,
+  },
+  {
+    repo_id: performancePackRepos.balanced[2],
+    label: 'Pocket listener',
+    role: 'ASR',
+    dictation_id: 'pocket',
+    size_gb: 0.3,
+    installed: present,
+    supported: true,
+  },
+  {
+    repo_id: performancePackRepos.balanced[3],
+    label: 'Desk listener',
+    role: 'ASR',
+    dictation_id: 'desk',
+    size_gb: 0.8,
+    installed: present,
+    supported: true,
+  },
+];
+
+const balancedProfile = {
+  global: 'balanced',
+  overrides: {},
+  effective: {},
+  families: [],
+  implemented_families: [],
+  targets: { tts: {} },
+  selections: { tts: { engine: 'fixture-engine', model: null } },
+};
+
+function serveBalancedPack({ installed, freeGb }: { installed: boolean; freeGb: number }) {
   mock.api.mockImplementation((path: string) => {
-    if (path === '/models') {
+    if (path === '/models')
       return Promise.resolve({
-        disk_free_gb: 100,
-        models: performancePackRepos.balanced.map((repo_id, index) => ({
-          repo_id,
-          label: `Model ${index}`,
-          role: 'ASR',
-          dictation_id: repo_id.includes('sherpa') ? `dictation-${index}` : undefined,
-          size_gb: 1,
-          installed: false,
-          supported: true,
-        })),
+        models: makeBalancedCatalogue(installed),
+        disk_free_gb: freeGb,
+        disk_headroom_gb: 10,
       });
-    }
-    if (path === '/api/settings/performance-profile') {
-      return Promise.resolve({
-        global: 'balanced',
-        overrides: {},
-        effective: {},
-        families: [],
-        implemented_families: [],
-        targets: {},
-        selections: {},
-      });
-    }
     if (path === '/models/install/status') return Promise.resolve({ jobs: [] });
-    if (path === '/setup/recommendations') {
-      return Promise.resolve({ device: { label: 'Linux x64' }, models: [], download_gb_remaining: 0, total_gb: 0, all_installed: false });
-    }
+    if (path === '/setup/recommendations')
+      return Promise.resolve({ device: { label: 'Fixture workstation' } });
+    if (path === '/api/settings/performance-profile') return Promise.resolve(balancedProfile);
     return Promise.resolve({});
   });
+}
 
+it('keeps distinct model names visible in the compact pack summary', async () => {
+  serveBalancedPack({ installed: false, freeGb: 40 });
   render(
     <QueryClientProvider client={new QueryClient()}>
       <PerformanceModelPacks compact />
     </QueryClientProvider>,
   );
-
-  const names = performancePackRepos.balanced.map((_, index) => `Model ${index}`);
-  for (const name of names) expect(await screen.findByText(name)).toBeInTheDocument();
-  // The balanced pack carries two dictation engines; the role stays visible.
-  expect(screen.getAllByText(/^engineSidebar\.dictation · /)).toHaveLength(2);
+  const labels = makeBalancedCatalogue(false).map(({ label }) => label);
+  expect(await screen.findByText(labels[0])).toBeVisible();
+  expect(labels.slice(1).every((label) => screen.getByText(label))).toBe(true);
+  expect(screen.getAllByText(/engineSidebar\.dictation/)).toHaveLength(2);
 });
 
-it('allows using an installed performance pack below the download reserve', async () => {
-  const profile = {
-    global: 'balanced',
-    overrides: {},
-    effective: {},
-    families: [],
-    implemented_families: [],
-    targets: { tts: {} },
-    selections: { tts: { engine: 'other', model: null } },
-  };
-  mock.api.mockImplementation((path: string) => {
-    if (path === '/models') {
-      return Promise.resolve({
-        disk_free_gb: 2.5,
-        models: performancePackRepos.balanced.map((repo_id) => ({
-          repo_id,
-          label: repo_id,
-          role: repo_id.includes('whisper') || repo_id.includes('sherpa') ? 'ASR' : 'TTS',
-          size_gb: 1,
-          installed: true,
-          supported: true,
-        })),
-      });
-    }
-    if (path === '/api/settings/performance-profile') return Promise.resolve(profile);
-    if (path === '/models/install/status') return Promise.resolve({ jobs: [] });
-    if (path === '/setup/recommendations') {
-      return Promise.resolve({
-        device: { label: 'Windows x64' },
-        models: [],
-        download_gb_remaining: 0,
-        total_gb: 0,
-        all_installed: true,
-      });
-    }
-    if (path.startsWith('/batch/jobs')) return Promise.resolve([]);
-    return Promise.resolve({});
-  });
-
+it('lets an already installed pack be chosen even when the disk is nearly full', async () => {
+  serveBalancedPack({ installed: true, freeGb: 0.2 });
   render(
     <QueryClientProvider client={new QueryClient()}>
       <PerformanceModelPacks />
     </QueryClientProvider>,
   );
-
-  const usePack = await screen.findByRole('button', { name: 'models.pack_use' });
-  expect(usePack).toBeEnabled();
+  const choose = await screen.findByRole('button', { name: /models\.pack_use/ });
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-  fireEvent.click(usePack);
-
+  expect(choose).toBeEnabled();
+  fireEvent.click(choose);
   await waitFor(() =>
-    expect(mock.api).toHaveBeenCalledWith(
-      '/api/settings/performance-profile',
-      expect.objectContaining({
-        method: 'PUT',
-        body: JSON.stringify({ tier: 'balanced', family: null }),
-      }),
-    ),
+    expect(mock.api).toHaveBeenCalledWith('/api/settings/performance-profile', {
+      method: 'PUT',
+      body: JSON.stringify({ tier: 'balanced', family: null }),
+    }),
   );
-  expect(mock.api.mock.calls.every(([path]) => path !== '/models/install')).toBe(true);
+  expect(choose).toBeEnabled();
+  expect(mock.api.mock.calls.some(([path]) => path === '/models/install')).toBe(false);
 });
 
-it('keeps the disk reserve guard when a performance pack still needs downloads', async () => {
-  mock.api.mockImplementation((path: string) => {
-    if (path === '/models') {
-      return Promise.resolve({
-        disk_free_gb: 2.5,
-        models: performancePackRepos.balanced.map((repo_id, index) => ({
-          repo_id,
-          label: repo_id,
-          role: repo_id.includes('whisper') || repo_id.includes('sherpa') ? 'ASR' : 'TTS',
-          size_gb: index === 0 ? 1 : 0,
-          installed: index !== 0,
-          supported: true,
-        })),
-      });
-    }
-    if (path === '/api/settings/performance-profile')
-      return Promise.resolve({ global: 'balanced', targets: {}, selections: {} });
-    if (path === '/models/install/status') return Promise.resolve({ jobs: [] });
-    if (path === '/setup/recommendations') {
-      return Promise.resolve({
-        device: { label: 'Windows x64' },
-        models: [],
-        download_gb_remaining: 0,
-        total_gb: 0,
-        all_installed: true,
-      });
-    }
-    if (path.startsWith('/batch/jobs')) return Promise.resolve([]);
-    return Promise.resolve({});
-  });
-
+it('disables a pack that still needs downloads when reserve space is missing', async () => {
+  serveBalancedPack({ installed: false, freeGb: 0.5 });
   render(
     <QueryClientProvider client={new QueryClient()}>
       <PerformanceModelPacks />
     </QueryClientProvider>,
   );
-
-  const installPack = await screen.findByRole('button', { name: 'models.pack_install' });
-  expect(installPack).toBeDisabled();
-  expect(screen.getByRole('alert')).toHaveTextContent('models.pack_low_disk');
-  fireEvent.click(installPack);
-  expect(mock.api.mock.calls.every(([path]) => path !== '/models/install')).toBe(true);
+  expect(await screen.findByRole('alert')).toHaveTextContent('models.pack_low_disk');
+  const blockedAction = await screen.findByRole('button', { name: /models\.pack_install/ });
+  fireEvent.click(blockedAction);
+  expect(blockedAction).toBeDisabled();
+  expect(mock.api).not.toHaveBeenCalledWith('/models/install', expect.anything());
 });
 
 it('unloads a resident model before deleting its slash-separated repository', async () => {
@@ -287,7 +248,7 @@ it('unloads a resident model before deleting its slash-separated repository', as
 
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <ModelLibrary family="tts" />
+      <EngineFamilyList family="tts" />
     </QueryClientProvider>,
   );
 
@@ -334,7 +295,7 @@ it('confirms reinstall, removes the old copy, then starts a fresh install', asyn
 
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <ModelLibrary family="asr" />
+      <EngineFamilyList family="asr" />
     </QueryClientProvider>,
   );
 
@@ -396,7 +357,7 @@ it('surfaces the backend routing verdict when selecting an ASR model from the ca
 
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <ModelLibrary family="asr" />
+      <EngineFamilyList family="asr" />
     </QueryClientProvider>,
   );
 
@@ -432,7 +393,7 @@ it('surfaces an interrupted cache as repairable and removable', async () => {
 
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <ModelLibrary family="tts" />
+      <EngineFamilyList family="tts" />
     </QueryClientProvider>,
   );
 
@@ -475,7 +436,7 @@ it('keeps speaker diarisation models discoverable after setup', async () => {
   expect(modelFamilies).toContain('diarisation');
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <ModelLibrary family={'diarisation' as never} />
+      <DiarisationSettings />
     </QueryClientProvider>,
   );
 
@@ -496,6 +457,8 @@ it('searches model metadata and keeps incompatible choices folded', async () => 
             note: 'Expressive narration',
             supported: true,
           },
+          { ...base, repo_id: 'owner/second', label: 'Second model', supported: true },
+          { ...base, repo_id: 'owner/third', label: 'Third model', supported: true },
           {
             ...base,
             repo_id: 'owner/apple-only',
@@ -513,7 +476,7 @@ it('searches model metadata and keeps incompatible choices folded', async () => 
 
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <ModelLibrary family="tts" />
+      <EngineFamilyList family="tts" />
     </QueryClientProvider>,
   );
 
@@ -567,16 +530,19 @@ it('shows device recommendations and live aggregate download telemetry', async (
 
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <ModelLibrary family="tts" />
+      <EngineFamilyList family="tts" />
     </QueryClientProvider>,
   );
 
   await screen.findByText('Fast local model');
   expect(screen.getByText('firstrun.chip_recommended')).toBeInTheDocument();
   expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '50');
-  expect(screen.getByText('512.0 MB / 1.00 GB')).toBeInTheDocument();
-  expect(screen.getByText('8.0 MB/s')).toBeInTheDocument();
-  expect(screen.getByText('~2m')).toBeInTheDocument();
+  // Bytes, speed and ETA come from the shared install progress (formatted
+  // values are covered in model-install-progress.test.tsx).
+  expect(screen.getByRole('status')).toHaveTextContent('modelInstall.downloadingPct');
+  expect(
+    screen.getByText('modelInstall.bytes · modelInstall.speed · modelInstall.eta'),
+  ).toBeInTheDocument();
 });
 
 it('shows the device bundle, warns before exceeding disk space, and starts selected installs', async () => {
@@ -784,7 +750,7 @@ it('sends a gated install that failed on a chosen mirror to the mirror settings'
 
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <ModelLibrary family="tts" />
+      <EngineFamilyList family="tts" />
     </QueryClientProvider>,
   );
 

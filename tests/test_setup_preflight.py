@@ -317,6 +317,100 @@ def test_preflight_sees_a_radeon_without_rocm_smi(monkeypatch, platform_, expect
     assert "rocm6.1" not in note  # the old, wrong advice
 
 
+def _gpu_check(monkeypatch, tmp_path, info):
+    """The preflight GPU row for a given ``_detect_gpu()`` result."""
+    from types import SimpleNamespace
+
+    from api.routers.setup import wizard
+    from services import media_tools
+
+    monkeypatch.setattr(wizard.sys, "platform", "linux")
+    monkeypatch.setattr(wizard._platform, "machine", lambda: "x86_64")
+    monkeypatch.setattr(wizard, "_ram_gb", lambda: 32)
+    monkeypatch.setattr(wizard, "_disk_free_gb", lambda _: 100)
+    monkeypatch.setattr(wizard, "hf_cache_dir", lambda: str(tmp_path / "hf"))
+    monkeypatch.setattr(wizard, "_network_check", lambda: {
+        "id": "network", "label": "Network", "status": "pass", "detail": "Test", "fix": None,
+    })
+    monkeypatch.setattr(wizard, "_detect_gpu", lambda: info)
+    monkeypatch.setattr(media_tools, "summary", lambda **_: {"ready": True})
+    monkeypatch.setitem(sys.modules, "services.tts_backend", SimpleNamespace(gpu_routing_verdict=lambda: {
+        "engine": "omnivoice", "routing_status": "cpu_only",
+        "effective_device": "cpu", "host_family": "cpu",
+    }))
+    return next(c for c in wizard.preflight()["checks"] if c["id"] == "gpu")
+
+
+def _radeon_preflight(monkeypatch, platform_, torch_mod):
+    from api.routers.setup import wizard as setup_mod
+    from core import gpu_inventory
+
+    monkeypatch.setattr(setup_mod._platform, "machine", lambda: "x86_64")
+
+    monkeypatch.setattr(setup_mod, "_run_cmd", lambda args, timeout=2.0: (-1, ""))
+    monkeypatch.setattr(
+        gpu_inventory, "detect_host_gpus",
+        lambda: (gpu_inventory.HostGPU("amd", "AMD Radeon RX 9070 XT", 16.0),),
+    )
+    monkeypatch.setattr(setup_mod.sys, "platform", platform_)
+    with patch.dict("sys.modules", {"torch": torch_mod}):
+        return setup_mod._detect_gpu()
+
+
+@pytest.mark.parametrize("platform_", ["win32", "linux"])
+def test_preflight_names_the_cpu_build_and_the_rocm_opt_in(monkeypatch, platform_):
+    """#3418: with no NVIDIA driver the desktop installer picks the CPU build,
+    and on Windows the note said no ROCm build exists for Windows at all, so an
+    RX 9070 owner was told there was nothing to do. Both OSes now have an
+    opt-in ROCm setup; the note must name the build actually installed and it."""
+    from types import SimpleNamespace
+
+    cpu_torch = SimpleNamespace(
+        cuda=SimpleNamespace(is_available=lambda: False),
+        version=SimpleNamespace(hip=None, cuda=None),
+        backends=SimpleNamespace(mps=SimpleNamespace(is_available=lambda: False)),
+    )
+    info = _radeon_preflight(monkeypatch, platform_, cpu_torch)
+    note = " ".join(info["notes"])
+    assert "CPU-only build" in note and "CUDA" not in note
+    assert "OMNIVOICE_TORCH_VARIANT=rocm" in note
+    assert "no ROCm build" not in note
+    if platform_ == "win32":
+        assert "docs/install/windows-rocm.md" in note
+
+
+def test_preflight_rocm_build_without_kernels_for_the_card_is_not_ready(monkeypatch, tmp_path):
+    """A ROCm wheel that predates gfx12 enumerates an RX 9070 XT, but the loader
+    runs on the CPU: the summary must not say "ROCm ready"."""
+    from types import SimpleNamespace
+
+    rocm_torch = SimpleNamespace(
+        cuda=SimpleNamespace(
+            is_available=lambda: True,
+            get_device_properties=lambda i=0: SimpleNamespace(gcnArchName="gfx1201"),
+            get_arch_list=lambda: ["gfx1030", "gfx1100"],
+        ),
+        version=SimpleNamespace(hip="6.2", cuda=None),
+    )
+    monkeypatch.delenv("HSA_OVERRIDE_GFX_VERSION", raising=False)
+    info = _radeon_preflight(monkeypatch, "linux", rocm_torch)
+    assert info["backend"] == "rocm"
+    assert info["kernels_missing"] == "gfx1201"
+
+    check = _gpu_check(monkeypatch, tmp_path, info)
+    assert check["status"] == "warn"
+    assert "no kernels" in check["detail"]
+
+
+def test_preflight_working_rocm_passes(monkeypatch, tmp_path):
+    check = _gpu_check(monkeypatch, tmp_path, {
+        "vendor": "amd", "driver": None, "device_name": "AMD Radeon RX 9070 XT",
+        "backend": "rocm", "available": True, "notes": [],
+    })
+    assert check["status"] == "pass"
+    assert "ROCm ready" in check["detail"]
+
+
 # ── Docker / container GPU fallback ──────────────────────────────────────
 
 def test_preflight_docker_gpu_fallback_detects_cuda():
@@ -593,3 +687,11 @@ def test_optional_gpu_never_blocks_cpu_setup(monkeypatch, tmp_path, vendor, avai
     if vendor == "nvidia" and not available:
         assert "CPU-only" in gpu["fix"]
         assert "GPU-only engines remain unavailable" in gpu["fix"]
+
+
+def test_network_probe_default_timeout_is_eight_seconds():
+    import inspect
+
+    from api.routers.setup import wizard
+
+    assert inspect.signature(wizard._probe_network).parameters["timeout"].default == 8.0

@@ -21,8 +21,11 @@ import VoiceStudioKit
                 .onChange(of: phase) { _, phase in
                     if phase == .active {
                         model.acceptUpload()
+                        PhoneInbox.shared.collect()
                         model.monitor()
-                    } else if phase == .background { BackgroundMonitor.schedule() }
+                        Task { await model.phone.refresh() }
+                    } else if phase == .inactive { PhoneJobs.shared.enteredInactive() }
+                    else if phase == .background { PhoneJobs.shared.enteredBackground(); BackgroundMonitor.schedule() }
                 }
         }
     }
@@ -33,7 +36,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         BackgroundMonitor.register(); return true
     }
     func application(_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String, completionHandler: @escaping () -> Void) {
-        BackgroundUpload.shared.eventsCompletion = completionHandler
+        let boxed = ModelEventsCompletion(completionHandler)
+        if !ModelDownloadSessions.handle(identifier,completion: { boxed.finish() }) {
+            BackgroundUpload.shared.eventsCompletion = completionHandler
+        }
     }
 }
 
@@ -68,4 +74,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
 private final class ScheduledTask: @unchecked Sendable {
     let value: BGTask
     init(_ value: BGTask) { self.value = value }
+}
+
+private final class ModelEventsCompletion: @unchecked Sendable {
+    private let completion: () -> Void
+    init(_ completion: @escaping () -> Void) { self.completion = completion }
+    func finish() { completion() }
 }

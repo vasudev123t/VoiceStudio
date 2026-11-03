@@ -93,6 +93,12 @@ class Supertonic3Backend(SubprocessBackend):
     # ── SubprocessBackend contract ─────────────────────────────────────
 
     @classmethod
+    def shares_parent_torch(cls) -> bool:
+        # The same check venv_python() makes: no venv of its own means the
+        # parent interpreter runs it.
+        return _own_venv_python() is None
+
+    @classmethod
     def venv_python(cls) -> Path:
         """Its own venv when the one-click installer made one. Otherwise the
         parent interpreter, the same Python ``uv sync --extra supertonic``

@@ -67,9 +67,9 @@ page.on('dialog', async (dialog) => {
 
 try {
   await page.addInitScript(() => localStorage.setItem('voicestudio.setup.complete.v1', '1'));
-  await page.goto(`${base}/#/calls`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`${base}/#/workflows`, { waitUntil: 'domcontentloaded' });
   try {
-    await page.getByRole('heading', { name: 'Design a voice workflow' }).waitFor({ timeout: 5000 });
+    await page.getByRole('textbox', { name: 'Workflow name' }).waitFor({ timeout: 5000 });
   } catch (error) {
     console.error(await page.locator('body').innerText(), errors);
     throw error;
@@ -85,6 +85,27 @@ try {
     throw error;
   }
   assert.equal(await page.locator('.react-flow__node').count(), 3);
+  // A fresh draft flags its missing settings and says why Run is unavailable.
+  assert.equal(await page.locator('.workflow-node__badge').count(), 2);
+  assert(
+    await page
+      .locator('.workflow-intro')
+      .getByRole('button', { name: 'Run workflow' })
+      .isDisabled(),
+  );
+  await page.getByRole('button', { name: 'Start needs setup' }).click();
+  await page
+    .getByRole('complementary', { name: 'Step details' })
+    .getByLabel('Scripts', { exact: true })
+    .waitFor();
+  // The step palette is reachable from the keyboard and moves with arrow keys.
+  const palette = page.getByRole('toolbar', { name: 'Add a step' });
+  await palette.getByRole('button', { name: 'Add Start' }).focus();
+  await page.keyboard.press('ArrowDown');
+  assert.equal(
+    await page.evaluate(() => document.activeElement?.getAttribute('aria-label')),
+    'Add Source clip',
+  );
   const node = page.locator('.react-flow__node').first();
   const before = await page.evaluate(
     () =>
@@ -100,7 +121,7 @@ try {
     before,
   );
   await page.reload();
-  await page.getByRole('heading', { name: 'Design a voice workflow' }).waitFor();
+  await page.getByRole('textbox', { name: 'Workflow name' }).waitFor();
   assert(
     (await page.evaluate(
       () =>
@@ -108,7 +129,10 @@ try {
           .x,
     )) > before,
   );
-  await page.getByRole('button', { name: 'Call', exact: true }).click();
+  await page
+    .getByRole('toolbar', { name: 'Add a step' })
+    .getByRole('button', { name: 'Add Call', exact: true })
+    .click();
   await page.waitForFunction(() => document.querySelectorAll('.react-flow__node').length === 4);
   assert.equal(await page.locator('.react-flow__node').count(), 4);
   await page.getByLabel('Step name').fill('Booking');
@@ -123,7 +147,7 @@ try {
     ),
   );
   await page.reload();
-  await page.getByRole('heading', { name: 'Design a voice workflow' }).waitFor();
+  await page.getByRole('textbox', { name: 'Workflow name' }).waitFor();
   assert.equal(await page.locator('.react-flow__node').count(), 4);
   await page.getByRole('button', { name: 'Duplicate' }).click();
   await page.getByRole('button', { name: 'Untitled workflow (2)' }).waitFor();
@@ -142,7 +166,13 @@ try {
   assert.equal(await page.getByRole('button', { name: 'Untitled workflow (2)' }).count(), 0);
   assert.deepEqual(nativeDialogs, []);
   assert.equal(await page.getByRole('complementary', { name: 'Step details' }).count(), 0);
-  await page.getByRole('button', { name: 'Book a restaurant' }).click();
+  await page.getByRole('button', { name: 'New from template' }).click();
+  const picker = page.getByRole('dialog', { name: 'Start from a template' });
+  await picker.getByRole('region', { name: 'Calls' }).waitFor();
+  await page.waitForTimeout(180);
+  await page.screenshot({ path: join(tmpdir(), 'voicestudio-workflow-templates.png') });
+  await picker.getByRole('button', { name: 'Book a restaurant', exact: true }).click();
+  await picker.waitFor({ state: 'detached' });
   await page.waitForFunction(() => document.querySelectorAll('.react-flow__node').length === 3);
   await page.getByLabel('Phone number').fill('+15550100199');
   assert(
@@ -160,7 +190,7 @@ try {
     ),
   );
   await page.getByRole('button', { name: 'Canvas', exact: true }).click();
-  await page.getByRole('heading', { name: 'Design a voice workflow' }).waitFor();
+  await page.getByRole('textbox', { name: 'Workflow name' }).waitFor();
   assert.equal(await page.locator('.react-flow__node').count(), 3);
   await page.screenshot({
     path: join(tmpdir(), 'voicestudio-workflow-canvas.png'),
@@ -218,11 +248,11 @@ try {
       }),
     );
   });
-  await localized.goto(`${base}/#/calls`, { waitUntil: 'domcontentloaded' });
-  await localized.getByRole('heading', { name: 'Sprachworkflow gestalten' }).waitFor();
+  await localized.goto(`${base}/#/workflows`, { waitUntil: 'domcontentloaded' });
+  await localized.getByRole('textbox', { name: 'Workflow-Name' }).waitFor();
   await localized.getByRole('button', { name: 'Unbenannter Workflow', exact: true }).waitFor();
   await localized.getByRole('button', { name: 'Unbenannter Workflow (3)' }).waitFor();
-  await localized.getByRole('button', { name: 'Bedingung' }).waitFor();
+  await localized.getByRole('button', { name: 'Bedingung hinzufügen' }).waitFor();
   assert.equal(await localized.getByRole('complementary', { name: 'Schrittdetails' }).count(), 0);
   assert.equal(await localized.getByText('workflows.untitled').count(), 0);
   await localized.screenshot({

@@ -104,9 +104,7 @@
     "dub": "Tłumacz i dubbinguj dźwięk lub wideo.",
     "stories": "Twórz sceny z wieloma głosami.",
     "audiobook": "Twórz audiobooki z rozdziałami.",
-    "transcribe": "Zamieniaj nagrania na tekst.",
-    "collapseFooter": "Zwiń stopkę",
-    "expandFooter": "Rozwiń stopkę"
+    "transcribe": "Zamieniaj nagrania na tekst."
   },
   "longformPersistence": {
     "storage_unavailable_title": "Nie udało się wczytać projektów",
@@ -377,13 +375,13 @@
     "hf_source_app_label": "VoiceStudio (zaszyfrowane, zalecane)",
     "hf_source_cli_label": "HuggingFace CLI",
     "hf_source_env_label": "Zmienna środowiskowa",
-    "theme_auto": "Automatyczny systemowy",
+    "theme_auto": "Zgodnie z systemem",
     "theme_light": "Jasny",
     "reduce_motion": "Ogranicz ruch",
     "reduce_motion_desc": "Zatrzymuje animacje tła i przejścia. Ustawienie systemowe działa samo z siebie; to je uzupełnia.",
     "perf_torch_compile": "Wyłącz torch.compile",
-    "perf_torch_compile_note": "Używa bezpośredniego wykonywania, aby uniknąć błędów pamięci Triton.",
-    "perf_torch_compile_hint": "Używa bezpośredniego wykonywania, aby uniknąć błędów pamięci Triton. <issueLink>#65</issueLink> · <crashLink>#2135</crashLink>",
+    "perf_torch_compile_note": "Uruchamia model bez skompilowanych jąder, gdy Triton działa niestabilnie.",
+    "perf_torch_compile_hint": "Włącz po awarii Triton lub <code>torch.compile</code>, również gdy backend zamyka się podczas tworzenia dźwięku. VoiceStudio przekaże <code>TORCH_COMPILE_DISABLE=1</code> i wybierze stabilność zamiast szybkości kompilacji. <issueLink>#65</issueLink> dotyczy Windows z VRAM poniżej 16 GB, a <crashLink>#2135</crashLink> starszych kart NVIDIA i grafów CUDA.",
     "llmp_cli_help": "Używa zainstalowanego CLI i jego logowania przez ten sam mechanizm co naprawa z agentem. Puste pole Model oznacza domyślny model CLI. Odpowiedzi mogą być wolniejsze; koszty obciążają konto CLI.",
     "llmp_sdk_help": "Natywni dostawcy używają LiteLLM. Dla innych wpisz provider/model. Bedrock używa klucza API lub profilu AWS; Vertex używa identyfikatora konta jako projektu i danych logowania Google. Bazowy URL jest opcjonalny.",
     "llmp_cli_auth": "Odrzucono dostęp do konta CLI. Sprawdź logowanie, subskrypcję i wybrany model."
@@ -451,10 +449,10 @@
     "importFailed": "Nie udało się odczytać tego pliku.",
     "addLine": "Dodaj linię",
     "addChapter": "Dodaj rozdział",
-    "clearScript": "Wyczyść scenariusz",
-    "clearScriptHint": "Usuń wszystkie linie i rozdziały ze scenariusza (obsada zostaje)",
     "clearConfirm": "Wyczyścić wszystkie {{count}} wpisów scenariusza i oczekujący zaimportowany tekst? Tej operacji nie można cofnąć.",
-    "cleared": "Scenariusz wyczyszczony",
+    "clearScript": "Wyczyść skrypt",
+    "clearScriptHint": "Usuwa całą zawartość skryptu: wszystkie wiersze i rozdziały",
+    "cleared": "Treść scenariusza usunięta",
     "chapterN": "Rozdział {{n}}",
     "stems": "Łodygi",
     "stemsDone": "Wyeksportowane rdzenie znaków {{count}}",
@@ -475,11 +473,7 @@
     "pasteAbove": "Wklej tekst powyżej",
     "cancel": "Anuluj",
     "splitIntoTracks": "Podziel na linie",
-    "splitMode": "Podziel według",
-    "split_sentences": "Zdania",
-    "split_paragraphs": "Akapity",
-    "split_chapters": "Rozdziały",
-    "splitModeHint": "Każdy wiersz jest czytany jako osobne ujęcie. Dla jednego narratora akapity lub całe rozdziały płyną lepiej niż zdania.",
+    "splitModeHint": "Każdy wiersz jest czytany jako osobne nagranie. Przy jednym narratorze Akapity lub Rozdziały brzmią płynniej.",
     "emptyText": "Rozpocznij swoją historię od dodania dialogów i linii narracji. Przypisz każdej postaci głos w obsadzie.",
     "addFirst": "Dodaj pierwszą linię",
     "linePlaceholder": "Wprowadź dialog lub narrację… użyj [pauzy 0,5 s], aby zrobić cichą przerwę",
@@ -510,7 +504,11 @@
     "exportFailed": "Eksport nie powiódł się — sprawdź, czy backend działa.",
     "global_speed": "Prędkość",
     "global_speed_hint": "Prędkość odczytu dla wszystkich linii bez własnego sterowania prędkością",
-    "deleteProjectConfirm": "Usunąć ten projekt na stałe?"
+    "deleteProjectConfirm": "Usunąć ten projekt na stałe?",
+    "splitMode": "Podziel według",
+    "split_chapters": "Rozdziały",
+    "split_paragraphs": "Akapity",
+    "split_sentences": "Zdania"
   },
   "common": {
     "stop": "Zatrzymaj się",
@@ -1760,8 +1758,8 @@
     "backend_shutting_down": "VoiceStudio się zamyka. Otwórz aplikację ponownie i spróbuj jeszcze raz.",
     "crash_broken_env": "Zakończył się podczas ładowania własnych zależności Pythona, więc nie chodzi o pamięć ani o kartę graficzną — środowisko jest niekompletne albo zostało zaktualizowane w połowie. Użyj „Wyczyść i ponów” w Ustawienia → Logi → Backend: odbudowuje je od zera i naprawia w miejscu, nie ruszając twoich głosów ani projektów. Jeśli nadal się nie udaje, szczegóły awarii wskazują pakiet, którego nie dało się zaimportować.",
     "crash_vram_default": "Na mniejszych GPU zwykłą przyczyną jest brak pamięci VRAM podczas ładowania modelu ASR obok już załadowanego modelu TTS: najpierw zwolnij model TTS albo wybierz mniejszy model ASR w Katalogu modeli → Modele.",
-    "stream_cut_backend_alive": "Strumień urwał się przedwcześnie, ale backend nadal działa — a więc nie uległ awarii. W konfiguracji serwerowej lub kontenerowej zwykle oznacza to, że odwrotne proxy albo load balancer buforuje połączenie lub przerywa je po limicie czasu: wyłącz buforowanie odpowiedzi dla tej trasy (nginx: proxy_buffering off; X-Accel-Buffering: no) i zwiększ jego limit czasu odczytu. Uruchomienie aplikacji desktopowej bezpośrednio albo na localhost bez proxy pozwoli to potwierdzić.",
-    "stream_cut_backend_alive_local": "Strumień zakończył się przedwcześnie, ale backend nadal działa — więc się nie zawiesił. Aplikacja utraciła połączenie z backendem w trakcie zadania; zdarza się to, gdy długi krok przez kilka minut nic nie wysyła, a backend zwykle i tak kończy zadanie. Odczekaj kilka minut i otwórz zadanie ponownie z historii albo sprawdź w logu backendu (Ustawienia → Logi → Zaplecze), co wtedy robił."
+    "stream_cut_backend_alive": "Najpierw sprawdź reverse proxy lub load balancer przed aplikacją: wyłącz buforowanie odpowiedzi dla tej trasy (proxy_buffering off; X-Accel-Buffering: no) i zwiększ limit czasu odczytu. Połączenie zostało przerwane, gdy backend nadal działał, więc nic się nie zawiesiło; w instalacji serwerowej lub kontenerowej zwykle winny jest proxy, a uruchomienie aplikacji desktopowej bezpośrednio albo przez localhost potwierdzi to lub wykluczy.",
+    "stream_cut_backend_alive_local": "Poczekaj kilka minut i otwórz zadanie ponownie z historii; jeśli go tam nie ma, zajrzyj do logu backendu w Ustawienia → Logi → Backend. Połączenie spadło w trakcie zadania po długim, cichym kroku, ale backend nadal działa i zwykle kończy pracę, więc to nie była awaria."
   },
   "keyboard": {
     "title": "Skróty klawiaturowe",
@@ -2265,7 +2263,12 @@
     "other_ways": "Inne sposoby pomocy",
     "star_short": "Gwiazdka",
     "star_github": "Gwiazda na GitHubie",
-    "join_discord": "Dołącz do Discorda"
+    "join_discord": "Dołącz do Discorda",
+    "sponsors_tier_strategic": "Strategiczny",
+    "sponsors_tier_company": "Firma",
+    "sponsors_tier_development": "Rozwój",
+    "sponsors_tier_community": "Społeczność",
+    "sponsors_tier_supporter": "Wspierający"
   },
   "updates": {
     "tab": "Aktualizacje",
@@ -2356,10 +2359,10 @@
     "hf_token_get": "Nie masz tokena? Zdobądź jeden za darmo →",
     "hf_token_inline_prompt": "Przyspiesz pobieranie dzięki darmowemu tokenowi Przytulająca Twarz",
     "hf_token_inline_ph": "Wklej token hf_… (opcjonalnie)",
-    "hf_token_get_short": "Zdobądź jeden za darmo →",
     "hf_token_active_using": "Znaleziono token Hugging Face w {{source}} — {{masked}}",
-    "hf_token_replace": "Zastąp token…",
-    "hf_token_replace_warning": "To zastępuje token zapisany dla tej aplikacji. Nie unieważnia starego tokena."
+    "hf_token_replace": "Zastąp…",
+    "hf_token_replace_warning": "To zastępuje token zapisany dla tej aplikacji. Nie unieważnia starego tokena.",
+    "hf_token_get_short": "Uzyskaj bezpłatnie →"
   },
   "history": {
     "dub_meta": "{{segments}} segmentów · {{duration}} s",
@@ -2469,7 +2472,7 @@
     "warn_unknown_voice": "Nieznany głos „{{name}}” — zostanie użyty domyślny",
     "warn_empty_chapter": "Rozdział „{{title}}” nie zawiera tekstu do przeczytania",
     "warn_unknown_tag": "Nierozpoznany znacznik {{tag}} — zostanie odczytany na głos",
-    "untitled": "Książka audio bez tytułu",
+    "untitled": "Bez tytułu",
     "dismiss": "Odrzuć",
     "output": "Wyjście",
     "title": "Książka audio",
@@ -2484,14 +2487,14 @@
     "preview_plan": "Podgląd planu",
     "stop": "Zatrzymaj",
     "stopped_note": "Zatrzymano — ukończone rozdziały są w pamięci podręcznej; kliknij Utwórz ponownie, aby wznowić.",
-    "recovery_title": "Przerwana książka audio",
-    "recovery_progress": "{{done}} z {{total}} rozdziałów jest w pamięci podręcznej",
-    "recovery_hint": "Wznowienie wykorzystuje ukończone rozdziały i syntezuje tylko to, co pozostało.",
-    "resume": "Wznów",
-    "open_chapter_cache": "Otwórz pamięć podręczną rozdziałów",
-    "cache_location_hint": "Pamięć podręczna dźwięku rozdziałów: {{cachePath}} · Manifest wznowienia: {{manifestPath}}",
-    "resume_failed": "Nie można wznowić książki audio: {{message}}",
-    "open_cache_failed": "Nie można otworzyć pamięci podręcznej rozdziałów",
+    "recovery_title": "Dokończ przerwany audiobook",
+    "recovery_progress": "Gotowe rozdziały: {{done}} z {{total}}",
+    "recovery_hint": "Utworzone nagrania pozostają bez zmian; kontynuacja przygotuje wyłącznie brakujące części.",
+    "resume": "Kontynuuj renderowanie",
+    "open_chapter_cache": "Pokaż zapisane rozdziały",
+    "cache_location_hint": "Folder nagrań: {{cachePath}} · zapis odzyskiwania: {{manifestPath}}",
+    "resume_failed": "Nie można kontynuować tego audiobooka: {{message}}",
+    "open_cache_failed": "Nie można wyświetlić folderu zapisanych rozdziałów",
     "progress_summary": "Synteza {{current}} z {{total}} rozdziałów",
     "eta": "~{{time}} pozostało",
     "chapter_n": "Rozdział {{n}}",
@@ -2545,15 +2548,17 @@
     "seed_ph": "Auto",
     "vary_repeats": "Zmienić powtarzające się wiersze",
     "vary_repeats_help": "Podaj odrębne ujęcia do identycznych wierszy zamiast ponownie używać jednego nagrania.",
-    "line_gap": "Przerwa między wierszami",
     "joins_help": "Przerwa między wierszami trafia między wiersze bez własnego [pause]; przerwa między akapitami – w miejsca pustych wierszy. Przy włączonym przycinaniu najpierw usuwana jest własna cisza początkowa i końcowa każdego wiersza, więc ustawiona przerwa jest tą, którą słychać.",
-    "paragraph_gap": "Przerwa między akapitami",
-    "trim_edges": "Przytnij ciszę silnika",
-    "trim_edges_help": "Usuwa ciszę, którą silnik dokleja do każdego wiersza, przed łączeniem. Wyłącz, aby zachować surowe rendery.",
+    "trim_edges_help": "Usuwa ciszę, którą każdy silnik dodaje przed wierszem i po nim, a potem łączy nagrania. Wyłącz, aby uzyskać surowe nagrania.",
     "emotion_help": "Stopniowana emocja — zastosowana tylko przez silnik IndexTTS2.",
     "emotion_text": "Opis emocji",
     "emotion_text_ph": "np. brzmi wyczerpany i smutny",
-    "emotion_alpha": "Siła emocji"
+    "emotion_alpha": "Siła emocji",
+    "recovery_load_failed": "Nie udało się sprawdzić niedokończonych audiobooków.",
+    "recovery_retry": "Spróbuj ponownie",
+    "line_gap": "Odstęp między wierszami",
+    "paragraph_gap": "Odstęp między akapitami",
+    "trim_edges": "Usuń ciszę generowaną przez silnik"
   },
   "voicePanel": {
     "title": "Głos",
@@ -2749,13 +2754,6 @@
     "progress": "Zweryfikowano {{done}} / {{total}} segmentów",
     "cancelled": "Anulowano",
     "fitting": "Dostosowywanie czasu"
-  },
-  "sponsorSlot": {
-    "book": "Zarezerwuj miejsce",
-    "preview": "Podgląd sponsora",
-    "message": "Twoja marka, strona i wiadomość",
-    "email_app": "Otwórz pocztę",
-    "copy_email": "Kopiuj e-mail"
   },
   "supportPlans": {
     "remove": "Usuń pasek sponsorów",

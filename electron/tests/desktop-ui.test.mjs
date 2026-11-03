@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync } from 'node:fs';
-import { once } from 'node:events';
 import { dirname, join } from 'node:path';
 import { withApp } from './desktop-harness.mjs';
 import { ROUTES } from './fixtures/routes.mjs';
@@ -103,11 +102,27 @@ test('guard: a renderer request leaving the machine fails the run', async (t) =>
 test('first run: setup gate completes to home', async (t) => {
   await withApp(t, { seed: false }, async ({ page }) => {
     await page.getByRole('heading', { name: 'System check', exact: true }).first().waitFor();
-    const next = page.getByRole('button', { name: /All good/ });
+    const next = page.getByRole('button', { name: 'Continue', exact: true });
     // System check -> Model packs -> Privacy -> Enter studio
     for (const heading of ['Model packs', 'Privacy', 'Enter studio']) {
       await next.click();
       await page.getByRole('heading', { name: heading, exact: true }).first().waitFor();
+      if (heading === 'Privacy') {
+        // A fresh profile is asked about the optional account (equal-weight Yes/No, owner rule
+        // 2026-10-16) and Next stays disabled until it answers. Main reports availability
+        // asynchronously, so wait for the question rather than reading it once.
+        const local = page.getByRole('button', { name: 'Keep everything local', exact: true });
+        const asked = await local
+          .waitFor({ timeout: 5000 })
+          .then(() => true)
+          .catch(() => false);
+        if (asked) {
+          const yes = page.getByRole('button', { name: 'Turn on account features', exact: true });
+          assert.equal(await yes.isVisible(), true, 'Both choices must carry equal weight');
+          await local.click();
+          await local.waitFor({ state: 'detached' });
+        }
+      }
     }
     await page.getByRole('button', { name: 'Enter studio', exact: true }).last().click();
     await page.getByRole('heading', { name: 'Home', exact: true }).waitFor();
@@ -233,12 +248,29 @@ test('settings: theme and language survive restart, user data stays in the profi
   });
 });
 
+test('guard: an unexpected desktop exit fails the run', async (t) => {
+  await assert.rejects(
+    withApp(t, {}, async ({ app }) => {
+      await app.close();
+    }),
+    /Desktop process exited unexpectedly/,
+  );
+});
+
+test('guard: requests before an intentional crash still fail after relaunch', async (t) => {
+  await assert.rejects(
+    withApp(t, {}, async (session) => {
+      await session.app.evaluate(({ net }) => net.fetch('https://example.com/leak').catch(() => {}));
+      await session.crash();
+      await session.relaunch();
+    }),
+    /Requests left the machine/,
+  );
+});
+
 test('unclean exit: relaunch on the same profile starts normally', async (t) => {
   await withApp(t, {}, async (session) => {
-    const child = session.app.process();
-    const exited = once(child, 'exit');
-    child.kill('SIGKILL');
-    await exited;
+    await session.crash();
     const restarted = await session.relaunch();
     await restarted.page.waitForFunction(() => Boolean(window.voicestudio?.files?.saveData));
     const facts = await bridgeFacts(restarted.page);

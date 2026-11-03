@@ -19,7 +19,7 @@ actor MockHost: HTTPTransport {
         case "/generate": return HTTPReply(data: data("RIFF-test-wave"), headers: ["content-type":"audio/wav", "x-audio-id":"take-1"])
         case "/dub/upload": return HTTPReply(data: data(#"{"job_id":"dub-1","task_id":"prep_dub-1","filename":"clip.mp4"}"#), status: 202)
         case "/jobs/prep_dub-1/events": return HTTPReply(data: data(#"{"job":{"id":"prep_dub-1","status":"done"},"events":[{"seq":1,"payload":"data: {\"type\":\"ready\"}\n\n"}]}"#))
-        case "/dub/transcribe/dub-1": return HTTPReply(data: data(#"{"segments":[{"id":0,"start":0,"end":2,"text":"Source"}],"source_lang":"en"}"#))
+        case "/dub/transcribe/dub-1": return HTTPReply(data: data(#"{"segments":[{"id":0,"start":0,"end":2,"text":"Source","gain":0,"speed":0.85,"direction":"Whisper urgently","effect_preset":"raw","instruct":"Calm delivery"}],"source_lang":"en"}"#))
         case "/engines/translation": return HTTPReply(data: data(#"{"active":"argos","engines":[{"id":"argos","display_name":"Argos","category":"offline","installed":true,"ready":true}]}"#))
         case "/dub/translate": return HTTPReply(data: data(#"{"translated":[{"id":"0","text":"Translated"}]}"#))
         case "/dub/generate/dub-1": return HTTPReply(data: data(#"{"task_id":"render-1"}"#))
@@ -117,7 +117,11 @@ actor MemoryVault: CredentialVault {
     #expect(requests.filter { $0.url?.path == "/dub/transcribe/dub-1" }.count == 1)
     let body = try JSONSerialization.jsonObject(with: #require(requests.first { $0.url?.path == "/dub/generate/dub-1" }?.httpBody)) as! [String: Any]
     #expect(body["language_code"] as? String == "es")
-    #expect((body["segments"] as? [[String: Any]])?.first?["profile_id"] as? String == "voice-1")
+    let cue = try #require((body["segments"] as? [[String: Any]])?.first)
+    #expect(cue["profile_id"] as? String == "voice-1")
+    #expect(cue["gain"] as? Double == 0); #expect(cue["speed"] as? Double == 0.85)
+    #expect(cue["direction"] as? String == "Whisper urgently"); #expect(cue["effect_preset"] as? String == "raw")
+    #expect(cue["instruct"] as? String == "Calm delivery")
 }
 
 @Test func forgedOffHostRequestsNeverReachTransport() async throws {
@@ -126,6 +130,7 @@ actor MemoryVault: CredentialVault {
     let forged = URLRequest(url: URL(string: "https://other.example/health")!)
     await #expect(throws: ClientError.self) { try await client.send(forged) }
     await #expect(throws: ClientError.self) { try await client.download(forged) }
+    await #expect(throws: ClientError.self) { try await client.download(forged,maxBytes: 65536) }
     #expect(await host.requests.isEmpty)
 }
 

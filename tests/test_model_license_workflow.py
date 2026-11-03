@@ -263,7 +263,7 @@ class WorkflowTests(unittest.TestCase):
         p = self.prepare()
         for group in ("receipts", "evidence", "installed"):
             self.assertEqual(self.service._record_path(group, p["plan_digest"]),
-                             self.service.store / group / f"{p['plan_digest']}.json")
+                             (self.service.store / group / f"{p['plan_digest']}.json").resolve())
 
     def test_symlinked_receipt_directory_cannot_escape_store(self):
         p = self.prepare()
@@ -358,7 +358,7 @@ class ProductionTests(unittest.TestCase):
 
     def test_production_rows_never_use_synthetic_positive_fixtures(self):
         registry = ml.load_registry()
-        self.assertEqual(len(registry["models"]), 57)
+        self.assertEqual(len(registry["models"]), 76)
         self.assertEqual(len(registry["dynamic_assets"]), 7)
         for row in registry["models"]:
             self.assertEqual(row["component_closure"], "incomplete")
@@ -381,11 +381,16 @@ class ProductionTests(unittest.TestCase):
         expected = {r["id"]: r["runtime_revision"] for r in data["models"]
                     if r["runtime_pin_scope"] == "central"}
         self.assertEqual(CURATED_REVISIONS, expected)
-        self.assertEqual(len(expected), 43)
+        self.assertEqual(len(expected), 46)
         self.assertEqual(expected.pop("OpenMOSS-Team/MOSS-Audio-Tokenizer"),
                          "3cd226ba2947efa357ef453bcad111b6eafba782")
+        self.assertEqual(expected.pop("Lourdle/Fun-CosyVoice3-0.5B-2512-GGUF"),
+                         "ab01740bbbfcc059fd748163787554f7c8977e64")
+        # OuteTTS's speaker-building Whisper (#2700).
+        self.assertEqual(expected.pop("mlx-community/whisper-large-v3-turbo-asr-fp16"),
+                         "624c19c9af5603fa73b83bce14d4aeea96156d18")
         # Preserve ALL 42 pre-existing pins from base 06c6e077 unchanged.
-        self.assertEqual(ml.digest(expected), "421276b5ac88b32b36b838667e4cd2da8d410d48ba489dcffb8486772df9d858")
+        self.assertEqual(ml.digest(expected), "1f4811c855d9f70882aa325ad5cd44f2036cd9fc2e676bac9c1ff23008695816")
         self.assertEqual(expected["openbmb/VoxCPM2"], "bffb3df5a29440629464e5e839f4d214c8714c3d")
 
     def test_generated_projection_is_current(self):
@@ -396,6 +401,16 @@ class ProductionTests(unittest.TestCase):
         actual = json.loads((ROOT / "docs/licensing/model-license-data.json").read_text(encoding="utf-8"))
         self.assertEqual(actual, expected)
         self.assertEqual(actual["enforcement"], "disclosure_only")
+
+    def test_package_entries_are_catalogued_by_their_own_id(self):
+        # A catalogue entry with its own ``id`` (one package of a shared repo)
+        # must mark its licence record as offered, not only whole-repo entries.
+        spec = importlib.util.spec_from_file_location("generate_model_license_data",
+                                                      ROOT / "scripts/generate_model_license_data.py")
+        module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+        rows = {row["id"]: row for row in module.generate(ROOT)["models"]}
+        self.assertTrue(rows["audio-cpp/audio.cpp-gguf:dots-tts-soar-q8_0"]["catalogued"])
+        self.assertTrue(rows["audio-cpp/audio.cpp-gguf"]["catalogued"])
 
     def test_v1_migration_preserves_unknowns_and_evidence(self):
         spec = importlib.util.spec_from_file_location("migrate_model_licenses",

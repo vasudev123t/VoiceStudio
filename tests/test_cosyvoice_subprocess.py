@@ -35,6 +35,7 @@ def _fake_model_class(name, calls, sample_rate=24000):
         "inference_zero_shot": method("zero_shot"),
         "inference_cross_lingual": method("cross_lingual"),
         "inference_sft": method("sft"),
+        "inference_vc": method("vc"),
         "list_available_spks": lambda self: ["spk-a"],
     })
 
@@ -289,7 +290,7 @@ def test_managed_install_probes_late_imports_and_restores_dependencies():
     assert 'cosyvoice.dataset.processor' in spec.probe_code
     assert 'matcha.utils' in spec.probe_code
     assert '{checkout}/third_party/PyWorld' in spec.install_args
-    assert spec.install_revision == 'security-floors-v3'
+    assert spec.install_revision == 'security-floors-v4'
     sources = {source.path: source for source in spec.extra_sources}
     assert sources['third_party/PyWorld'].revision == 'f31ad88d543fdaebbda2d0c9a5e4d4f991ae0b6c'
     assert sources['third_party/PyWorld/lib/World'].revision == 'd625e7608ca23a870018f01e7c562ac683d9847f'
@@ -370,6 +371,7 @@ def test_load_preserves_legacy_non_qwen_checkout(monkeypatch, tmp_path):
 # completion marker and never receive the change.
 _REQUIREMENTS_BY_REVISION = {
     "security-floors-v3": "10d15c52b78ae41cfd040880f97a3b9b71c2fa2dab9893bceb982fc46b72d9dd",
+    "security-floors-v4": "607deac39c6ee97e595d05426af10e87070b4b52a3df2ad809d71e20d5058658",
 }
 
 
@@ -394,3 +396,53 @@ def test_an_install_from_the_previous_revision_is_offered_a_repair(tmp_path):
     assert not sidecar_install._install_marker_valid(spec, tmp_path)
     marker.write_text(f"{spec.probe_module}\n{spec.install_revision}\n", encoding="utf-8")
     assert sidecar_install._install_marker_valid(spec, tmp_path)
+
+
+# -- Keep my delivery (#3421): speech-to-speech through upstream inference_vc --
+
+
+def test_convert_keeps_the_source_tokens_through_inference_vc(monkeypatch, tmp_path):
+    calls = []
+    sidecar, _ = _load_sidecar(monkeypatch, tmp_path, calls)
+    source, ref = tmp_path / "source.wav", tmp_path / "ref.wav"
+    source.write_bytes(b"RIFF")
+    ref.write_bytes(b"RIFF")
+    out = io.BytesIO()
+    sidecar._handle_convert({"source_audio": str(source), "ref_audio": str(ref)}, out)
+    kind, args, kwargs = _last_call(calls)
+    assert kind == "vc"
+    assert args == (str(source), str(ref)) and kwargs == {"stream": False}
+    assert _frames(out)[-1]["op"] == "audio"
+
+
+def test_convert_refuses_urls_and_missing_files(monkeypatch, tmp_path):
+    calls = []
+    sidecar, _ = _load_sidecar(monkeypatch, tmp_path, calls)
+    ref = tmp_path / "ref.wav"
+    ref.write_bytes(b"RIFF")
+    with pytest.raises(ValueError, match="local file path"):
+        sidecar._handle_convert({"source_audio": "https://x.test/a.wav", "ref_audio": str(ref)}, io.BytesIO())
+    with pytest.raises(ValueError, match="not found"):
+        sidecar._handle_convert({"source_audio": str(tmp_path / "gone.wav"), "ref_audio": str(ref)}, io.BytesIO())
+    assert not any(c[0] == "vc" for c in calls)
+
+
+def test_the_sidecar_class_sends_a_convert_op(monkeypatch):
+    from engines.cosyvoice_subprocess import CosyVoiceSubprocessBackend
+    from services.tts_backend import CosyVoiceBackend, TTSBackend
+
+    sent = []
+    monkeypatch.setattr(
+        CosyVoiceSubprocessBackend, "_exchange",
+        lambda self, msg, *, deadline_text: sent.append(msg) or torch.zeros(1, 10),
+    )
+    backend = CosyVoiceSubprocessBackend()
+    try:
+        backend.convert_voice("/s.wav", ref_audio="/r.wav", seed=7)
+    finally:
+        backend.shutdown()
+    assert sent == [{"op": "convert", "source_audio": "/s.wav", "ref_audio": "/r.wav", "seed": 7}]
+    assert CosyVoiceSubprocessBackend.supports_voice_conversion is True
+    # The in-process scaffold and every other engine keep re-speaking.
+    assert CosyVoiceBackend.supports_voice_conversion is False
+    assert TTSBackend.supports_voice_conversion is False

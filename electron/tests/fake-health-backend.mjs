@@ -18,6 +18,18 @@ export const DEFAULT_FIXTURES = {
   '/dictation/models': { engine_available: false, models: [] },
   '/batch/jobs': [],
   '/history': [],
+  // The Calls view at #/calls (Workflows moved to #/workflows): no Twilio set up, no calls yet.
+  '/calls': { calls: [] },
+  // backend/services/telephony/calls.py readiness() returns a bare list.
+  '/calls/readiness': [],
+  '/calls/settings': {
+    from_number: '',
+    disclosure_template: '',
+    inbound_mode: 'greeting',
+    inbound_brief: '',
+    max_concurrent: 1,
+    record_calls: false,
+  },
   '/api/settings/performance-profile': {
     global: 'balanced',
     overrides: {},
@@ -66,6 +78,20 @@ export const DEFAULT_FIXTURES = {
   '/model/loaded': { models: [] },
   '/engines/translation': { active: null, engines: [] },
   '/engines/diarisation': { active: 'off', options: [] },
+  '/engines/omnivoice-gguf/gpu-offer': {
+    eligible: false,
+    answer: null,
+    active: false,
+    show: false,
+    licence_accepted: false,
+    gpu_name: null,
+    device: null,
+    vendor: null,
+    shared_memory: false,
+    effective_vram_gb: null,
+    quant: null,
+    download_mb: 0,
+  },
   '/engines/audiocpp/runtime/install/status': {
     installed: false,
     supported: true,
@@ -142,6 +168,11 @@ export const DEFAULT_FIXTURES = {
     enabled: false,
     env_pinned: false,
     device: 'cpu',
+  },
+  '/api/settings/pause-fill': {
+    mode: 'silence',
+    env_pinned: false,
+    choices: ['silence', 'room_tone'],
   },
   '/api/settings/storage': { categories: [], volumes: [], warnings: [] },
   '/api/settings/storage/models-dir': {},

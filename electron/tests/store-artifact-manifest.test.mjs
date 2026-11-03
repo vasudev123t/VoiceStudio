@@ -8,7 +8,9 @@ import { createArtifactManifest } from '../../scripts/create_store_artifact_mani
 
 test('creates deterministic provenance for regular files only', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'voicestudio-store-manifest-'));
-  writeFileSync(join(dir, 'VoiceStudio-Electron-0.5.7-win-x64.exe'), 'installer');
+  writeFileSync(join(dir, 'VoiceStudio-0.5.7-win-x64.exe'), 'installer');
+  writeFileSync(join(dir, 'VoiceStudio-MicrosoftStore-0.5.7-win-x64.exe'), 'store installer');
+  writeFileSync(join(dir, 'VoiceStudio-MacAppStore-0.5.7-mac-arm64.pkg'), 'store package');
   writeFileSync(join(dir, 'electron-stable-win32-x64.yml'), 'version: 0.5.7\n');
   writeFileSync(join(dir, 'ignored.txt'), 'not a release artifact');
   const output = join(dir, 'store-artifact-manifest-win32-x64.json');
@@ -27,7 +29,7 @@ test('creates deterministic provenance for regular files only', async () => {
   const manifest = JSON.parse(readFileSync(output, 'utf8'));
   assert.deepEqual(
     manifest.artifacts.map((item) => item.file),
-    ['VoiceStudio-Electron-0.5.7-win-x64.exe', 'electron-stable-win32-x64.yml'],
+    ['VoiceStudio-0.5.7-win-x64.exe', 'electron-stable-win32-x64.yml'],
   );
   assert.equal(manifest.distribution.target, 'direct');
   assert.equal(manifest.distribution.applicationUpdates, 'application');
@@ -39,7 +41,7 @@ test('creates deterministic provenance for regular files only', async () => {
 test('keeps Microsoft Store artifacts separate from direct installers', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'voicestudio-microsoft-store-manifest-'));
   writeFileSync(join(dir, 'VoiceStudio-MicrosoftStore-0.5.7-win-x64.exe'), 'store');
-  writeFileSync(join(dir, 'VoiceStudio-Electron-0.5.7-win-x64.exe'), 'direct');
+  writeFileSync(join(dir, 'VoiceStudio-0.5.7-win-x64.exe'), 'direct');
   writeFileSync(join(dir, 'electron-microsoft-store-stable-win32-x64.yml'), 'version: 0.5.7\n');
   const output = join(dir, 'store-artifact-manifest-win32-x64.json');
 

@@ -17,6 +17,7 @@ import os
 import re
 import subprocess
 from dataclasses import asdict
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -168,7 +169,7 @@ def set_performance_profile(body: _PerformanceProfileBody):
 
 
 class _TorchCompileBody(BaseModel):
-    enabled: bool = Field(..., description="True to disable torch.compile (eager mode) for the engine")
+    enabled: bool = Field(..., description="True disables torch.compile and selects eager execution")
 
 
 def _torch_compile_state() -> dict:
@@ -181,22 +182,13 @@ def _torch_compile_state() -> dict:
 
 @router.get("/perf/torch-compile-disabled")
 def get_torch_compile_disabled():
-    """Return the current torch.compile-disabled toggle + the runtime platform.
-
-    `platform` is still reported (clients may show it), but since #2135 the
-    toggle is live on every host: it used to be rendered disabled off Windows
-    on the assumption that only #65's Windows OOM needed it, which left the
-    Linux/CUDA reporter of #2135 with no way to switch off the compile that
-    was killing their backend.
-    """
+    """Return the cross-platform compile-disable toggle and runtime platform."""
     return _torch_compile_state()
 
 
 @router.put("/perf/torch-compile-disabled")
 def set_torch_compile_disabled(body: _TorchCompileBody):
-    """Persist the toggle. Honoured by `services.engine_env.build_engine_env()`
-    (subprocess engines) and `services.engine_env.should_torch_compile()`
-    (in-process), on every platform since #2135."""
+    """Persist the toggle used by subprocess environments and in-process compile gates on every host."""
     from services import settings_store
 
     try:
@@ -250,6 +242,47 @@ def set_offload_after_generation(body: _OffloadAfterGenerationBody):
         logger.exception("set_offload_after_generation failed")
         raise HTTPException(status_code=500, detail="Failed to persist setting")
     return _offload_after_generation_state()
+
+
+# ── Pause fill: digital silence or room tone (#3611) ──────────────────────
+
+
+class _PauseFillBody(BaseModel):
+    mode: Literal["silence", "room_tone"] = Field(
+        ..., description="silence: exact zeros (default); room_tone: the take's own noise floor",
+    )
+
+
+def _pause_fill_state() -> dict:
+    """`mode` is the effective value (env > saved > silence). `env_pinned`
+    means OMNIVOICE_PAUSE_FILL decides and a saved value is ignored."""
+    from services import audio_dsp
+
+    return {
+        "mode": audio_dsp.pause_fill_mode(),
+        "env_pinned": bool((os.environ.get(audio_dsp.PAUSE_FILL_ENV) or "").strip()),
+        "choices": list(audio_dsp.PAUSE_FILL_MODES),
+    }
+
+
+@router.get("/pause-fill")
+def get_pause_fill():
+    """How [pause] markers and audiobook gaps are filled."""
+    return _pause_fill_state()
+
+
+@router.put("/pause-fill")
+def set_pause_fill(body: _PauseFillBody):
+    """Persist the choice. Applies from the next generation, no restart."""
+    from core import prefs
+    from services import audio_dsp
+
+    try:
+        prefs.set_(audio_dsp.PAUSE_FILL_PREF, body.mode)
+    except Exception:
+        logger.exception("set_pause_fill failed")
+        raise HTTPException(status_code=500, detail="Failed to persist setting")
+    return _pause_fill_state()
 
 
 # ── Compute-device override (Settings → Performance) ──────────────────────
@@ -372,6 +405,7 @@ def _cuda_devices() -> list[dict]:
             ],
             capture_output=True,
             text=True,
+            errors="replace",
             timeout=3,
             check=False,
         )
@@ -481,6 +515,7 @@ class _RefinementBody(BaseModel):
     smart_cleanup: bool | None = None
     self_correction: bool | None = None
     preserve_technical: bool | None = None
+    spoken_punctuation: bool | None = None
 
 
 def _refinement_state():
@@ -1411,13 +1446,14 @@ def get_changelog(limit_versions: int = Query(5, ge=1, le=50)):
     frontend renders them safely without HTML. `available: false` when this
     install has no changelog (never an error: the viewer just hides)."""
     from core import changelog
+    from core.version import APP_VERSION
 
     path = changelog.changelog_path()
     if not path:
         return {"available": False, "releases": []}
     try:
         with open(path, encoding="utf-8") as fh:
-            releases = changelog.parse_changelog(fh.read(), limit_versions)
+            releases = changelog.parse_changelog(fh.read(), limit_versions, APP_VERSION)
     except Exception:
         logger.exception("changelog parse failed")
         return {"available": False, "releases": []}

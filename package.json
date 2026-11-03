@@ -11,7 +11,7 @@
     "dev:desktop": "bun run --cwd electron dev",
     "wait:api": "node scripts/wait-app-port.mjs api",
     "wait:frontend": "node scripts/wait-app-port.mjs web",
-    "predev": "bun install",
+    "predev": "node scripts/prepare-dev.mjs",
     "dev": "bun run --cwd electron dev",
     "predesktop": "bun install",
     "desktop": "bun run --cwd electron dev",
@@ -23,7 +23,6 @@
     "deps:check": "taze -r --maturity-period 7",
     "dev:web": "bun run setup:api && concurrently -n api,fe -c green,cyan --kill-others-on-fail \"bun run dev:api\" \"bun run dev:frontend\"",
     "predev:web": "bun install && bun scripts/clear-dev-ports.mjs",
-    "build:all": "turbo run build",
     "build:web": "bun run --cwd electron build:web",
     "dist": "bun run --cwd electron dist --publish never",
     "desktop-prod": "bun run build && bun run start",
@@ -37,11 +36,12 @@
   },
   "workspaces": ["electron"],
   "devDependencies": {
-    "concurrently": "^10.0.5",
-    "playwright": "^1.63.0",
+    "concurrently": "^10.0.6",
+    "playwright": "^1.64.1",
     "taze": "^21.3.0",
-    "turbo": "^2.11.5",
-    "typescript": "^7.0.2",
     "wait-on": "^9.5.1"
+  },
+  "patchedDependencies": {
+    "app-builder-lib@26.15.3": "patches/app-builder-lib-26.15.3.patch"
   }
 }

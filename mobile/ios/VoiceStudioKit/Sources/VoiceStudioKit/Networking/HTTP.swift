@@ -16,10 +16,29 @@ public struct DownloadReply: Sendable {
     public init(file: URL, status: Int, headers: [String: String]) { self.file = file; self.status = status; self.headers = headers }
 }
 public protocol HTTPTransport: Sendable {
+    var preferredRangeBytes: Int64 { get }
     func send(_ request: URLRequest) async throws -> HTTPReply
     func download(_ request: URLRequest) async throws -> DownloadReply
+    func download(_ request: URLRequest, maxBytes: Int) async throws -> DownloadReply
+    func download(_ request: URLRequest, progress: @escaping @Sendable (Int64) async -> Void) async throws -> DownloadReply
 }
 public extension HTTPTransport {
+    var preferredRangeBytes: Int64 { 4_194_304 }
+    func download(_ request: URLRequest, progress: @escaping @Sendable (Int64) async -> Void) async throws -> DownloadReply {
+        let reply = try await download(request)
+        await progress(Int64((try? reply.file.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0))
+        return reply
+    }
+    // In-memory test transports still enforce the same boundary. Network transports
+    // must override this method to enforce the limit while receiving the response.
+    func download(_ request: URLRequest, maxBytes: Int) async throws -> DownloadReply {
+        guard maxBytes > 0 else { throw ClientError("mobile.errors.file") }
+        let reply = try await download(request)
+        do {
+            guard (try reply.file.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? Int.max) <= maxBytes else { throw ClientError("mobile.errors.file") }
+            return reply
+        } catch { try? FileManager.default.removeItem(at: reply.file); throw error }
+    }
     func download(_ request: URLRequest) async throws -> DownloadReply {
         let reply = try await send(request)
         let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -47,6 +66,39 @@ public struct URLSessionTransport: HTTPTransport {
         let headers = http.allHeaderFields.reduce(into: [String: String]()) { out, field in
             if let key = field.key as? String { out[key.lowercased()] = String(describing: field.value) }
         }
+        return DownloadReply(file: file, status: http.statusCode, headers: headers)
+    }
+    public func download(_ request: URLRequest, maxBytes: Int) async throws -> DownloadReply {
+        guard maxBytes > 0 else { throw ClientError("mobile.errors.file") }
+        // A download completion handler can suppress progress delegate callbacks.
+        // Read the response stream ourselves so neither declared nor chunked bodies
+        // can consume unbounded temporary storage before validation.
+        let (bytes, response) = try await session.bytes(for: request, delegate: HostSessionDelegate())
+        defer { bytes.task.cancel() }
+        guard let http = response as? HTTPURLResponse else { throw ClientError("mobile.errors.invalid_response") }
+        guard response.expectedContentLength <= Int64(maxBytes) else { throw ClientError("mobile.errors.file") }
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        guard FileManager.default.createFile(atPath: file.path,contents: nil,attributes: [.posixPermissions: 0o600]) else { throw ClientError("mobile.errors.file") }
+        var completed = false
+        defer { if !completed { try? FileManager.default.removeItem(at: file) } }
+        let writer = try FileHandle(forWritingTo: file)
+        defer { try? writer.close() }
+        var chunk = Data(), received = 0
+        chunk.reserveCapacity(65_536)
+        for try await byte in bytes {
+            guard received < maxBytes else { throw ClientError("mobile.errors.file") }
+            received += 1; chunk.append(byte)
+            if chunk.count == 65_536 {
+                try Task.checkCancellation(); try writer.write(contentsOf: chunk)
+                chunk.removeAll(keepingCapacity: true)
+            }
+        }
+        try Task.checkCancellation()
+        if !chunk.isEmpty { try writer.write(contentsOf: chunk) }
+        let headers = http.allHeaderFields.reduce(into: [String: String]()) { out, field in
+            if let key = field.key as? String { out[key.lowercased()] = String(describing: field.value) }
+        }
+        completed = true
         return DownloadReply(file: file, status: http.statusCode, headers: headers)
     }
     public func send(_ request: URLRequest) async throws -> HTTPReply {

@@ -7,6 +7,7 @@ export const ROUTES = Object.freeze([
   '/gallery',
   '/transcriptions',
   '/calls',
+  '/workflows',
   '/stories',
   '/audiobook',
   '/dub',

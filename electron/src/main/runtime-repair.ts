@@ -22,11 +22,17 @@ export interface MissingRuntimeFacts {
   repairAttempted: boolean;
   /** The platform can never resolve the runtime (Intel Mac): repairing would only fail. */
   unsupported?: boolean;
+  /**
+   * Windows ROCm is requested but this runtime was never installed with it.
+   * Switching means a multi-GB download from new hosts, so the user starts it;
+   * a working CUDA/CPU runtime is never silently replaced.
+   */
+  rocmNotYetInstalled?: boolean;
 }
 
 export function decideMissingRuntime(facts: MissingRuntimeFacts): MissingRuntimeAction {
   if (!facts.packaged) return 'setup_api';
-  if (facts.unsupported || !facts.previouslyInstalled) return 'wizard';
+  if (facts.unsupported || facts.rocmNotYetInstalled || !facts.previouslyInstalled) return 'wizard';
   return facts.repairAttempted ? 'repair_failed' : 'repair';
 }
 

@@ -303,7 +303,7 @@ try {
     }
     if (firstSound) {
       const continueButton = window.getByRole('button', {
-        name: 'All good — continue',
+        name: 'Continue',
         exact: true,
       });
       const systemCheck = window.getByRole('button', {

@@ -493,7 +493,8 @@ def build_report(
             warnings.append({"kind": "low_disk", "severity": "critical", **base})
         elif free_gb < 2 * min_free_gb:
             warnings.append({"kind": "low_disk", "severity": "low", **base})
-        if v["used_percent"] > VOLUME_PRESSURE_PERCENT and ({"hf_cache", "data"} & set(v["roots"])):
+        # One warning per disk: a low-space warning already says it is full.
+        elif v["used_percent"] > VOLUME_PRESSURE_PERCENT and ({"hf_cache", "data"} & set(v["roots"])):
             warnings.append({
                 "kind": "volume_pressure",
                 "severity": "warning",

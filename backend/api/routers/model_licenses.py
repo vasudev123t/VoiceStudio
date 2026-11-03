@@ -25,14 +25,14 @@ class PrepareRequest(BaseModel):
 
 class AcceptRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    repo_id: str = Field(min_length=3, max_length=200, pattern=r"^[A-Za-z0-9][\w.-]*/[\w.-]+$")
+    repo_id: str = Field(min_length=3, max_length=200, pattern=r"^[A-Za-z0-9][\w.-]*/[\w.-]+(?::[\w.-]+)?$")
     fingerprint: str = Field(pattern=r"^v2:[a-f0-9]{64}$")
     accepted: StrictBool
 
 
 class RevokeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    repo_id: str = Field(min_length=3, max_length=200, pattern=r"^[A-Za-z0-9][\w.-]*/[\w.-]+$")
+    repo_id: str = Field(min_length=3, max_length=200, pattern=r"^[A-Za-z0-9][\w.-]*/[\w.-]+(?::[\w.-]+)?$")
 
 
 class CommitRequest(BaseModel):
@@ -78,7 +78,8 @@ def _fetch_file(repo_id: str, revision: str, filename: str,
     if not local_only:
         resolved = resolve()
         token = token_for_endpoint(endpoint, resolved.token if resolved else None) or False
-    return hf_hub_download(repo_id=repo_id, revision=revision, filename=filename,
+    # A package record (`<repo>:<package>`) downloads from its Hub repo.
+    return hf_hub_download(repo_id=repo_id.split(":", 1)[0], revision=revision, filename=filename,
                            endpoint=endpoint, token=token, local_files_only=local_only,
                            cache_dir=cache_dir)
 
