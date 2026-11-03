@@ -13,6 +13,7 @@ const state = vi.hoisted(() => ({
   engines: undefined as unknown,
   session: undefined as unknown,
   sessions: undefined as unknown,
+  asr: undefined as unknown,
 }));
 vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: vi.fn(async () => undefined) }),
@@ -21,6 +22,7 @@ vi.mock('@tanstack/react-query', () => ({
       queryKey[1] === 'engines' ? state.engines
         : queryKey[1] === 'session' ? state.session
           : queryKey[1] === 'sessions' ? state.sessions
+            : queryKey[1] === 'asr-engines' ? state.asr
             : queryKey[1] === 'rvc-voices' ? [] : undefined;
     return { data, isLoading: false, isError: false };
   },
@@ -43,9 +45,12 @@ vi.mock('@/lib/api/audio-edit', async (importOriginal) => ({
   deleteSession: vi.fn(async () => ({ ok: true })),
   saveSpans: vi.fn(async () => ({})),
   installEngine: vi.fn(async () => ({})),
+  transcribeSession: vi.fn(async () => ({ job: { id: 'j1' } })),
+  downloadAsrEngine: vi.fn(async () => ({ engine: 'vasista22_whisper_kn', status: 'running', progress: 0 })),
 }));
 
 import * as api from '@/lib/api/audio-edit';
+import type { AsrEngine } from '@/lib/api/audio-edit';
 import { AudioEditPage } from './audio-edit-page';
 import { EditWorkspace } from './edit-workspace';
 import { HistoryTab } from './history-tab';
@@ -75,7 +80,25 @@ function session(): Session {
   };
 }
 
+function asrEngine(patch: Partial<AsrEngine> = {}): AsrEngine {
+  return {
+    id: 'whisper', kind: 'local', label: 'Whisper', description: '', languages: null, word_timestamps: true,
+    provider: null, size_gb: null, gated: false, installed: true, configured: true, available: true, reason: null,
+    download: null, ...patch,
+  };
+}
+
+function asrOverview(...extra: AsrEngine[]) {
+  return {
+    default_engine: 'whisper',
+    languages: [{ code: 'auto', name: 'Auto-detect' }, { code: 'kn', name: 'Kannada' }],
+    engines: [asrEngine(), ...extra],
+  };
+}
+
 beforeEach(() => {
+  localStorage.clear();
+  state.asr = asrOverview();
   state.engines = { engines: [engine()], separation: { available: true, weights: 'w', missing: null }, gpu: true };
   state.session = session();
   state.sessions = { items: [], total: 0 };
@@ -158,4 +181,33 @@ it('lists history with open and confirmed delete', () => {
   fireEvent.click(screen.getByRole('button', { name: 'audioEdit.delete' }));
   fireEvent.click(screen.getByRole('button', { name: 'audioEdit.confirm_delete' }));
   expect(api.deleteSession).toHaveBeenCalledWith(item.id);
+});
+
+it('picks language and engine before upload and blocks a cloud engine without a key', () => {
+  state.asr = asrOverview(asrEngine({ id: 'sarvam', kind: 'cloud', label: 'Sarvam Saaras', provider: 'sarvam',
+    configured: false, available: false, reason: 'key_missing' }));
+  api.saveTranscribeOptions({ engine: 'sarvam', language: 'kn' });
+  render(<EditWorkspace mode="speech" sessionId={null} onSessionChange={vi.fn()} />);
+  expect(screen.getByRole('combobox', { name: 'audioEdit.asr.language' })).toHaveAttribute('data-value', 'kn');
+  expect(screen.getByRole('combobox', { name: 'audioEdit.asr.engine' })).toHaveAttribute('data-value', 'sarvam');
+  expect(screen.getByTestId('audio-edit-asr-blocker')).toHaveTextContent('audioEdit.asr.key_missing');
+  expect(screen.getByRole('button', { name: 'audioEdit.choose_file' })).toBeDisabled();
+});
+
+it('offers a download for a local Kannada model that is not installed', () => {
+  state.asr = asrOverview(asrEngine({ id: 'vasista22_whisper_kn', label: 'Whisper Kannada', languages: ['kn'],
+    installed: false, available: false, reason: 'not_installed', size_gb: 3.1 }));
+  api.saveTranscribeOptions({ engine: 'vasista22_whisper_kn', language: 'kn' });
+  render(<EditWorkspace mode="speech" sessionId={null} onSessionChange={vi.fn()} />);
+  expect(screen.getByRole('button', { name: 'audioEdit.choose_file' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'audioEdit.asr.download' }));
+  expect(api.downloadAsrEngine).toHaveBeenCalledWith('vasista22_whisper_kn');
+});
+
+it('re-transcribes a ready session with the picked language and engine', () => {
+  api.saveTranscribeOptions({ engine: 'whisper', language: 'kn' });
+  render(<EditWorkspace mode="speech" sessionId={'a'.repeat(32)} onSessionChange={vi.fn()} />);
+  expect(screen.getByTestId('audio-edit-retranscribe')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'audioEdit.asr.retranscribe' }));
+  expect(api.transcribeSession).toHaveBeenCalledWith('a'.repeat(32), { engine: 'whisper', language: 'kn' });
 });

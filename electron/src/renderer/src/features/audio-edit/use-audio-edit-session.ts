@@ -8,10 +8,22 @@ export const audioEditKeys = {
   session: (id: string) => ['audio-edit', 'session', id] as const,
   job: (id: string) => ['audio-edit', 'job', id] as const,
   voices: ['audio-edit', 'rvc-voices'] as const,
+  asrEngines: ['audio-edit', 'asr-engines'] as const,
+  asrKeys: ['audio-edit', 'asr-keys'] as const,
 };
 
 export function useAudioEditEngines() {
   return useQuery({ queryKey: audioEditKeys.engines, queryFn: ({ signal }) => api.getEngines(signal) });
+}
+
+/** Speech recognisers; polled every 2 s while a model download runs. */
+export function useAsrEngines() {
+  return useQuery({
+    queryKey: audioEditKeys.asrEngines,
+    queryFn: ({ signal }) => api.getAsrEngines(signal),
+    refetchInterval: (query) =>
+      query.state.data?.engines.some((e) => e.download?.status === 'running') ? 2000 : false,
+  });
 }
 
 /** The open session plus the job currently working on it (polled every second). */

@@ -23,7 +23,7 @@ export const MAX_REPLACEMENT_CHARS = 500;
 export const UPLOAD_ACCEPT = '.wav,.flac,.mp3,.m4a,.ogg,.opus,.aac,.mp4,.mov,.mkv,.webm';
 
 export interface Word { i: number; word: string; start: number; end: number }
-export interface Transcript { language: string | null; text: string; words: Word[] }
+export interface Transcript { language: string | null; engine?: string; text: string; words: Word[] }
 export interface Span {
   id: string;
   start_s: number;
@@ -68,6 +68,7 @@ export interface Session {
   channels: number;
   created_at: number;
   transcript: Transcript | null;
+  asr?: TranscribeOptions | null;
   spans: Span[];
   render_ids: string[];
   renders: Render[];
@@ -137,6 +138,80 @@ export const DEFAULT_RENDER_OPTIONS: Record<AudioEditMode, RenderOptions> = {
   speech: { ...BASE_OPTIONS, engine: 'f5tts' },
   song: { ...BASE_OPTIONS, engine: 'ace_step' },
 };
+
+// ── speech recognition (language + engine picked before transcribing) ──
+
+export interface TranscribeOptions { engine: string; language: string }
+export const DEFAULT_TRANSCRIBE_OPTIONS: TranscribeOptions = { engine: 'whisper', language: 'auto' };
+export interface AsrDownload { engine: string; status: 'running' | 'succeeded' | 'failed'; progress: number;
+  error: string | null; started_at: number }
+export interface AsrEngine {
+  id: string;
+  kind: 'local' | 'cloud';
+  label: string;
+  description: string;
+  languages: string[] | null;
+  word_timestamps: boolean;
+  provider: string | null;
+  size_gb: number | null;
+  gated: boolean;
+  installed: boolean;
+  configured: boolean;
+  available: boolean;
+  reason: string | null;
+  download: AsrDownload | null;
+}
+export interface AsrEnginesOverview {
+  default_engine: string;
+  languages: { code: string; name: string }[];
+  engines: AsrEngine[];
+}
+export interface AsrKeyField {
+  id: string;
+  label: string;
+  secret: boolean;
+  placeholder: string;
+  has_value: boolean;
+  source: 'settings' | 'env' | null;
+  value: string | null;
+  masked: string | null;
+}
+export interface AsrProvider { id: string; label: string; docs_url: string; fields: AsrKeyField[]; configured: boolean }
+
+export const engineSupports = (engine: AsrEngine | undefined, language: string) =>
+  !engine || !engine.languages || engine.languages.includes(language)
+  || (language === 'auto' && engine.languages.length === 1);
+
+/** Why the picked engine cannot run yet, or null when it can. */
+export function transcribeBlocker(
+  overview: AsrEnginesOverview | undefined, options: TranscribeOptions,
+): 'key_missing' | 'not_installed' | 'missing_module' | 'language_unsupported' | null {
+  const engine = overview?.engines.find((e) => e.id === options.engine);
+  if (!engine) return null;
+  if (!engineSupports(engine, options.language)) return 'language_unsupported';
+  if (engine.available) return null;
+  if (engine.reason === 'key_missing') return 'key_missing';
+  if (engine.reason === 'not_installed') return 'not_installed';
+  return 'missing_module';
+}
+
+const TRANSCRIBE_PREF_KEY = 'audioEdit.transcribeOptions';
+export function loadTranscribeOptions(): TranscribeOptions {
+  try {
+    const raw = JSON.parse(globalThis.localStorage?.getItem(TRANSCRIBE_PREF_KEY) ?? 'null');
+    if (raw && typeof raw.engine === 'string' && typeof raw.language === 'string') return raw;
+  } catch {
+    // ignore a corrupt preference
+  }
+  return DEFAULT_TRANSCRIBE_OPTIONS;
+}
+export function saveTranscribeOptions(options: TranscribeOptions): void {
+  try {
+    globalThis.localStorage?.setItem(TRANSCRIBE_PREF_KEY, JSON.stringify(options));
+  } catch {
+    // storage unavailable: the pick lasts for this view only
+  }
+}
 
 export const isLive = (status: JobStatus) => status === 'queued' || status === 'running';
 
@@ -252,7 +327,15 @@ export const listSessions = (signal?: AbortSignal) =>
 export const getSession = (id: string, signal?: AbortSignal) => apiJson<Session>(sid(id), { signal });
 export const deleteSession = (id: string) => apiJson<{ ok: boolean }>(sid(id), { method: 'DELETE' });
 export const separateSession = (id: string) => apiJson<{ job: EditJob }>(`${sid(id)}/separate`, { method: 'POST' });
-export const transcribeSession = (id: string) => apiJson<{ job: EditJob }>(`${sid(id)}/transcribe`, { method: 'POST' });
+export const transcribeSession = (id: string, options?: TranscribeOptions) =>
+  apiJson<{ job: EditJob }>(`${sid(id)}/transcribe`, options ? json('POST', options) : { method: 'POST' });
+export const getAsrEngines = (signal?: AbortSignal) => apiJson<AsrEnginesOverview>(`${BASE}/asr/engines`, { signal });
+export const downloadAsrEngine = (engine: string) =>
+  apiJson<AsrDownload>(`${BASE}/asr/engines/${encodeURIComponent(engine)}/download`, { method: 'POST' });
+export const getAsrKeys = (signal?: AbortSignal) =>
+  apiJson<{ providers: AsrProvider[] }>(`${BASE}/asr/keys`, { signal });
+export const saveAsrKeys = (provider: string, fields: Record<string, string>) =>
+  apiJson<AsrProvider>(`${BASE}/asr/keys/${encodeURIComponent(provider)}`, json('PUT', { fields }));
 export const saveSpans = (id: string, spans: Span[]) => apiJson<Session>(`${sid(id)}/spans`, json('PUT', { spans }));
 export const startRender = (id: string, options: RenderOptions) =>
   apiJson<{ job: EditJob; render: Render }>(`${sid(id)}/render`, json('POST', toRenderBody(options)));

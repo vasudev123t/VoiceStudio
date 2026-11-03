@@ -123,8 +123,46 @@ def separate(session_id: str) -> dict:
 
 
 @router.post("/sessions/{session_id}/transcribe")
-def transcribe(session_id: str) -> dict:
-    return {"job": _call(_svc().start_transcription, session_id).to_dict()}
+def transcribe(session_id: str, body: Optional[dict[str, Any]] = Body(None)) -> dict:
+    """Body ``{engine, language}`` picks the recogniser; omitted = active Whisper, auto-detect."""
+    return {"job": _call(_svc().start_transcription, session_id, body).to_dict()}
+
+
+# ── speech recognition engines and cloud keys ────────────────────────────
+
+def _asr():
+    from services import audio_edit_asr
+
+    return audio_edit_asr
+
+
+def _asr_call(fn, *args):
+    asr = _asr()
+    try:
+        return fn(*args)
+    except asr.AsrError as exc:
+        raise _error(exc.status, exc.code, exc.message) from None
+
+
+@router.get("/asr/engines")
+def asr_engines() -> dict:
+    return _asr_call(_asr().engines_overview)
+
+
+@router.post("/asr/engines/{engine}/download")
+def asr_download(engine: str) -> dict:
+    return _asr_call(_asr().start_download, engine)
+
+
+@router.get("/asr/keys")
+def asr_keys() -> dict:
+    return _asr_call(_asr().list_providers)
+
+
+@router.put("/asr/keys/{provider}")
+def asr_set_keys(provider: str, body: dict = Body(...)) -> dict:
+    """Body ``{fields: {api_key: "…"}}``; an omitted field is kept, ``""`` clears it."""
+    return _asr_call(_asr().set_provider_keys, provider, body.get("fields"))
 
 
 @router.put("/sessions/{session_id}/spans")

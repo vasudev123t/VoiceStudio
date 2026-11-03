@@ -7,12 +7,14 @@ import * as api from '@/lib/api/audio-edit';
 import { CommercialBadge, LicenceGate } from './licence-gate';
 import { RenderControls } from './render-controls';
 import { SpanList } from './span-list';
+import { TranscribeOptions } from './transcribe-options';
 import { TranscriptSpans } from './transcript-spans';
-import { audioEditKeys, useAudioEditEngines, useAudioEditSession } from './use-audio-edit-session';
+import { audioEditKeys, useAsrEngines, useAudioEditEngines, useAudioEditSession } from './use-audio-edit-session';
 
 const KNOWN_ERRORS = new Set([
   'invalid_audio', 'too_long', 'too_large', 'no_word_timestamps', 'invalid_spans', 'engine_not_installed',
   'licence_ack_required', 'ace_step_unavailable', 'separation_unavailable', 'engine_failed', 'busy',
+  'asr_key_missing', 'asr_model_missing', 'asr_language_unsupported', 'asr_auth_failed', 'asr_failed',
 ]);
 
 type T = ReturnType<typeof useTranslation>['t'];
@@ -33,6 +35,13 @@ export function EditWorkspace({ mode, sessionId, onSessionChange }: Props) {
   const qc = useQueryClient();
   const engines = useAudioEditEngines();
   const { session, job, setJobId } = useAudioEditSession(sessionId);
+  const asrEngines = useAsrEngines();
+  const [asr, setAsrState] = useState<api.TranscribeOptions>(api.loadTranscribeOptions);
+  const setAsr = (next: api.TranscribeOptions) => {
+    setAsrState(next);
+    api.saveTranscribeOptions(next);
+  };
+  const asrBlocker = api.transcribeBlocker(asrEngines.data, asr);
   const [spans, setSpans] = useState<api.Span[]>([]);
   const [options, setOptions] = useState<api.RenderOptions>(api.DEFAULT_RENDER_OPTIONS[mode]);
   const [anchor, setAnchor] = useState<number | null>(null);
@@ -56,7 +65,7 @@ export function EditWorkspace({ mode, sessionId, onSessionChange }: Props) {
   useEffect(() => {
     // Songs: transcribe the separated vocals as soon as separation succeeds.
     if (!session || jobKind !== 'separate' || jobStatus !== 'succeeded' || stage !== 'separated') return;
-    api.transcribeSession(session.id).then((r) => setJobId(r.job.id), fail);
+    api.transcribeSession(session.id, asr).then((r) => setJobId(r.job.id), fail);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobKind, jobStatus, stage]);
 
@@ -74,7 +83,7 @@ export function EditWorkspace({ mode, sessionId, onSessionChange }: Props) {
     try {
       const { session: created, job: first } = await api.createSession(file, mode);
       onSessionChange(created.id);
-      setJobId(first ? first.id : (await api.transcribeSession(created.id)).job.id);
+      setJobId(first ? first.id : (await api.transcribeSession(created.id, asr)).job.id);
       void qc.invalidateQueries({ queryKey: audioEditKeys.sessions });
     } catch (err) {
       fail(err);
@@ -114,8 +123,18 @@ export function EditWorkspace({ mode, sessionId, onSessionChange }: Props) {
     try {
       const r = session.mode === 'song' && session.stage === 'uploaded'
         ? await api.separateSession(session.id)
-        : await api.transcribeSession(session.id);
+        : await api.transcribeSession(session.id, asr);
       setJobId(r.job.id);
+    } catch (err) {
+      fail(err);
+    }
+  };
+
+  const retranscribe = async () => {
+    if (!session) return;
+    setError(null);
+    try {
+      setJobId((await api.transcribeSession(session.id, asr)).job.id);
     } catch (err) {
       fail(err);
     }
@@ -158,17 +177,18 @@ export function EditWorkspace({ mode, sessionId, onSessionChange }: Props) {
           onDrop={(e) => {
             e.preventDefault();
             const file = e.dataTransfer.files[0];
-            if (file) void upload(file);
+            if (file && !asrBlocker) void upload(file);
           }}
         >
-          <p className="text-sm text-muted-foreground">{t(`audioEdit.upload_hint_${mode}`)}</p>
+          <TranscribeOptions overview={asrEngines.data} value={asr} onChange={setAsr} disabled={busy} />
+          <p className="mt-3 text-sm text-muted-foreground">{t(`audioEdit.upload_hint_${mode}`)}</p>
           <input ref={fileRef} type="file" accept={api.UPLOAD_ACCEPT} className="hidden" data-testid="audio-edit-file"
             onChange={(e) => {
               const file = e.target.files?.[0];
-              if (file) void upload(file);
+              if (file && !asrBlocker) void upload(file);
               e.target.value = '';
             }} />
-          <Button className="mt-3" disabled={busy} onClick={() => fileRef.current?.click()}>
+          <Button className="mt-3" disabled={busy || !!asrBlocker} onClick={() => fileRef.current?.click()}>
             {t('audioEdit.choose_file')}
           </Button>
           {mode === 'song' && engines.data && !engines.data.separation.available && (
@@ -208,6 +228,27 @@ export function EditWorkspace({ mode, sessionId, onSessionChange }: Props) {
             {t('audioEdit.cancel')}
           </Button>
         </div>
+      )}
+      {!live && (session.stage === 'ready' || session.stage === 'uploaded' || session.stage === 'separated') && (
+        <details className="rounded-lg border p-3 text-sm" data-testid="audio-edit-retranscribe">
+          <summary className="cursor-pointer text-xs text-muted-foreground">
+            {t('audioEdit.asr.retranscribe_summary', {
+              engine: asrEngines.data?.engines.find((e) => e.id === (session.asr?.engine ?? 'whisper'))?.label
+                ?? session.asr?.engine ?? 'Whisper',
+              language: session.transcript?.language ?? session.asr?.language ?? 'auto',
+            })}
+          </summary>
+          <div className="mt-2 space-y-2">
+            <TranscribeOptions overview={asrEngines.data} value={asr} onChange={setAsr} disabled={busy} />
+            <Button size="sm" variant="outline" disabled={busy || !!asrBlocker || (mode === 'song' && session.stage === 'uploaded')}
+              onClick={() => void retranscribe()}>
+              {t('audioEdit.asr.retranscribe')}
+            </Button>
+            {session.stage === 'ready' && session.spans.length > 0 && (
+              <p className="text-xs text-muted-foreground">{t('audioEdit.asr.retranscribe_clears')}</p>
+            )}
+          </div>
+        </details>
       )}
       {mode === 'song' && (session.stage === 'separated' || session.stage === 'transcribing' || session.stage === 'ready') && (
         <div className="grid gap-2 sm:grid-cols-2">

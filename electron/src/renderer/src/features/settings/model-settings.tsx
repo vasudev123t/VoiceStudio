@@ -13,6 +13,7 @@ import { familyIcons, modelFamilies, type ModelFamily } from './model-family';
 import { SettingsSection } from './settings-layout';
 import { VoicePreviewsSettings } from './voice-previews-settings';
 import { AsrOpenAiCompatSettings } from './asr-openai-compat-settings';
+import { AudioEditAsrKeysSettings } from './audio-edit-asr-keys-settings';
 import { AecSettings } from './aec-settings';
 import { DiarisationSettings } from './model-list/diarisation-list';
 import { DictationList } from './model-list/dictation-list';
@@ -87,6 +88,7 @@ export function ModelSettings({ family }: { family?: ModelFamily }) {
         <>
           <EngineFamilyList family="asr" />
           <AsrOpenAiCompatSettings />
+          <AudioEditAsrKeysSettings />
         </>
       );
     case 'tts':

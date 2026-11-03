@@ -1693,7 +1693,14 @@
     "gpu_report_engine_no_family_path": "CPU: no path for your GPU type",
     "gpu_report_engine_no_gpu": "CPU: no GPU available",
     "gpu_report_engine_needs_accelerator": "Needs a GPU ({{needs}}) this machine does not have",
-    "models_dir_desc": "Downloaded models are stored here. Choose a drive with more free space if this one fills up."
+    "models_dir_desc": "Downloaded models are stored here. Choose a drive with more free space if this one fills up.",
+    "asr_cloud_keys_title": "Audio Edit cloud speech recognition",
+    "asr_cloud_keys_desc": "API keys for the cloud recognisers in Audio Edit",
+    "asr_cloud_keys_hint": "Keys are stored encrypted on this device and only sent to their own provider. Leave a field empty to keep the saved key.",
+    "asr_cloud_key_ready": "Ready",
+    "asr_cloud_key_missing": "Not set",
+    "asr_cloud_key_clear": "Remove",
+    "asr_cloud_key_get": "Get a key"
   },
   "gallery": {
     "title": "VoiceStudio Gallery",
@@ -4561,7 +4568,11 @@
   "audioEdit": {
     "title": "Audio Edit",
     "subtitle": "Change, add or remove words in a recording. Everything outside your edits stays exactly as it was.",
-    "tabs": { "speech": "Speech", "song": "Song", "history": "History" },
+    "tabs": {
+      "speech": "Speech",
+      "song": "Song",
+      "history": "History"
+    },
     "upload_hint_speech": "Drop a speech recording or video here (up to 10 minutes).",
     "upload_hint_song": "Drop a song here (up to 10 minutes). Vocals are separated from the music first.",
     "choose_file": "Choose file",
@@ -4576,7 +4587,11 @@
     },
     "stage_failed": "That step failed: {{error}}",
     "retry": "Retry",
-    "job": { "separate": "Separating vocals", "transcribe": "Transcribing", "render": "Rendering" },
+    "job": {
+      "separate": "Separating vocals",
+      "transcribe": "Transcribing",
+      "render": "Rendering"
+    },
     "cancel": "Cancel",
     "stem_vocals": "Vocals",
     "stem_instrumental": "Instrumental",
@@ -4652,7 +4667,34 @@
       "ace_step_unavailable": "ACE-Step could not start. Check its install in Settings → Models.",
       "separation_unavailable": "Vocal separation is not installed.",
       "engine_failed": "The engine failed while rendering. Try again or pick another engine.",
-      "busy": "Another Audio Edit job is running. Wait for it or cancel it."
+      "busy": "Another Audio Edit job is running. Wait for it or cancel it.",
+      "asr_key_missing": "Add the API key for the selected recogniser in Settings → Models → ASR.",
+      "asr_model_missing": "Download the selected speech recognition model first.",
+      "asr_language_unsupported": "The selected recogniser does not support this language.",
+      "asr_auth_failed": "The speech recognition provider rejected the API key.",
+      "asr_failed": "Speech recognition failed. Try again or pick another recogniser."
+    },
+    "asr": {
+      "language": "Spoken language",
+      "language_auto": "Auto-detect",
+      "engine": "Speech recogniser",
+      "whisper_default": "Whisper (active ASR engine)",
+      "tag_local": "local",
+      "tag_not_installed": "local, not downloaded",
+      "tag_cloud": "cloud",
+      "tag_needs_key": "cloud, needs key",
+      "auto_hint": "Pick the language for Kannada and other Indian languages: auto-detect can mistake Kannada for Telugu.",
+      "phrase_timing": "This recogniser times phrases, not words; word timings are estimated within each phrase.",
+      "key_missing": "Add your {{engine}} API key to use it.",
+      "open_settings": "Open Settings → Models → ASR",
+      "model_missing": "{{engine}} is not downloaded yet (about {{size}} GB).",
+      "download": "Download",
+      "downloading": "Downloading… {{pct}}%",
+      "module_missing": "{{engine}} needs the Python package {{module}}.",
+      "language_unsupported": "The selected recogniser does not support this language.",
+      "retranscribe_summary": "Transcribed with {{engine}} ({{language}}). Change language or recogniser…",
+      "retranscribe": "Transcribe again",
+      "retranscribe_clears": "Transcribing again replaces the transcript and clears the marked spans."
     }
   },
   "voiceLab": {

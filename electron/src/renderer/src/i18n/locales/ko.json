@@ -1522,7 +1522,14 @@
     "usage_empty": "아직 생성한 항목이 없습니다. 무언가 만들면 여기에 표시됩니다.",
     "usage_since": "{{date}}부터",
     "usage_starred": "별표 표시한 테이크",
-    "usage_takes": "생성한 테이크"
+    "usage_takes": "생성한 테이크",
+    "asr_cloud_keys_title": "Audio Edit cloud speech recognition",
+    "asr_cloud_keys_desc": "API keys for the cloud recognisers in Audio Edit",
+    "asr_cloud_keys_hint": "Keys are stored encrypted on this device and only sent to their own provider. Leave a field empty to keep the saved key.",
+    "asr_cloud_key_ready": "Ready",
+    "asr_cloud_key_missing": "Not set",
+    "asr_cloud_key_clear": "Remove",
+    "asr_cloud_key_get": "Get a key"
   },
   "gallery": {
     "title": "VoiceStudio 갤러리",
@@ -4561,7 +4568,11 @@
   "audioEdit": {
     "title": "오디오 편집",
     "subtitle": "녹음에서 단어를 바꾸거나 추가하거나 삭제하세요. 편집 범위 밖의 모든 부분은 원래 그대로 유지됩니다.",
-    "tabs": { "speech": "음성", "song": "노래", "history": "기록" },
+    "tabs": {
+      "speech": "음성",
+      "song": "노래",
+      "history": "기록"
+    },
     "upload_hint_speech": "음성 녹음이나 동영상을 여기에 놓으세요(최대 10분).",
     "upload_hint_song": "노래를 여기에 놓으세요(최대 10분). 먼저 보컬을 반주에서 분리합니다.",
     "choose_file": "파일 선택",
@@ -4576,7 +4587,11 @@
     },
     "stage_failed": "해당 단계가 실패했습니다: {{error}}",
     "retry": "다시 시도",
-    "job": { "separate": "보컬 분리 중", "transcribe": "받아쓰는 중", "render": "렌더링 중" },
+    "job": {
+      "separate": "보컬 분리 중",
+      "transcribe": "받아쓰는 중",
+      "render": "렌더링 중"
+    },
     "cancel": "취소",
     "stem_vocals": "보컬",
     "stem_instrumental": "반주",
@@ -4652,7 +4667,34 @@
       "ace_step_unavailable": "ACE-Step을 시작할 수 없습니다. 설정 → 모델에서 설치 상태를 확인하세요.",
       "separation_unavailable": "보컬 분리가 설치되어 있지 않습니다.",
       "engine_failed": "렌더링 중 엔진이 실패했습니다. 다시 시도하거나 다른 엔진을 선택하세요.",
-      "busy": "다른 오디오 편집 작업이 실행 중입니다. 끝날 때까지 기다리거나 취소하세요."
+      "busy": "다른 오디오 편집 작업이 실행 중입니다. 끝날 때까지 기다리거나 취소하세요.",
+      "asr_key_missing": "Add the API key for the selected recogniser in Settings → Models → ASR.",
+      "asr_model_missing": "Download the selected speech recognition model first.",
+      "asr_language_unsupported": "The selected recogniser does not support this language.",
+      "asr_auth_failed": "The speech recognition provider rejected the API key.",
+      "asr_failed": "Speech recognition failed. Try again or pick another recogniser."
+    },
+    "asr": {
+      "language": "Spoken language",
+      "language_auto": "Auto-detect",
+      "engine": "Speech recogniser",
+      "whisper_default": "Whisper (active ASR engine)",
+      "tag_local": "local",
+      "tag_not_installed": "local, not downloaded",
+      "tag_cloud": "cloud",
+      "tag_needs_key": "cloud, needs key",
+      "auto_hint": "Pick the language for Kannada and other Indian languages: auto-detect can mistake Kannada for Telugu.",
+      "phrase_timing": "This recogniser times phrases, not words; word timings are estimated within each phrase.",
+      "key_missing": "Add your {{engine}} API key to use it.",
+      "open_settings": "Open Settings → Models → ASR",
+      "model_missing": "{{engine}} is not downloaded yet (about {{size}} GB).",
+      "download": "Download",
+      "downloading": "Downloading… {{pct}}%",
+      "module_missing": "{{engine}} needs the Python package {{module}}.",
+      "language_unsupported": "The selected recogniser does not support this language.",
+      "retranscribe_summary": "Transcribed with {{engine}} ({{language}}). Change language or recogniser…",
+      "retranscribe": "Transcribe again",
+      "retranscribe_clears": "Transcribing again replaces the transcript and clears the marked spans."
     }
   },
   "voiceLab": {

@@ -1522,7 +1522,14 @@
     "gpu_report_engine_no_family_path": "CPU：お使いの GPU の種類に対応する経路がありません",
     "gpu_report_engine_no_gpu": "CPU：GPU がありません",
     "gpu_report_engine_needs_accelerator": "このマシンにない GPU（{{needs}}）が必要です",
-    "models_dir_desc": "ダウンロードしたモデルはここに保存されます。空き容量が足りなくなったら、より空きのあるドライブを選んでください。"
+    "models_dir_desc": "ダウンロードしたモデルはここに保存されます。空き容量が足りなくなったら、より空きのあるドライブを選んでください。",
+    "asr_cloud_keys_title": "Audio Edit cloud speech recognition",
+    "asr_cloud_keys_desc": "API keys for the cloud recognisers in Audio Edit",
+    "asr_cloud_keys_hint": "Keys are stored encrypted on this device and only sent to their own provider. Leave a field empty to keep the saved key.",
+    "asr_cloud_key_ready": "Ready",
+    "asr_cloud_key_missing": "Not set",
+    "asr_cloud_key_clear": "Remove",
+    "asr_cloud_key_get": "Get a key"
   },
   "gallery": {
     "title": "VoiceStudio ギャラリー",
@@ -4561,7 +4568,11 @@
   "audioEdit": {
     "title": "オーディオ編集",
     "subtitle": "録音内の単語を変更、追加、削除できます。編集範囲外の部分はすべて元のまま保たれます。",
-    "tabs": { "speech": "音声", "song": "楽曲", "history": "履歴" },
+    "tabs": {
+      "speech": "音声",
+      "song": "楽曲",
+      "history": "履歴"
+    },
     "upload_hint_speech": "音声の録音または動画をここにドロップしてください（最長 10 分）。",
     "upload_hint_song": "楽曲をここにドロップしてください（最長 10 分）。最初にボーカルを伴奏から分離します。",
     "choose_file": "ファイルを選択",
@@ -4576,7 +4587,11 @@
     },
     "stage_failed": "この手順に失敗しました: {{error}}",
     "retry": "再試行",
-    "job": { "separate": "ボーカルを分離中", "transcribe": "文字起こし中", "render": "レンダリング中" },
+    "job": {
+      "separate": "ボーカルを分離中",
+      "transcribe": "文字起こし中",
+      "render": "レンダリング中"
+    },
     "cancel": "キャンセル",
     "stem_vocals": "ボーカル",
     "stem_instrumental": "伴奏",
@@ -4652,7 +4667,34 @@
       "ace_step_unavailable": "ACE-Step を起動できませんでした。設定 → モデルでインストール状況を確認してください。",
       "separation_unavailable": "ボーカル分離がインストールされていません。",
       "engine_failed": "レンダリング中にエンジンが失敗しました。もう一度試すか、別のエンジンを選んでください。",
-      "busy": "別のオーディオ編集ジョブが実行中です。完了を待つか、キャンセルしてください。"
+      "busy": "別のオーディオ編集ジョブが実行中です。完了を待つか、キャンセルしてください。",
+      "asr_key_missing": "Add the API key for the selected recogniser in Settings → Models → ASR.",
+      "asr_model_missing": "Download the selected speech recognition model first.",
+      "asr_language_unsupported": "The selected recogniser does not support this language.",
+      "asr_auth_failed": "The speech recognition provider rejected the API key.",
+      "asr_failed": "Speech recognition failed. Try again or pick another recogniser."
+    },
+    "asr": {
+      "language": "Spoken language",
+      "language_auto": "Auto-detect",
+      "engine": "Speech recogniser",
+      "whisper_default": "Whisper (active ASR engine)",
+      "tag_local": "local",
+      "tag_not_installed": "local, not downloaded",
+      "tag_cloud": "cloud",
+      "tag_needs_key": "cloud, needs key",
+      "auto_hint": "Pick the language for Kannada and other Indian languages: auto-detect can mistake Kannada for Telugu.",
+      "phrase_timing": "This recogniser times phrases, not words; word timings are estimated within each phrase.",
+      "key_missing": "Add your {{engine}} API key to use it.",
+      "open_settings": "Open Settings → Models → ASR",
+      "model_missing": "{{engine}} is not downloaded yet (about {{size}} GB).",
+      "download": "Download",
+      "downloading": "Downloading… {{pct}}%",
+      "module_missing": "{{engine}} needs the Python package {{module}}.",
+      "language_unsupported": "The selected recogniser does not support this language.",
+      "retranscribe_summary": "Transcribed with {{engine}} ({{language}}). Change language or recogniser…",
+      "retranscribe": "Transcribe again",
+      "retranscribe_clears": "Transcribing again replaces the transcript and clears the marked spans."
     }
   },
   "voiceLab": {

@@ -102,3 +102,36 @@ describe('requests', () => {
     expect(formatSeconds(75.5)).toBe('1:15.50');
   });
 });
+
+describe('speech recognition options', () => {
+  const overview = (patch: Record<string, unknown>) => ({
+    default_engine: 'whisper',
+    languages: [{ code: 'auto', name: 'Auto-detect' }, { code: 'kn', name: 'Kannada' }],
+    engines: [{
+      id: 'x', kind: 'cloud' as const, label: 'X', description: '', languages: null, word_timestamps: true,
+      provider: 'x', size_gb: null, gated: false, installed: true, configured: true, available: true,
+      reason: null, download: null, ...patch,
+    }],
+  });
+
+  it('reports why the picked engine cannot run', async () => {
+    const { transcribeBlocker } = await import('./audio-edit');
+    expect(transcribeBlocker(undefined, { engine: 'x', language: 'kn' })).toBeNull();
+    expect(transcribeBlocker(overview({}), { engine: 'x', language: 'kn' })).toBeNull();
+    expect(transcribeBlocker(overview({ available: false, reason: 'key_missing' }), { engine: 'x', language: 'kn' }))
+      .toBe('key_missing');
+    expect(transcribeBlocker(overview({ available: false, reason: 'not_installed' }), { engine: 'x', language: 'kn' }))
+      .toBe('not_installed');
+    expect(transcribeBlocker(overview({ languages: ['en'] }), { engine: 'x', language: 'kn' }))
+      .toBe('language_unsupported');
+    expect(transcribeBlocker(overview({ languages: ['kn'] }), { engine: 'x', language: 'auto' })).toBeNull();
+  });
+
+  it('posts the options with the transcribe request', async () => {
+    const { transcribeSession } = await import('./audio-edit');
+    await transcribeSession('a'.repeat(32), { engine: 'sarvam', language: 'kn' });
+    expect(client.apiJson).toHaveBeenLastCalledWith(`/audio-edit/sessions/${'a'.repeat(32)}/transcribe`, {
+      method: 'POST', body: JSON.stringify({ engine: 'sarvam', language: 'kn' }),
+    });
+  });
+});

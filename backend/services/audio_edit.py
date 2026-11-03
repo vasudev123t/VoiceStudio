@@ -675,10 +675,28 @@ def start_separation(session_id: str) -> EditJob:
     return _launch(job, _separate_work)
 
 
-def start_transcription(session_id: str) -> EditJob:
+def asr_options(raw: object = None) -> dict:
+    """Validated ``{engine, language}`` for a transcription request."""
+    from services import audio_edit_asr as asr
+
+    try:
+        return asr.validate_options(raw)
+    except asr.AsrError as exc:
+        raise AudioEditError(exc.code, exc.message, exc.status) from None
+
+
+def start_transcription(session_id: str, options: object = None) -> EditJob:
+    from services import audio_edit_asr as asr
+
+    picked = asr_options(options)
+    try:
+        asr.check_ready(picked)
+    except asr.AsrError as exc:
+        raise AudioEditError(exc.code, exc.message, exc.status) from None
     job = _start_stage_job(session_id, "transcribe",
                            {"speech": ("uploaded", "ready"), "song": ("separated", "ready")},
                            "transcribing", "Separate the song before transcribing it.")
+    update_session(session_id, asr=picked)
     return _launch(job, _transcribe_work)
 
 
@@ -731,10 +749,24 @@ def _separate_work(job: EditJob) -> None:
     update_session(job.session_id, stage="separated", error=None)
 
 
-def _asr_transcribe(path: Path) -> dict:
-    from services.asr_backend import get_active_asr_backend
+def _asr_transcribe(path: Path, options: Optional[dict] = None, job: Optional[EditJob] = None) -> dict:
+    """Run the picked recogniser (default: the active Whisper, auto language)."""
+    from services import audio_edit_asr as asr
 
-    return get_active_asr_backend().transcribe(str(path), word_timestamps=True)
+    picked = options or {"engine": asr.DEFAULT_ENGINE, "language": "auto"}
+
+    def progress(p: float) -> None:
+        if job is not None:
+            job.progress = 0.05 + 0.9 * max(0.0, min(1.0, p))
+
+    try:
+        return asr.transcribe(path, picked, on_progress=progress,
+                              check_cancel=(lambda: _check_cancel(job)) if job is not None else (lambda: None))
+    except asr.AsrError as exc:
+        raise AudioEditError(exc.code, exc.message, exc.status) from None
+    finally:
+        if picked["engine"] != asr.DEFAULT_ENGINE:
+            asr.release_local_models()
 
 
 def _transcribe_work(job: EditJob) -> None:
@@ -743,10 +775,14 @@ def _transcribe_work(job: EditJob) -> None:
     source = d / ("vocals.wav" if session["mode"] == "song" else "source.wav")
     job.stage, job.progress = "transcribe", 0.05
     _release_gpu()
-    result = _asr_transcribe(source)
+    picked = session.get("asr") or None
+    result = _asr_transcribe(source, picked, job)
     _check_cancel(job)
     words = words_from_asr(result if isinstance(result, dict) else {})
-    transcript = {"language": result.get("language") if isinstance(result, dict) else None,
+    language = result.get("language") if isinstance(result, dict) else None
+    if picked and picked.get("language") not in (None, "auto"):
+        language = picked["language"]
+    transcript = {"language": language, "engine": (picked or {}).get("engine", "whisper"),
                   "text": " ".join(w["word"] for w in words), "words": words}
     _write_json(d / "transcript.json", transcript)
     update_session(job.session_id, stage="ready", error=None, transcript=transcript, spans=[])

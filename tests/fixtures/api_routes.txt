@@ -65,6 +65,8 @@ GET /archetypes/previews/status
 GET /archetypes/{archetype_id}
 GET /archetypes/{archetype_id}/preview
 GET /archetypes/{archetype_id}/preview/state
+GET /audio-edit/asr/engines
+GET /audio-edit/asr/keys
 GET /audio-edit/engines
 GET /audio-edit/jobs/{job_id}
 GET /audio-edit/sessions
@@ -246,6 +248,7 @@ POST /api/settings/llm-providers/{provider_id}/test
 POST /api/settings/storage/temp/clear
 POST /archetypes/previews/check
 POST /archetypes/{archetype_id}/use
+POST /audio-edit/asr/engines/{engine}/download
 POST /audio-edit/jobs/{job_id}/cancel
 POST /audio-edit/licence/ack
 POST /audio-edit/sessions
@@ -410,6 +413,7 @@ PUT /api/settings/perf/torch-compile-disabled
 PUT /api/settings/performance-profile
 PUT /api/settings/storage/models-dir
 PUT /archetypes/previews
+PUT /audio-edit/asr/keys/{provider}
 PUT /audio-edit/sessions/{session_id}/spans
 PUT /calls/settings
 PUT /glossary/{project_id}/{term_id}

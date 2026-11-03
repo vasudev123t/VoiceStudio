@@ -64,7 +64,7 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(ae, "_free_vram", lambda: None)
     monkeypatch.setattr(ae, "_release_gpu", lambda: None)
     monkeypatch.setattr(ae, "_registry_records", lambda: {})
-    monkeypatch.setattr(ae, "_asr_transcribe", lambda path: {"language": "en", "words": WORDS})
+    monkeypatch.setattr(ae, "_asr_transcribe", lambda path, *_: {"language": "en", "words": WORDS})
     monkeypatch.setattr(ae, "_edit_engine", lambda engine_id: _Editor())
     monkeypatch.setattr(ae, "separation_status", lambda: {"available": True, "weights": "w", "missing": None})
     monkeypatch.setattr(aee, "engine_status", lambda e: {
@@ -104,7 +104,7 @@ def test_router_is_admin_and_desktop_only():
 
     deps = {d.dependency for d in router_module.router.dependencies}
     assert {require_admin, require_desktop} <= deps
-    assert len(router_module.router.routes) == 16
+    assert len(router_module.router.routes) == 20
 
 
 def test_engines_listing(client):

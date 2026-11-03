@@ -9532,6 +9532,153 @@
     "summary": "Use Archetype"
    }
   },
+  "/audio-edit/asr/engines": {
+   "get": {
+    "operationId": "asr_engines_audio_edit_asr_engines_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response Asr Engines Audio Edit Asr Engines Get",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Asr Engines",
+    "tags": [
+     "audio-edit"
+    ]
+   }
+  },
+  "/audio-edit/asr/engines/{engine}/download": {
+   "post": {
+    "operationId": "asr_download_audio_edit_asr_engines__engine__download_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "engine",
+      "required": true,
+      "schema": {
+       "title": "Engine",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response Asr Download Audio Edit Asr Engines  Engine  Download Post",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Asr Download",
+    "tags": [
+     "audio-edit"
+    ]
+   }
+  },
+  "/audio-edit/asr/keys": {
+   "get": {
+    "operationId": "asr_keys_audio_edit_asr_keys_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response Asr Keys Audio Edit Asr Keys Get",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Asr Keys",
+    "tags": [
+     "audio-edit"
+    ]
+   }
+  },
+  "/audio-edit/asr/keys/{provider}": {
+   "put": {
+    "description": "Body ``{fields: {api_key: \"\u2026\"}}``; an omitted field is kept, ``\"\"`` clears it.",
+    "operationId": "asr_set_keys_audio_edit_asr_keys__provider__put",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "provider",
+      "required": true,
+      "schema": {
+       "title": "Provider",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "additionalProperties": true,
+        "title": "Body",
+        "type": "object"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response Asr Set Keys Audio Edit Asr Keys  Provider  Put",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Asr Set Keys",
+    "tags": [
+     "audio-edit"
+    ]
+   }
+  },
   "/audio-edit/engines": {
    "get": {
     "operationId": "list_engines_audio_edit_engines_get",
@@ -10242,6 +10389,7 @@
   },
   "/audio-edit/sessions/{session_id}/transcribe": {
    "post": {
+    "description": "Body ``{engine, language}`` picks the recogniser; omitted = active Whisper, auto-detect.",
     "operationId": "transcribe_audio_edit_sessions__session_id__transcribe_post",
     "parameters": [
      {
@@ -10254,6 +10402,24 @@
       }
      }
     ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "anyOf": [
+         {
+          "additionalProperties": true,
+          "type": "object"
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "title": "Body"
+       }
+      }
+     }
+    },
     "responses": {
      "200": {
       "content": {

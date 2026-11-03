@@ -274,14 +274,14 @@ def _no_vram_calls(monkeypatch):
 def test_transcribe_speech_session(store, monkeypatch):
     calls = []
     monkeypatch.setattr(ae, "_release_gpu", lambda: calls.append("release"))
-    monkeypatch.setattr(ae, "_asr_transcribe", lambda path: calls.append(Path(path).name) or {
+    monkeypatch.setattr(ae, "_asr_transcribe", lambda path, *_: calls.append(Path(path).name) or {
         "language": "en", "segments": [{"words": [{"word": "hi", "start": 0.1, "end": 0.4}]}]})
     sid = ae.create_session("speech", "", _upload(store), "a.wav")["id"]
     job = ae.start_transcription(sid)
     assert job.status == "succeeded" and job.kind == "transcribe" and job.progress == 1.0
     loaded = ae.load_session(sid)
     assert loaded["stage"] == "ready" and loaded["error"] is None
-    assert loaded["transcript"] == {"language": "en", "text": "hi",
+    assert loaded["transcript"] == {"language": "en", "engine": "whisper", "text": "hi",
                                     "words": [{"i": 0, "word": "hi", "start": 0.1, "end": 0.4}]}
     assert calls == ["release", "source.wav"]
     assert (ae.session_dir(sid) / "transcript.json").is_file()
@@ -289,7 +289,7 @@ def test_transcribe_speech_session(store, monkeypatch):
 
 def test_transcribe_without_word_timings_reverts_stage(store, monkeypatch):
     monkeypatch.setattr(ae, "_release_gpu", lambda: None)
-    monkeypatch.setattr(ae, "_asr_transcribe", lambda path: {"segments": [{"text": "hello"}]})
+    monkeypatch.setattr(ae, "_asr_transcribe", lambda path, *_: {"segments": [{"text": "hello"}]})
     sid = ae.create_session("speech", "", _upload(store), "a.wav")["id"]
     job = ae.start_transcription(sid)
     assert job.status == "failed" and job.error == "no_word_timestamps"
@@ -306,7 +306,7 @@ def test_song_separation_then_transcription(store, monkeypatch):
 
     seen = []
     monkeypatch.setattr(ae, "separate_stems", fake_separate)
-    monkeypatch.setattr(ae, "_asr_transcribe", lambda path: seen.append(Path(path).name) or {"words": WORDS})
+    monkeypatch.setattr(ae, "_asr_transcribe", lambda path, *_: seen.append(Path(path).name) or {"words": WORDS})
     sid = ae.create_session("song", "", _upload(store, channels=2), "s.wav")["id"]
     with pytest.raises(ae.AudioEditError) as early:
         ae.start_transcription(sid)

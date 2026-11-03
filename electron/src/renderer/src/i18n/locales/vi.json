@@ -1522,7 +1522,14 @@
     "gpu_report_engine_no_family_path": "CPU: không có đường chạy cho loại GPU của bạn",
     "gpu_report_engine_no_gpu": "CPU: không có GPU",
     "gpu_report_engine_needs_accelerator": "Cần GPU ({{needs}}) mà máy này không có",
-    "models_dir_desc": "Các mô hình đã tải được lưu ở đây. Hãy chọn ổ có nhiều dung lượng trống hơn nếu ổ này đầy."
+    "models_dir_desc": "Các mô hình đã tải được lưu ở đây. Hãy chọn ổ có nhiều dung lượng trống hơn nếu ổ này đầy.",
+    "asr_cloud_keys_title": "Audio Edit cloud speech recognition",
+    "asr_cloud_keys_desc": "API keys for the cloud recognisers in Audio Edit",
+    "asr_cloud_keys_hint": "Keys are stored encrypted on this device and only sent to their own provider. Leave a field empty to keep the saved key.",
+    "asr_cloud_key_ready": "Ready",
+    "asr_cloud_key_missing": "Not set",
+    "asr_cloud_key_clear": "Remove",
+    "asr_cloud_key_get": "Get a key"
   },
   "gallery": {
     "title": "VoiceStudio Thư viện ảnh",
@@ -4561,7 +4568,11 @@
   "audioEdit": {
     "title": "Chỉnh sửa âm thanh",
     "subtitle": "Thay đổi, thêm hoặc xóa từ trong bản ghi âm. Mọi phần nằm ngoài chỉnh sửa của bạn vẫn giữ nguyên như cũ.",
-    "tabs": { "speech": "Lời nói", "song": "Bài hát", "history": "Lịch sử" },
+    "tabs": {
+      "speech": "Lời nói",
+      "song": "Bài hát",
+      "history": "Lịch sử"
+    },
     "upload_hint_speech": "Thả bản ghi giọng nói hoặc video vào đây (tối đa 10 phút).",
     "upload_hint_song": "Thả bài hát vào đây (tối đa 10 phút). Giọng hát sẽ được tách khỏi nhạc trước.",
     "choose_file": "Chọn tệp",
@@ -4576,7 +4587,11 @@
     },
     "stage_failed": "Bước đó không thành công: {{error}}",
     "retry": "Thử lại",
-    "job": { "separate": "Đang tách giọng hát", "transcribe": "Đang chép lời", "render": "Đang kết xuất" },
+    "job": {
+      "separate": "Đang tách giọng hát",
+      "transcribe": "Đang chép lời",
+      "render": "Đang kết xuất"
+    },
     "cancel": "Hủy",
     "stem_vocals": "Giọng hát",
     "stem_instrumental": "Nhạc nền",
@@ -4652,7 +4667,34 @@
       "ace_step_unavailable": "Không thể khởi động ACE-Step. Hãy kiểm tra bản cài đặt trong Cài đặt → Mô hình.",
       "separation_unavailable": "Chưa cài đặt tính năng tách giọng hát.",
       "engine_failed": "Công cụ gặp lỗi khi kết xuất. Hãy thử lại hoặc chọn công cụ khác.",
-      "busy": "Một tác vụ Chỉnh sửa âm thanh khác đang chạy. Hãy chờ nó hoàn tất hoặc hủy nó."
+      "busy": "Một tác vụ Chỉnh sửa âm thanh khác đang chạy. Hãy chờ nó hoàn tất hoặc hủy nó.",
+      "asr_key_missing": "Add the API key for the selected recogniser in Settings → Models → ASR.",
+      "asr_model_missing": "Download the selected speech recognition model first.",
+      "asr_language_unsupported": "The selected recogniser does not support this language.",
+      "asr_auth_failed": "The speech recognition provider rejected the API key.",
+      "asr_failed": "Speech recognition failed. Try again or pick another recogniser."
+    },
+    "asr": {
+      "language": "Spoken language",
+      "language_auto": "Auto-detect",
+      "engine": "Speech recogniser",
+      "whisper_default": "Whisper (active ASR engine)",
+      "tag_local": "local",
+      "tag_not_installed": "local, not downloaded",
+      "tag_cloud": "cloud",
+      "tag_needs_key": "cloud, needs key",
+      "auto_hint": "Pick the language for Kannada and other Indian languages: auto-detect can mistake Kannada for Telugu.",
+      "phrase_timing": "This recogniser times phrases, not words; word timings are estimated within each phrase.",
+      "key_missing": "Add your {{engine}} API key to use it.",
+      "open_settings": "Open Settings → Models → ASR",
+      "model_missing": "{{engine}} is not downloaded yet (about {{size}} GB).",
+      "download": "Download",
+      "downloading": "Downloading… {{pct}}%",
+      "module_missing": "{{engine}} needs the Python package {{module}}.",
+      "language_unsupported": "The selected recogniser does not support this language.",
+      "retranscribe_summary": "Transcribed with {{engine}} ({{language}}). Change language or recogniser…",
+      "retranscribe": "Transcribe again",
+      "retranscribe_clears": "Transcribing again replaces the transcript and clears the marked spans."
     }
   },
   "voiceLab": {
