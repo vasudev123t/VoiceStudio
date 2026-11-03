@@ -29,10 +29,29 @@
   Model licences: OmniVoice weights CC-BY-NC-4.0 (non-commercial, ~2.4 GB),
   KittenTTS Apache-2.0 (~80 MB), faster-whisper-small MIT (~0.5 GB). Applio MIT.
 
+  ASR models for Audio Edit (-AsrModels, default all, about 10 GB together):
+    whisper-large-v3      ~2.9 GB  Systran/faster-whisper-large-v3 (active Whisper engine default)
+    indicconformer_kn     ~2.4 GB  ai4bharat/indic-conformer-600m-multilingual (GATED)
+    indicwhisper_kn       ~1.4 GB  AI4Bharat IndicWhisper Kannada (zip, ~3 GB unpacked)
+    vasista22_whisper_kn  ~3.1 GB  vasista22/whisper-kannada-medium
+  They are downloaded through the backend, so they land where Audio Edit looks
+  (<data dir>\audio_edit\asr_models and the Hugging Face cache).
+
+  HF_TOKEN: only IndicConformer is gated. Accept its terms at
+  https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual, create a
+  read token at https://huggingface.co/settings/tokens, then either
+    $env:HF_TOKEN = 'hf_...'   (this window), or
+    hf auth login              (saved), or
+    Settings > Hugging Face token in the app.
+  Without one the other models still install, IndicConformer is reported as
+  failed and the script exits with code 3.
+
 .EXAMPLE
   .\install.ps1 -Yes
 .EXAMPLE
   .\install.ps1 -Cpu -SkipApplio -Models kittentts -NoLaunch
+.EXAMPLE
+  .\install.ps1 -AsrOnly -Yes -Dir D:\VoiceStudio
 .EXAMPLE
   .\install.ps1 -Yes -Models omnivoice,kittentts -Dir D:\VoiceStudio -DataDir D:\VoiceStudioData\data -ApplioDir D:\VoiceStudioData\applio -CacheDir D:\VoiceStudioData\cache
 #>
@@ -53,6 +72,13 @@ param(
   [switch]$SkipModels,
   # omnivoice,kittentts,whisper-small, all, none. Quoted ('a,b') or not (a,b).
   [string[]]$Models = @(),
+  # Only download the ASR models into an existing setup (skips prerequisites,
+  # bun install, setup:api, Applio and the starter models).
+  [switch]$AsrOnly,
+  # whisper-large-v3,indicconformer_kn,indicwhisper_kn,vasista22_whisper_kn, all (default), none.
+  [string[]]$AsrModels = @(),
+  # Also print where the cloud ASR API keys go (Settings > Models > ASR, or env vars).
+  [switch]$WithCloudKeysHelp,
   # Clone/use VoiceStudio here (default: this checkout, else .\VoiceStudio).
   [string]$Dir = '',
   # Repository to clone.
@@ -109,6 +135,16 @@ function Join-ModelList([string[]]$Value) {
   return (@($parts) -join ',')
 }
 $ModelSpec = Join-ModelList $Models
+$AsrSpec = Join-ModelList $AsrModels
+if ($AsrOnly) { $SkipApplio = [switch]$true }
+# ASR models: Kind 'model' = Model Store repo (POST /models/install);
+# Kind 'engine' = Audio Edit local engine (POST /audio-edit/asr/engines/<id>/download).
+$AsrCatalog = [ordered]@{
+  'whisper-large-v3'     = @{ Kind = 'model'; Id = 'Systran/faster-whisper-large-v3'; Size = '~2.9 GB'; Note = 'active Whisper engine default (99 languages)' }
+  'indicconformer_kn'    = @{ Kind = 'engine'; Id = 'indicconformer_kn'; Size = '~2.4 GB'; Note = 'ai4bharat/indic-conformer-600m-multilingual, GATED: needs HF_TOKEN' }
+  'indicwhisper_kn'      = @{ Kind = 'engine'; Id = 'indicwhisper_kn'; Size = '~1.4 GB zip'; Note = 'AI4Bharat IndicWhisper Kannada (~3 GB unpacked)' }
+  'vasista22_whisper_kn' = @{ Kind = 'engine'; Id = 'vasista22_whisper_kn'; Size = '~3.1 GB'; Note = 'vasista22/whisper-kannada-medium' }
+}
 
 # -- logging -------------------------------------------------------------
 $script:StepNo = 0
@@ -230,6 +266,13 @@ function Get-Prop($Object, [string]$Name, $Default = $null) {
 Write-Host "VoiceStudio source setup (Windows $([Environment]::OSVersion.Version), $env:PROCESSOR_ARCHITECTURE)" -ForegroundColor Green
 if ($PSVersionTable.PSVersion.Major -lt 5) { throw 'PowerShell 5.1 or newer is required.' }
 
+if ($AsrOnly) {
+  Write-Step 'Prerequisites'
+  Update-SessionPath
+  if (-not (Test-Command 'uv')) { throw 'uv is not installed; run .\install.ps1 without -AsrOnly first.' }
+  Write-Ok "-AsrOnly: using the existing setup ($(& uv --version))"
+}
+else {
 Write-Step 'Prerequisites (winget, choco fallback)'
 Update-SessionPath
 if (-not $script:HaveWinget -and -not $script:HaveChoco -and -not $SkipSystem) {
@@ -268,6 +311,7 @@ else {
   if (-not (Test-Command 'cargo')) { throw 'cargo not on PATH after installing rustup (open a new terminal and re-run).' }
   Write-Ok (& rustc --version)
 }
+}  # end of the -AsrOnly skip
 
 # -- repository ----------------------------------------------------------
 Write-Step 'VoiceStudio source'
@@ -313,6 +357,7 @@ function Install-BunOfficial([string]$Version) {
   if (-not (Test-Path $bunExe)) { throw "bun.sh installer did not create $bunExe" }
 }
 $BunVersion = $DefaultBunVersion
+if (-not $AsrOnly) {
 $pkgJson = Get-Content (Join-Path $Dir 'package.json') -Raw | ConvertFrom-Json
 $pm = Get-Prop $pkgJson 'packageManager' ''
 if ($pm -match '^bun@(.+)$') { $BunVersion = $Matches[1] }
@@ -330,6 +375,7 @@ else {
   $haveBun = (& bun --version).Trim()
   if ($haveBun -ne $BunVersion) { Write-Warn2 "Bun $haveBun is active (wanted $BunVersion)" } else { Write-Ok "Bun $haveBun" }
 }
+}  # end of the -AsrOnly skip
 
 # -- data dir / variant --------------------------------------------------
 $CustomDataDir = [bool]$DataDir
@@ -358,13 +404,18 @@ if ($CacheDir) {
   Write-Info "caches in ${CacheDir}: HF_HOME=$env:HF_HOME UV_CACHE_DIR=$env:UV_CACHE_DIR"
 }
 
+$RepoPython = Join-Path $Dir '.venv\Scripts\python.exe'
+if ($AsrOnly) {
+  if (-not (Test-Path $RepoPython)) { throw "No backend venv at $Dir\.venv; run .\install.ps1 without -AsrOnly first." }
+}
+else {
 Write-Step 'JavaScript workspace (bun install)'
 Invoke-Native bun @('install')
 
 Write-Step "Python backend (bun run setup:api, PyTorch: $Variant)"
 $env:OMNIVOICE_TORCH_VARIANT = $Variant
 Invoke-Native bun @('run', 'setup:api')
-$RepoPython = Join-Path $Dir '.venv\Scripts\python.exe'
+}
 $TorchVersion = Invoke-Quiet { & $RepoPython -c 'import torch; print(torch.__version__)' }
 Write-Ok "backend environment ready (torch $TorchVersion)"
 
@@ -502,12 +553,89 @@ function Test-ModelInstalled([string]$RepoId) {
   return [bool]($m -and (Get-Prop $m 'installed' $false))
 }
 
+function Install-ModelRepo([string]$RepoId) {
+  if (Test-ModelInstalled $RepoId) { Write-Ok "$RepoId already installed"; return }
+  Write-Info "installing $RepoId"
+  $resp = Invoke-Api '/models/install' 'POST' @{ repo_id = $RepoId; target = 'local' }
+  $status = Get-Prop $resp 'status' ''
+  if (@('install_started', 'already_running', 'already_installed') -notcontains $status) { throw "Unexpected install response for ${RepoId}: $($resp | ConvertTo-Json -Compress)" }
+  $last = ''
+  while ($true) {
+    Start-Sleep -Seconds 3
+    $job = @((Invoke-Api '/models/install/status').jobs) | Where-Object { $_.repo_id -eq $RepoId } | Select-Object -First 1
+    $state = Get-Prop $job 'state' ''
+    if ($state -eq 'failed') { throw "Download failed for ${RepoId}: $($job | ConvertTo-Json -Compress)" }
+    if ($state -ne 'downloading') { break }
+    $now = '{0:N0}/{1:N0} MB' -f ([double](Get-Prop $job 'downloaded_bytes' 0) / 1e6), ([double](Get-Prop $job 'total_bytes' 0) / 1e6)
+    if ($now -ne $last) { Write-Info "  $now"; $last = $now }
+  }
+  if (-not (Test-ModelInstalled $RepoId)) { throw "$RepoId did not finish installing (see $script:BackendLog)." }
+  Write-Ok "$RepoId installed"
+}
+function Get-AsrEngine([string]$Id) {
+  return @((Invoke-Api '/audio-edit/asr/engines').engines) | Where-Object { $_.id -eq $Id } | Select-Object -First 1
+}
+function Install-AsrEngine([string]$Id, [string]$Size) {
+  $engine = Get-AsrEngine $Id
+  if (-not $engine) { throw "the backend has no Audio Edit engine '$Id' (is this checkout older than the ASR selector?)" }
+  if (Get-Prop $engine 'installed' $false) { Write-Ok "$Id already downloaded" }
+  else {
+    Write-Info "downloading $Id ($Size)"
+    $resp = Invoke-RestMethod -Uri "http://127.0.0.1:$script:BackendPort/audio-edit/asr/engines/$Id/download" -Method POST -TimeoutSec 60
+    if (@('running', 'succeeded') -notcontains (Get-Prop $resp 'status' '')) { throw "Unexpected download response for ${Id}: $($resp | ConvertTo-Json -Compress)" }
+    $ticks = 0; $last = ''
+    while ($true) {
+      Start-Sleep -Seconds 5; $ticks++
+      $engine = Get-AsrEngine $Id
+      $dl = Get-Prop $engine 'download' $null
+      $status = Get-Prop $dl 'status' ''
+      if ($status -ne 'running') { break }
+      $now = '{0:N0}%' -f (100 * [double](Get-Prop $dl 'progress' 0))
+      if ($now -ne $last -or ($ticks % 12) -eq 0) { Write-Info "  ${Id}: $now ($($ticks * 5)s)"; $last = $now }
+    }
+    if ($status -eq 'failed') { throw "$Id failed: $(Get-Prop $dl 'error' '')" }
+    if (-not (Get-Prop $engine 'installed' $false)) { throw "$Id did not finish downloading (see $script:BackendLog)." }
+    Write-Ok "$Id downloaded"
+  }
+  $reason = [string](Get-Prop $engine 'reason' '')
+  if ($reason -like 'missing_module:*') {
+    $mod = $reason.Substring('missing_module:'.Length)
+    Write-Info "$Id needs the Python module '$mod'; installing it into the backend venv"
+    Invoke-Native uv @('pip', 'install', '--python', $RepoPython, $mod)
+  }
+}
+# HF token from the env, the hf CLI token file, or the app (asked through the backend).
+function Test-HfToken {
+  if ($env:HF_TOKEN -or $env:HUGGING_FACE_HUB_TOKEN) { return $true }
+  $hfHome = if ($env:HF_HOME) { $env:HF_HOME } else { Join-Path $env:USERPROFILE '.cache\huggingface' }
+  $tokenFile = if ($env:HF_TOKEN_PATH) { $env:HF_TOKEN_PATH } else { Join-Path $hfHome 'token' }
+  if ((Test-Path $tokenFile) -and (Get-Item $tokenFile).Length -gt 0) { return $true }
+  try { $st = Invoke-Api '/system/hf-token/state'; return [bool](@($st.sources) | Where-Object { $_.set }) } catch { return $false }
+}
+function Show-CloudKeysHelp {
+  Write-Step 'Cloud ASR keys (optional)'
+  Write-Info 'Cloud speech recognisers in Audio Edit need an API key. Save keys in the app:'
+  Write-Info 'Settings > Models > ASR (stored encrypted). Environment variables are a fallback:'
+  Write-Info '  Sarvam Saaras        SARVAM_API_KEY                 https://dashboard.sarvam.ai'
+  Write-Info '  Smallest.ai Pulse    SMALLEST_API_KEY               https://smallest.ai'
+  Write-Info '  Google Cloud STT     GOOGLE_STT_API_KEY (or GOOGLE_API_KEY)'
+  Write-Info '  Azure AI Speech      AZURE_SPEECH_KEY + AZURE_SPEECH_REGION (e.g. centralindia)'
+  Write-Info '  OpenAI Whisper API   OPENAI_API_KEY'
+  Write-Info '  Deepgram             DEEPGRAM_API_KEY'
+  Write-Info '  AssemblyAI           ASSEMBLYAI_API_KEY'
+  Write-Info '  Bhashini (ULCA)      BHASHINI_API_KEY + BHASHINI_USER_ID'
+  Write-Info "Hugging Face (gated IndicConformer only): HF_TOKEN, 'hf auth login', or Settings > Hugging Face token."
+}
+
 $Installed = New-Object System.Collections.Generic.List[string]
+$AsrInstalled = New-Object System.Collections.Generic.List[string]
+$AsrFailed = New-Object System.Collections.Generic.List[string]
 $VcDevice = ''
 try {
   # -- models ------------------------------------------------------------
   Write-Step 'Models'
   if ($SkipModels) { Write-Info 'skipped (-SkipModels)' }
+  elseif ($AsrOnly) { Write-Info 'starter models skipped (-AsrOnly)' }
   else {
     $selected = @()
     if (-not $ModelSpec) {
@@ -547,6 +675,41 @@ try {
         if (-not (Test-ModelInstalled $repoId)) { throw "$repoId did not finish installing (see $script:BackendLog)." }
         Write-Ok "$repoId installed"
         $Installed.Add($repoId)
+      }
+    }
+  }
+
+  # -- ASR models (Audio Edit) -------------------------------------------
+  Write-Step 'ASR models (Audio Edit)'
+  if ($SkipModels) { Write-Info 'skipped (-SkipModels)' }
+  else {
+    $spec = if ($AsrSpec) { $AsrSpec } else { 'all' }
+    $asrSelected = @()
+    if ($spec -ne 'none') {
+      $asrList = if ($spec -eq 'all') { @($AsrCatalog.Keys) } else { @($spec.Split(',')) }
+      foreach ($k in $asrList) { if (-not $AsrCatalog.Contains($k)) { throw "Unknown ASR model '$k' (use $(@($AsrCatalog.Keys) -join ', '), all, none)." } }
+      Write-Info 'ASR models for Audio Edit (Hugging Face / AI4Bharat):'
+      foreach ($k in $asrList) { Write-Info ('  {0,-22} {1,-12} {2}' -f $k, $AsrCatalog[$k].Size, $AsrCatalog[$k].Note) }
+      if (Confirm-Step 'Download these ASR models (skips any already present)?' $true) { $asrSelected = @($asrList) }
+    }
+    if ($asrSelected.Count -eq 0) { Write-Info 'no ASR models selected; download them later in Audio Edit' }
+    else {
+      Start-Backend
+      foreach ($k in $asrSelected) {
+        $entry = $AsrCatalog[$k]
+        try {
+          if ($k -eq 'indicconformer_kn' -and -not (Test-HfToken)) {
+            Write-Warn2 'indicconformer_kn is gated and no Hugging Face token was found.'
+            Write-Warn2 '  1. accept the terms: https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual'
+            Write-Warn2 '  2. create a read token: https://huggingface.co/settings/tokens'
+            Write-Warn2 "  3. `$env:HF_TOKEN='hf_...'; .\install.ps1 -AsrOnly -AsrModels indicconformer_kn"
+            Write-Warn2 "     (or run 'hf auth login', or save it in the app's Settings)"
+            $AsrFailed.Add("$k (HF_TOKEN missing)"); continue
+          }
+          if ($entry.Kind -eq 'model') { Install-ModelRepo $entry.Id; $AsrInstalled.Add($entry.Id) }
+          else { Install-AsrEngine $entry.Id $entry.Size; $AsrInstalled.Add($entry.Id) }
+        }
+        catch { Write-Warn2 "${k}: $($_.Exception.Message)"; $AsrFailed.Add($k) }
       }
     }
   }
@@ -592,9 +755,22 @@ Write-Info "Data dir      $DataDir"
 if ($CacheDir) { Write-Info "Caches        $CacheDir (HF_HOME, UV_CACHE_DIR)" }
 Write-Info "Applio        $(if ($SkipApplio) { 'skipped' } else { "$ApplioDir (backend sees it: $ApplioReady)" })"
 Write-Info "Models        $(if ($Installed.Count) { $Installed -join ', ' } else { 'none downloaded (use the in-app Model Store)' })"
+Write-Info "ASR models    $(if ($AsrInstalled.Count) { $AsrInstalled -join ', ' } else { 'none' }) (Audio Edit dir: $DataDir\audio_edit\asr_models)"
+if ($AsrFailed.Count) { Write-Warn2 "ASR failed    $($AsrFailed -join ', ') (re-run: .\install.ps1 -AsrOnly)" }
 Write-Host ''
 Write-Host '    Launch: ' -ForegroundColor Green -NoNewline; Write-Host $launch
+if ($WithCloudKeysHelp) { Show-CloudKeysHelp }
+Write-Step 'Next steps'
+Write-Info "1. Launch:        $launch"
+Write-Info '2. Cloud keys:    Settings > Models > ASR (re-run with -WithCloudKeysHelp for the list)'
+Write-Info '3. Audio Edit:    pick the language (Kannada = kn) and the engine before uploading'
+Write-Info '4. Update later:  git pull, then .\install.ps1 (or .\install.ps1 -AsrOnly for models only)'
+if ($AsrFailed.Count) {
+  Write-Host ''
+  Write-Host '    Some ASR models did not install (see above); fix and re-run .\install.ps1 -AsrOnly.' -ForegroundColor Red
+  exit 3
+}
 
-if (-not $NoLaunch -and (Confirm-Step 'Start VoiceStudio now (bun run dev)?' $true)) {
+if (-not $NoLaunch -and -not $AsrOnly -and (Confirm-Step 'Start VoiceStudio now (bun run dev)?' $true)) {
   Invoke-Native bun @('run', 'dev')
 }

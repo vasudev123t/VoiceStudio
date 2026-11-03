@@ -427,6 +427,26 @@ local backend, the Python dependencies before launching Electron. Run
 
 See [Electron setup](electron/README.md).
 
+**Full setup with models (installer)** — toolchains, `bun install`,
+`bun run setup:api`, Applio, the starter models and the Audio Edit ASR models
+(Whisper large-v3, IndicConformer kn, IndicWhisper kn,
+vasista22/whisper-kannada-medium; about 10 GB). Safe to re-run.
+
+```bash
+export HF_TOKEN=hf_...        # only for the gated IndicConformer model
+./install.sh --yes            # Linux / macOS / WSL2
+./install.sh --asr-only       # later: just the ASR models
+```
+
+```powershell
+$env:HF_TOKEN = 'hf_...'
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -Yes -Dir D:\VoiceStudio
+.\install.ps1 -AsrOnly        # later: just the ASR models
+```
+
+Flags (`--skip-models`, `--asr-models`, `--with-cloud-keys-help`, …) and disk
+sizes: [One-command source setup](docs/install/full-setup.md).
+
 **With a coding agent** (Claude Code, Codex, Cursor, …), paste:
 
 ```text

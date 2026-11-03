@@ -39,12 +39,31 @@ APPLIO_RETRY_DELAY=${APPLIO_RETRY_DELAY:-10}
 NODE_MAJOR_MIN=22
 DEFAULT_BUN_VERSION="1.4.2"
 
+ASR_ONLY=0
+ASR_MODELS=""
+CLOUD_KEYS_HELP=0
+
 # Starter models: key|repo id|size|licence
 MODEL_CATALOG=(
   "omnivoice|k2-fsa/OmniVoice|~2.4 GB|weights CC-BY-NC-4.0 (non-commercial)"
   "kittentts|KittenML/kitten-tts-mini-0.8|~80 MB|Apache-2.0"
   "whisper-small|Systran/faster-whisper-small|~0.5 GB|MIT"
 )
+
+# ASR models (Audio Edit + transcription): key|kind|id|size|note
+#   kind "model":  a Model Store repo, installed with POST /models/install
+#                  (the active Whisper engine's default weights)
+#   kind "engine": an Audio Edit local engine, installed with
+#                  POST /audio-edit/asr/engines/<id>/download, which puts it
+#                  where backend/services/audio_edit_asr.py looks for it
+# whisper-large-v3 resolves to the MLX build on Apple Silicon (see asr_whisper_repo).
+ASR_CATALOG=(
+  "whisper-large-v3|model|Systran/faster-whisper-large-v3|~2.9 GB|active Whisper engine default (99 languages)"
+  "indicconformer_kn|engine|indicconformer_kn|~2.4 GB|ai4bharat/indic-conformer-600m-multilingual, GATED: needs HF_TOKEN"
+  "indicwhisper_kn|engine|indicwhisper_kn|~1.4 GB zip (~3 GB unpacked)|AI4Bharat IndicWhisper Kannada (Vistaar archive)"
+  "vasista22_whisper_kn|engine|vasista22_whisper_kn|~3.1 GB|vasista22/whisper-kannada-medium"
+)
+ASR_DEFAULT="whisper-large-v3,indicconformer_kn,indicwhisper_kn,vasista22_whisper_kn"
 
 # ── logging ──────────────────────────────────────────────────────────────
 if [[ -t 1 && "${NO_COLOR:-}" == "" ]]; then
@@ -80,7 +99,17 @@ Usage: install.sh [options]
       --rocm           Install AMD ROCm PyTorch (Linux)
                        (default: auto; CUDA when nvidia-smi finds a GPU)
       --skip-applio    Do not install Applio (voice conversion)
-      --skip-models    Do not download any models
+      --skip-models    Do not download any models (starter and ASR)
+      --asr-only       Only download the ASR models into an existing setup
+                       (skips system packages, toolchains, bun install,
+                       setup:api, Applio and the starter TTS models; run the
+                       full installer once first)
+      --asr-models LIST  Comma list of ASR models (default: all):
+                       whisper-large-v3, indicconformer_kn, indicwhisper_kn,
+                       vasista22_whisper_kn, all, none
+      --with-cloud-keys-help  Also print where to put the cloud ASR API keys
+                       (Sarvam, Smallest.ai, Google, Azure, OpenAI, Deepgram,
+                       AssemblyAI, Bhashini) after the summary
       --models LIST    Comma list: omnivoice,kittentts,whisper-small, all, none
                        (default: omnivoice,kittentts; whisper-small is offered)
       --dir PATH       Clone/use VoiceStudio at PATH
@@ -102,6 +131,22 @@ Usage: install.sh [options]
 Model licences: OmniVoice weights are CC-BY-NC-4.0 (non-commercial),
 KittenTTS is Apache-2.0, faster-whisper-small is MIT. Applio is MIT.
 
+ASR models (Audio Edit), about 10 GB together:
+  whisper-large-v3      ~2.9 GB  default weights of the active Whisper engine
+                                 (MLX build on Apple Silicon, ~3.0 GB)
+  indicconformer_kn     ~2.4 GB  AI4Bharat IndicConformer 600M (GATED)
+  indicwhisper_kn       ~1.4 GB  AI4Bharat IndicWhisper Kannada (zip, ~3 GB unpacked)
+  vasista22_whisper_kn  ~3.1 GB  vasista22/whisper-kannada-medium
+
+HF_TOKEN: only IndicConformer is gated. Accept its terms at
+https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual, create a
+read token at https://huggingface.co/settings/tokens, then either
+  export HF_TOKEN=hf_...      (this run), or
+  hf auth login               (saved for every run), or
+  Settings > Hugging Face token in the app.
+Without a token the other models still install; IndicConformer is reported
+as failed and the script exits non-zero at the end.
+
 Slow connections: UV_HTTP_TIMEOUT and UV_HTTP_RETRIES default to 600 s and 5
 for this run (values you set are kept); Applio's dependency download is
 retried up to 3 times. An interrupted run can be re-run safely.
@@ -118,6 +163,10 @@ while [[ $# -gt 0 ]]; do
     --rocm) TORCH_VARIANT="rocm" ;;
     --skip-applio) SKIP_APPLIO=1 ;;
     --skip-models) SKIP_MODELS=1 ;;
+    --asr-only) ASR_ONLY=1 ;;
+    --asr-models) need_value "$@"; ASR_MODELS="$2"; shift ;;
+    --asr-models=*) ASR_MODELS="${1#*=}" ;;
+    --with-cloud-keys-help) CLOUD_KEYS_HELP=1 ;;
     --skip-system) SKIP_SYSTEM=1 ;;
     --models) need_value "$@"; MODELS="$2"; shift ;;
     --models=*) MODELS="${1#*=}" ;;
@@ -217,6 +266,9 @@ case "$OS" in
     case "$TORCH_VARIANT" in cpu) ps_args+=(-Cpu) ;; cuda) ps_args+=(-Cuda) ;; esac
     [[ $SKIP_APPLIO == 1 ]] && ps_args+=(-SkipApplio)
     [[ $SKIP_MODELS == 1 ]] && ps_args+=(-SkipModels)
+    [[ $ASR_ONLY == 1 ]] && ps_args+=(-AsrOnly)
+    [[ -n "$ASR_MODELS" ]] && ps_args+=(-AsrModels "$ASR_MODELS")
+    [[ $CLOUD_KEYS_HELP == 1 ]] && ps_args+=(-WithCloudKeysHelp)
     [[ -n "$MODELS" ]] && ps_args+=(-Models "$MODELS")
     [[ -n "$TARGET_DIR" ]] && ps_args+=(-Dir "$TARGET_DIR")
     [[ -n "$DATA_DIR_ARG" ]] && ps_args+=(-DataDir "$DATA_DIR_ARG")
@@ -675,6 +727,211 @@ download_models() {
   done
 }
 
+# ── 6b. ASR models (Audio Edit local engines + Whisper) ──────────────────
+asr_field() { # key fieldno
+  local entry
+  for entry in "${ASR_CATALOG[@]}"; do
+    [[ "${entry%%|*}" == "$1" ]] && { cut -d'|' -f"$2" <<<"$entry"; return 0; }
+  done
+  return 1
+}
+
+# The active Whisper engine is MLX on Apple Silicon and faster-whisper elsewhere.
+asr_whisper_repo() {
+  if [[ "$OS" == Darwin && "$ARCH" == arm64 ]]; then printf 'mlx-community/whisper-large-v3-mlx'
+  else printf 'Systran/faster-whisper-large-v3'; fi
+}
+
+# HF token from the env, the hf CLI file, or (asked through the backend) the app.
+hf_token_known() {
+  [[ -n "${HF_TOKEN:-}" || -n "${HUGGING_FACE_HUB_TOKEN:-}" ]] && return 0
+  local f="${HF_TOKEN_PATH:-${HF_HOME:-$HOME/.cache/huggingface}/token}"
+  [[ -s "$f" ]] && return 0
+  [[ -n "$BACKEND_PID" ]] || return 1
+  local st; st="$(api /system/hf-token/state || true)"
+  [[ "$(json_field "$st" "any(s.get('set') for s in d.get('sources', []))")" == True ]]
+}
+
+SELECTED_ASR=()
+select_asr_models() {
+  local list=${ASR_MODELS:-$ASR_DEFAULT} key
+  [[ $list == none ]] && return
+  [[ $list == all ]] && list=$ASR_DEFAULT
+  local requested=()
+  IFS=',' read -r -a requested <<<"$list"
+  for key in "${requested[@]}"; do
+    key="${key// /}"
+    [[ -z "$key" ]] && continue
+    asr_field "$key" 2 >/dev/null \
+      || die "unknown ASR model '$key' (use whisper-large-v3, indicconformer_kn, indicwhisper_kn, vasista22_whisper_kn, all, none)"
+    SELECTED_ASR+=("$key")
+  done
+  [[ ${#SELECTED_ASR[@]} -gt 0 ]] || return 0
+  printf '\n    ASR models for Audio Edit (Hugging Face / AI4Bharat):\n'
+  for key in "${SELECTED_ASR[@]}"; do
+    printf '      %-22s %-28s %s\n' "$key" "$(asr_field "$key" 4)" "$(asr_field "$key" 5)"
+  done
+  confirm "Download these ASR models (skips any already present)?" y || SELECTED_ASR=()
+}
+
+# install_model_repo <repo>: Model Store install through the backend, waits.
+install_model_repo() {
+  local repo=$1 resp state installed models_json last="" now
+  models_json="$(api /models || true)"
+  installed="$(json_field "$models_json" "next((m['installed'] for m in d['models'] if m['repo_id']=='$repo'), False)")"
+  if [[ "$installed" == True ]]; then ok "$repo already installed"; return 0; fi
+  info "installing $repo"
+  resp="$(api /models/install -X POST -H 'Content-Type: application/json' \
+    -d "{\"repo_id\":\"$repo\",\"target\":\"local\"}")" || { warn "POST /models/install failed for $repo"; return 1; }
+  state="$(json_field "$resp" "d.get('status','')")"
+  [[ "$state" == install_started || "$state" == already_running || "$state" == already_installed ]] \
+    || { warn "unexpected install response for $repo: $resp"; return 1; }
+  while :; do
+    sleep 3
+    resp="$(api /models/install/status || echo '{}')"
+    state="$(json_field "$resp" "next((j.get('state','') for j in d.get('jobs',[]) if j.get('repo_id')=='$repo'), '')")"
+    if [[ "$state" == failed ]]; then
+      warn "download failed for $repo: $(json_field "$resp" "next((j.get('error') or j.get('message') or j for j in d['jobs'] if j.get('repo_id')=='$repo'), '')")"
+      return 1
+    fi
+    [[ "$state" == downloading ]] || break
+    now="$(json_field "$resp" "next((f\"{j.get('downloaded_bytes',0)/1e6:.0f}/{(j.get('total_bytes') or 0)/1e6:.0f} MB\" for j in d['jobs'] if j.get('repo_id')=='$repo'), '')")"
+    [[ -n "$now" && "$now" != "$last" ]] && info "  $now"
+    last=$now
+  done
+  models_json="$(api /models || true)"
+  installed="$(json_field "$models_json" "next((m['installed'] for m in d['models'] if m['repo_id']=='$repo'), False)")"
+  [[ "$installed" == True ]] || { warn "$repo did not finish installing (see $BACKEND_LOG)"; return 1; }
+  ok "$repo installed"
+}
+
+# asr_engine_field <engines json> <engine id> <python expr over `e`>
+asr_engine_field() {
+  json_field "$1" "next(($3 for e in d.get('engines', []) if e.get('id')=='$2'), '')"
+}
+
+# install_asr_engine <engine id>: Audio Edit engine download through the backend, waits.
+install_asr_engine() {
+  local id=$1 engines resp status last="" now reason
+  engines="$(api /audio-edit/asr/engines || true)"
+  [[ -n "$engines" ]] || { warn "GET /audio-edit/asr/engines failed (is this checkout older than the ASR selector?)"; return 1; }
+  if [[ "$(asr_engine_field "$engines" "$id" "e.get('installed')")" == True ]]; then
+    ok "$id already downloaded"
+  else
+    info "downloading $id ($(asr_field "$id" 4))"
+    resp="$(curl -sS --max-time 60 -X POST "http://127.0.0.1:$BACKEND_PORT/audio-edit/asr/engines/$id/download")" \
+      || { warn "POST /audio-edit/asr/engines/$id/download failed"; return 1; }
+    status="$(json_field "$resp" "d.get('status','')")"
+    [[ "$status" == running || "$status" == succeeded ]] || { warn "unexpected download response for $id: $resp"; return 1; }
+    # The download runs in a backend thread; HF snapshots report no byte progress.
+    local ticks=0
+    while :; do
+      sleep 5; ticks=$((ticks + 1))
+      engines="$(api /audio-edit/asr/engines || echo '{}')"
+      status="$(asr_engine_field "$engines" "$id" "(e.get('download') or {}).get('status','')")"
+      [[ "$status" == running ]] || break
+      now="$(asr_engine_field "$engines" "$id" "f\"{100*(e.get('download') or {}).get('progress',0):.0f}%\"")"
+      if [[ "$now" != "$last" || $((ticks % 12)) == 0 ]]; then info "  $id: $now ($((ticks * 5))s)"; fi
+      last=$now
+    done
+    if [[ "$status" == failed ]]; then
+      warn "$id failed: $(asr_engine_field "$engines" "$id" "(e.get('download') or {}).get('error')")"
+      return 1
+    fi
+    [[ "$(asr_engine_field "$engines" "$id" "e.get('installed')")" == True ]] \
+      || { warn "$id did not finish downloading (see $BACKEND_LOG)"; return 1; }
+    ok "$id downloaded"
+  fi
+  reason="$(asr_engine_field "$engines" "$id" "e.get('reason') or ''")"
+  if [[ "$reason" == missing_module:* ]]; then
+    local mod=${reason#missing_module:}
+    info "$id needs the Python module '$mod'; installing it into the backend venv"
+    run uv pip install --python "$(repo_python)" "$mod" || { warn "could not install $mod for $id"; return 1; }
+  fi
+  return 0
+}
+
+INSTALLED_ASR=()
+FAILED_ASR=()
+download_asr_models() {
+  step "ASR models (Audio Edit)"
+  if [[ $SKIP_MODELS == 1 ]]; then info "skipped (--skip-models)"; return; fi
+  select_asr_models
+  if [[ ${#SELECTED_ASR[@]} -eq 0 ]]; then info "no ASR models selected; download them later in Audio Edit"; return; fi
+  start_backend
+  local key kind id
+  for key in "${SELECTED_ASR[@]}"; do
+    kind="$(asr_field "$key" 2)"; id="$(asr_field "$key" 3)"
+    if [[ $key == indicconformer_kn ]] && ! hf_token_known; then
+      warn "indicconformer_kn is gated and no Hugging Face token was found."
+      warn "  1. accept the terms: https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual"
+      warn "  2. create a read token: https://huggingface.co/settings/tokens"
+      warn "  3. re-run with HF_TOKEN=hf_... ./install.sh --asr-only --asr-models indicconformer_kn"
+      warn "     (or run \`hf auth login\`, or save it in the app's Settings)"
+      FAILED_ASR+=("$key (HF_TOKEN missing)")
+      continue
+    fi
+    if [[ $kind == model ]]; then
+      id="$(asr_whisper_repo)"
+      if install_model_repo "$id"; then INSTALLED_ASR+=("$id"); else FAILED_ASR+=("$key"); fi
+    else
+      if install_asr_engine "$id"; then INSTALLED_ASR+=("$id"); else FAILED_ASR+=("$key"); fi
+    fi
+  done
+}
+
+cloud_keys_help() {
+  step "Cloud ASR keys (optional)"
+  cat <<'KEYS'
+    Cloud speech recognisers in Audio Edit need an API key. Save keys in the
+    app: Settings > Models > ASR (stored encrypted). Environment variables are
+    read as a fallback when nothing is saved:
+
+      Sarvam Saaras        SARVAM_API_KEY                 https://dashboard.sarvam.ai
+      Smallest.ai Pulse    SMALLEST_API_KEY               https://smallest.ai
+      Google Cloud STT     GOOGLE_STT_API_KEY (or GOOGLE_API_KEY)
+      Azure AI Speech      AZURE_SPEECH_KEY + AZURE_SPEECH_REGION (e.g. centralindia)
+      OpenAI Whisper API   OPENAI_API_KEY
+      Deepgram             DEEPGRAM_API_KEY
+      AssemblyAI           ASSEMBLYAI_API_KEY
+      Bhashini (ULCA)      BHASHINI_API_KEY + BHASHINI_USER_ID
+
+    Hugging Face (gated IndicConformer only): HF_TOKEN, `hf auth login`, or
+    Settings > Hugging Face token.
+KEYS
+}
+
+print_next_steps() {
+  step "Next steps"
+  info "1. Launch:        $1"
+  info "2. Cloud keys:    Settings > Models > ASR (re-run with --with-cloud-keys-help for the list)"
+  info "3. Audio Edit:    pick the language (Kannada = kn) and the engine before uploading"
+  info "4. Windows / MSI: git pull, then run .\\install.ps1 (or .\\install.ps1 -AsrOnly for models only)"
+}
+
+asr_only_main() {
+  printf '%sVoiceStudio ASR model setup%s  (%s %s)\n' "$C_GREEN" "$C_RESET" "$OS" "$ARCH"
+  load_tool_envs
+  have uv || die "uv is not installed; run ./install.sh without --asr-only first"
+  resolve_repo
+  [[ -x "$(repo_python)" ]] || die "no backend venv at $TARGET_DIR/.venv; run ./install.sh without --asr-only first"
+  resolve_data_dir
+  SKIP_APPLIO=1
+  step "Download settings"
+  apply_network_defaults
+  download_asr_models
+  stop_backend
+  [[ $CLOUD_KEYS_HELP == 1 ]] && cloud_keys_help
+  step "Summary"
+  info "Data dir      $DATA_DIR (Audio Edit models: $DATA_DIR/audio_edit/asr_models)"
+  info "HF cache      ${HF_HOME:-$HOME/.cache/huggingface}"
+  info "ASR models    ${INSTALLED_ASR[*]:-none}"
+  [[ ${#FAILED_ASR[@]} -gt 0 ]] && warn "ASR failed     ${FAILED_ASR[*]}"
+  print_next_steps "cd $(printf '%q' "$TARGET_DIR") && bun run dev"
+  [[ ${#FAILED_ASR[@]} -eq 0 ]] || { printf '\n%s✗ some ASR models did not install (see above); re-run to retry.%s\n' "$C_RED" "$C_RESET" >&2; exit 3; }
+  return 0
+}
+
 # ── 7. verify ────────────────────────────────────────────────────────────
 VC_READY="skipped"; VC_DEVICE=""; HEALTH=""
 verify_backend() {
@@ -698,6 +955,7 @@ verify_backend() {
 # Wrapped in a function so `curl … | bash` parses the whole file before any
 # step runs (children cannot swallow the rest of the script from stdin).
 main() {
+if [[ $ASR_ONLY == 1 ]]; then asr_only_main; return; fi
 printf '%sVoiceStudio source setup%s  (%s %s)\n' "$C_GREEN" "$C_RESET" "$OS" "$ARCH"
 
 install_system_packages
@@ -735,6 +993,7 @@ ok "backend environment ready ($("$(repo_python)" -c 'import torch; print("torch
 
 install_applio
 download_models
+download_asr_models
 verify_backend
 
 # summary
@@ -762,8 +1021,16 @@ info "Data dir      $DATA_DIR"
 if [[ $SKIP_APPLIO == 1 ]]; then info "Applio        skipped"
 else info "Applio        $APPLIO_DIR (backend sees it: $VC_READY)"; fi
 info "Models        $models_text"
+info "ASR models    ${INSTALLED_ASR[*]:-none} (Audio Edit dir: $DATA_DIR/audio_edit/asr_models)"
+[[ ${#FAILED_ASR[@]} -gt 0 ]] && warn "ASR failed     ${FAILED_ASR[*]} (re-run: ./install.sh --asr-only)"
 [[ -n "$env_words" ]] && info "Environment   export ${env_words% }"
 printf '\n    %sLaunch:%s %s\n' "$C_GREEN" "$C_RESET" "$launch_cmd"
+[[ $CLOUD_KEYS_HELP == 1 ]] && cloud_keys_help
+print_next_steps "$launch_cmd"
+if [[ ${#FAILED_ASR[@]} -gt 0 ]]; then
+  printf '\n%s✗ some ASR models did not install (see above); fix and re-run ./install.sh --asr-only.%s\n' "$C_RED" "$C_RESET" >&2
+  exit 3
+fi
 
 if [[ $NO_LAUNCH == 0 ]]; then
   if confirm "Start VoiceStudio now (bun run dev)?" y; then

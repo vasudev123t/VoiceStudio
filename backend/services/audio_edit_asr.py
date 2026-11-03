@@ -343,11 +343,16 @@ def _hf_token() -> Optional[str]:
         return None
 
 
+_HF_IGNORE = ["*.msgpack", "*.h5", "flax_model*", "tf_model*", "rust_model.ot"]
+
+
 def _download_hf(engine: Engine, dl: Download) -> None:
     from huggingface_hub import snapshot_download
 
     dl.progress = 0.05
-    snapshot_download(engine.repo, token=_hf_token())
+    # transformers loads the PyTorch weights; skip the Flax/TF copies some
+    # repos also ship (vasista22/whisper-kannada-medium: +2.9 GB of msgpack).
+    snapshot_download(engine.repo, token=_hf_token(), ignore_patterns=_HF_IGNORE)
 
 
 def _download_archive(engine: Engine, dl: Download) -> None:

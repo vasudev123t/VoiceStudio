@@ -305,3 +305,51 @@ def test_setup_py_cudnn8_timeout_env():
         os.environ.pop("OMNIVOICE_CUDNN8_TIMEOUT", None)
         if old is not None:
             os.environ["OMNIVOICE_CUDNN8_TIMEOUT"] = old
+
+
+# ── ASR model step ──────────────────────────────────────────────────────────
+
+
+@needs_bash
+def test_sh_asr_models_selection_and_unknown_key():
+    r = _source("""
+        ASSUME_YES=1
+        ASR_MODELS="whisper-large-v3, vasista22_whisper_kn"
+        select_asr_models >/dev/null
+        echo "sel=${SELECTED_ASR[*]}"
+    """)
+    assert r.returncode == 0, r.stderr
+    assert "sel=whisper-large-v3 vasista22_whisper_kn" in r.stdout
+    r = _source('ASSUME_YES=1; ASR_MODELS=nope; select_asr_models')
+    assert r.returncode != 0 and "unknown ASR model 'nope'" in r.stderr
+
+
+@needs_bash
+def test_sh_asr_default_is_all_and_none_selects_nothing():
+    r = _source('ASSUME_YES=1; select_asr_models >/dev/null; echo "n=${#SELECTED_ASR[@]}"')
+    assert r.returncode == 0, r.stderr
+    assert "n=4" in r.stdout
+    r = _source('ASR_MODELS=none; select_asr_models; echo "n=${#SELECTED_ASR[@]}"')
+    assert "n=0" in r.stdout
+
+
+@needs_bash
+def test_sh_hf_token_detection(tmp_path):
+    env = _clean_env(HF_HOME=str(tmp_path))
+    env.pop("HF_TOKEN", None); env.pop("HUGGING_FACE_HUB_TOKEN", None); env.pop("HF_TOKEN_PATH", None)
+    r = _source('hf_token_known && echo yes || echo no', env=env)
+    assert r.stdout.strip().endswith("no")
+    (tmp_path / "token").write_text("hf_x")
+    r = _source('hf_token_known && echo yes || echo no', env=env)
+    assert r.stdout.strip().endswith("yes")
+
+
+def test_ps1_asr_static_contract():
+    src = open(PS1, encoding="utf-8").read()
+    for flag in ("[switch]$AsrOnly", "[string[]]$AsrModels", "[switch]$WithCloudKeysHelp"):
+        assert flag in src
+    for key in ("whisper-large-v3", "indicconformer_kn", "indicwhisper_kn", "vasista22_whisper_kn"):
+        assert f"'{key}'" in src
+    assert "/audio-edit/asr/engines/$Id/download" in src
+    # Gated model checks for a token before asking the backend to download it.
+    assert src.index("Test-HfToken)") < src.index("Install-AsrEngine $entry.Id")

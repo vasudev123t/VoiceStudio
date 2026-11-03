@@ -89,12 +89,39 @@ for the current window only.
 
    The default is `omnivoice,kittentts`. `whisper-small` is offered
    interactively, or you can pass it with `--models`.
-7. **Verify.** Starts the backend on port 3900, or on the next free port if
+7. **ASR models (Audio Edit).** Downloads the speech recognisers Audio Edit
+   runs locally, through the backend's own APIs, so each one lands where the
+   app looks for it (Hugging Face cache, or `<data dir>/audio_edit/asr_models`
+   for the IndicWhisper archive). Models already present are skipped. Default
+   is all of them (about 10 GB); pick with `--asr-models` / `-AsrModels`:
+
+   | Key | Model | Download | Installed with |
+   |---|---|---|---|
+   | `whisper-large-v3` | `Systran/faster-whisper-large-v3` (Apple Silicon: `mlx-community/whisper-large-v3-mlx`), the active Whisper engine's default | ~2.9 GB | `POST /models/install` |
+   | `indicconformer_kn` | `ai4bharat/indic-conformer-600m-multilingual` (**gated**) | ~2.4 GB | `POST /audio-edit/asr/engines/indicconformer_kn/download` |
+   | `indicwhisper_kn` | AI4Bharat IndicWhisper Kannada (Vistaar zip) | ~1.4 GB zip, ~3 GB unpacked | `POST /audio-edit/asr/engines/indicwhisper_kn/download` |
+   | `vasista22_whisper_kn` | `vasista22/whisper-kannada-medium` | ~3.1 GB | `POST /audio-edit/asr/engines/vasista22_whisper_kn/download` |
+
+   **HF_TOKEN.** Only IndicConformer is gated. Accept its terms at
+   <https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual>,
+   create a read token at <https://huggingface.co/settings/tokens>, and make
+   it visible with `export HF_TOKEN=hf_...` (PowerShell:
+   `$env:HF_TOKEN='hf_...'`), `hf auth login`, or Settings → Hugging Face
+   token. Without one the script still installs the other models, prints how
+   to fix it, and exits with code 3 so the missing model is not overlooked.
+
+   To fetch only these models into an existing setup:
+   `./install.sh --asr-only` (Windows: `.\install.ps1 -AsrOnly`).
+   `--with-cloud-keys-help` / `-WithCloudKeysHelp` also lists the cloud ASR
+   keys (Sarvam, Smallest.ai, Google, Azure, OpenAI, Deepgram, AssemblyAI,
+   Bhashini); they are saved in Settings → Models → ASR.
+8. **Verify.** Starts the backend on port 3900, or on the next free port if
    3900 is busy, checks `/health` and `/voice-conversion/status`, and stops it.
-8. **Summary.** Prints:
+9. **Summary.** Prints:
    - the tool versions, PyTorch variant, GPU and voice-conversion device
    - the data dir and the Applio path
-   - the launch command, then offers to start `bun run dev`
+   - the installed and failed ASR models
+   - the launch command and next steps, then offers to start `bun run dev`
 
 ## Flags
 
@@ -103,7 +130,10 @@ for the current window only.
 | `-y`, `--yes` | `-Yes` | Answer yes to every prompt, including model downloads |
 | `--cpu` / `--cuda` / `--rocm` | `-Cpu` / `-Cuda` | PyTorch variant (default auto; ROCm is Linux only) |
 | `--skip-applio` | `-SkipApplio` | Do not install Applio |
-| `--skip-models` | `-SkipModels` | Do not download models |
+| `--skip-models` | `-SkipModels` | Do not download models (starter and ASR) |
+| `--asr-only` | `-AsrOnly` | Only download the ASR models into an existing setup |
+| `--asr-models LIST` | `-AsrModels LIST` | `whisper-large-v3,indicconformer_kn,indicwhisper_kn,vasista22_whisper_kn`, `all` (default) or `none` |
+| `--with-cloud-keys-help` | `-WithCloudKeysHelp` | Also print where the cloud ASR API keys go |
 | `--models LIST` | `-Models LIST` | `omnivoice,kittentts,whisper-small`, `all` or `none` (in PowerShell, quoted or not) |
 | `--dir PATH` | `-Dir PATH` | Checkout location |
 | `--repo URL` | `-Repo URL` | Repository to clone (default `vasudev123t/VoiceStudio`) |
@@ -123,6 +153,7 @@ On Git Bash, `install.sh` hands off to `install.ps1` with the same flags.
 - A CPU setup needs about 5 GB for the backend environment and about 2 GB for Applio.
 - CUDA wheels add several GB to each of those.
 - The starter models add about 2.5 GB.
+- The ASR models add about 10 GB (`--asr-models none` skips them).
 - The first run takes 10–30 minutes, depending on the network. A re-run takes seconds.
 
 ## Slow connections and interrupted runs
